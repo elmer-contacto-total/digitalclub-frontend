@@ -3,11 +3,22 @@
  * Uses design system CSS variables for light/dark mode support
  */
 
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .chat-panel {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   height: 100%;
   background: var(--card-bg);
+  overflow: hidden;
 }
 
 .loading-overlay {
@@ -18,9 +29,11 @@
   justify-content: center;
   gap: var(--space-4);
   color: var(--fg-muted);
+  background: var(--bg-subtle);
 
   span {
     font-size: var(--text-sm);
+    color: var(--fg-muted);
   }
 }
 
@@ -31,16 +44,18 @@
   align-items: center;
   justify-content: center;
   color: var(--fg-muted);
+  background: var(--bg-subtle);
 
   i {
     font-size: 48px;
     margin-bottom: var(--space-3);
-    color: var(--danger-default);
+    color: var(--error-default);
   }
 
   p {
     margin: 0;
     font-size: var(--text-sm);
+    color: var(--fg-muted);
   }
 }
 

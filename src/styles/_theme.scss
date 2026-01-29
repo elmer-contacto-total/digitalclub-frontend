@@ -83,6 +83,13 @@
 
   // Focus Ring
   --focus-ring: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--accent-default);
+
+  // Chat specific
+  --chat-bg: #e5ddd5;
+  --message-outgoing-bg: #dcf8c6;
+  --message-incoming-bg: #ffffff;
+  --message-outgoing-text: #1a1a1a;
+  --message-incoming-text: #1a1a1a;
 }
 
 // ===== DARK THEME =====
@@ -165,4 +172,11 @@
 
   // Focus Ring
   --focus-ring: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--accent-default);
+
+  // Chat specific
+  --chat-bg: #0b141a;
+  --message-outgoing-bg: #005c4b;
+  --message-incoming-bg: #202c33;
+  --message-outgoing-text: #e9edef;
+  --message-incoming-text: #e9edef;
 }

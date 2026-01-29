@@ -1,6 +1,7 @@
 /**
  * Message Item Component Styles
  * Uses design system CSS variables for light/dark mode support
+ * PARIDAD RAILS: _message.html.erb layout
  */
 
 .message-item {
@@ -20,7 +21,7 @@
 
   &.failed {
     .message-bubble {
-      border: 1px solid var(--danger-default);
+      border: 1px solid var(--error-default);
     }
   }
 }
@@ -30,7 +31,6 @@
   height: 32px;
   min-width: 32px;
   border-radius: var(--radius-full);
-  background: var(--fg-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -54,18 +54,21 @@
   box-shadow: var(--shadow-sm);
 
   .incoming & {
-    background: var(--card-bg);
+    background: var(--message-incoming-bg);
+    color: var(--message-incoming-text);
     border-bottom-right-radius: var(--radius-sm);
   }
 
   .outgoing & {
-    background: var(--message-outgoing-bg, var(--success-subtle));
+    background: var(--message-outgoing-bg);
+    color: var(--message-outgoing-text);
     border-bottom-left-radius: var(--radius-sm);
   }
 
   .template & {
     background: var(--info-subtle);
     border: 1px solid var(--info-default);
+    color: var(--fg-default);
   }
 }
 
@@ -77,7 +80,7 @@
   color: var(--info-default);
   margin-bottom: var(--space-2);
   padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--info-subtle);
+  border-bottom: 1px solid var(--border-muted);
 
   i {
     font-size: var(--text-xs);
@@ -157,17 +160,16 @@
   line-height: 1.4;
   word-wrap: break-word;
   white-space: pre-wrap;
-  color: var(--fg-default);
 
   .sender-name {
     display: block;
     margin-bottom: 2px;
-    color: var(--fg-default);
+    font-weight: var(--font-semibold);
   }
 
   ::ng-deep {
     a {
-      color: var(--accent-emphasis);
+      color: var(--accent-default);
       text-decoration: none;
 
       &:hover {
@@ -187,18 +189,18 @@
 
 .message-time {
   font-size: var(--text-xs);
-  color: var(--fg-subtle);
+  opacity: 0.7;
 }
 
 .message-status {
   font-size: var(--text-sm);
 
   &.status-pending {
-    color: var(--fg-subtle);
+    opacity: 0.5;
   }
 
   &.status-sent {
-    color: var(--fg-muted);
+    opacity: 0.7;
   }
 
   &.status-read {
@@ -207,7 +209,7 @@
 
   &.status-error,
   &.status-failed {
-    color: var(--danger-default);
+    color: var(--error-default);
   }
 }
 
@@ -217,10 +219,10 @@
   gap: var(--space-2);
   margin-top: var(--space-2);
   padding: var(--space-2);
-  background: var(--danger-subtle);
+  background: var(--error-subtle);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
-  color: var(--danger-default);
+  color: var(--error-default);
 
   i {
     font-size: var(--text-xs);
@@ -234,18 +236,29 @@
   margin-top: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: transparent;
-  border: 1px solid var(--danger-default);
+  border: 1px solid var(--error-default);
   border-radius: var(--radius-sm);
-  color: var(--danger-default);
+  color: var(--error-default);
   font-size: var(--text-xs);
   cursor: pointer;
   transition: all var(--duration-normal);
 
   &:hover {
-    background: var(--danger-subtle);
+    background: var(--error-subtle);
   }
 
   i {
     font-size: var(--text-sm);
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .message-item {
+    max-width: 85%;
+  }
+
+  .media-content {
+    max-width: 250px;
   }
 }

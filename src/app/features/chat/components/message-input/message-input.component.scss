@@ -3,10 +3,16 @@
  * Uses design system CSS variables for light/dark mode support
  */
 
+:host {
+  display: block;
+  flex-shrink: 0;
+}
+
 .message-input-container {
   background: var(--card-bg);
   border-top: 1px solid var(--border-default);
   padding: var(--space-2) var(--space-4) var(--space-4);
+  flex-shrink: 0;
 }
 
 .input-toolbar {
@@ -168,6 +174,7 @@
   background: transparent;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
+  color: var(--fg-default);
   cursor: pointer;
   transition: all var(--duration-normal);
 
@@ -213,7 +220,7 @@
   transition: all var(--duration-normal);
 
   &:hover:not(:disabled) {
-    background: var(--success-emphasis);
+    filter: brightness(0.9);
   }
 
   &:disabled {
@@ -300,8 +307,8 @@
   color: var(--fg-muted);
 
   &:hover {
-    background: var(--danger-subtle);
-    color: var(--danger-default);
+    background: var(--error-subtle);
+    color: var(--error-default);
   }
 
   i {
@@ -378,7 +385,7 @@
   }
 }
 
-// Responsive: 2 columns on smaller screens
+// Responsive
 @media (max-width: 600px) {
   .canned-messages-grid {
     grid-template-columns: repeat(2, 1fr);

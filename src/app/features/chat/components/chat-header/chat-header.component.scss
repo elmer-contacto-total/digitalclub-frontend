@@ -3,9 +3,15 @@
  * Uses design system CSS variables for light/dark mode support
  */
 
+:host {
+  display: block;
+  flex-shrink: 0;
+}
+
 .chat-header {
   background: var(--card-bg);
   border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
 }
 
 .header-main {
@@ -97,12 +103,12 @@
 
 .warning-badge {
   background: var(--warning-subtle);
-  color: var(--warning-emphasis);
+  color: var(--warning-default);
 }
 
 .alert-badge {
-  background: var(--danger-subtle);
-  color: var(--danger-default);
+  background: var(--error-subtle);
+  color: var(--error-default);
 }
 
 .header-actions {
@@ -125,6 +131,7 @@
 
   &:hover {
     background: var(--bg-muted);
+    color: var(--fg-default);
   }
 
   i {
