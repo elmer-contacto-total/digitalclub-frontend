@@ -1,0 +1,210 @@
+<!-- Client Settings - PARIDAD: Rails admin/client_settings/index.html.erb -->
+<div class="settings-container">
+  @if (isLoading()) {
+    <app-loading-spinner [overlay]="true" message="Cargando configuraciones..." />
+  }
+
+  <!-- Back Link -->
+  <a routerLink="/app/clients" class="back-link">
+    <i class="ph ph-arrow-left"></i>
+    Volver a Organizaciones
+  </a>
+
+  <!-- Hero Header -->
+  <div class="hero-card">
+    <div class="hero-main">
+      <div class="hero-icon">
+        <i class="ph ph-gear"></i>
+      </div>
+      <div class="hero-info">
+        <h1>Configuración del Cliente</h1>
+        @if (client()) {
+          <p class="hero-subtitle">{{ client()!.name }}</p>
+        }
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div class="stat-item">
+        <span class="stat-value">{{ settings().length }}</span>
+        <span class="stat-label">Configuraciones</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{ getActiveCount() }}</span>
+        <span class="stat-label">Activas</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Content -->
+  @if (!isLoading()) {
+    @if (settings().length === 0) {
+      <div class="empty-card">
+        <div class="empty-icon">
+          <i class="ph ph-gear"></i>
+        </div>
+        <h3>Sin configuraciones</h3>
+        <p>No hay configuraciones definidas para este cliente.</p>
+      </div>
+    } @else {
+      <!-- Settings by Type -->
+      <div class="settings-sections">
+        <!-- Boolean Settings -->
+        @if (getBooleanSettings().length > 0) {
+          <div class="section-card">
+            <div class="section-header">
+              <div class="section-title">
+                <i class="ph ph-toggle-left"></i>
+                <h3>Opciones</h3>
+              </div>
+              <span class="section-count">{{ getBooleanSettings().length }}</span>
+            </div>
+            <div class="section-body">
+              <div class="toggle-grid">
+                @for (item of getBooleanSettings(); track item.key) {
+                  <div class="toggle-card" [class.active]="item.value === true">
+                    <div class="toggle-info">
+                      <span class="toggle-key">{{ formatKey(item.key) }}</span>
+                      <span class="toggle-description">{{ item.key }}</span>
+                    </div>
+                    <button
+                      class="toggle-switch"
+                      [class.on]="item.value === true"
+                      (click)="toggleBoolean(item)"
+                      [disabled]="isSaving()"
+                    >
+                      <span class="toggle-track">
+                        <span class="toggle-thumb"></span>
+                      </span>
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Text/Number Settings -->
+        @if (getTextSettings().length > 0) {
+          <div class="section-card">
+            <div class="section-header">
+              <div class="section-title">
+                <i class="ph ph-text-aa"></i>
+                <h3>Valores</h3>
+              </div>
+              <span class="section-count">{{ getTextSettings().length }}</span>
+            </div>
+            <div class="section-body">
+              <div class="value-list">
+                @for (item of getTextSettings(); track item.key) {
+                  <div class="value-item" [class.editing]="item.isEditing">
+                    <div class="value-info">
+                      <span class="value-key">{{ formatKey(item.key) }}</span>
+                      <span class="value-type">
+                        <i class="ph" [ngClass]="getTypeIcon(item.type)"></i>
+                        {{ getTypeLabel(item.type) }}
+                      </span>
+                    </div>
+                    @if (item.isEditing) {
+                      <div class="value-edit">
+                        @if (item.type === 'integer' || item.type === 'float') {
+                          <input
+                            type="number"
+                            [(ngModel)]="item.editValue"
+                            class="edit-input"
+                            [step]="item.type === 'float' ? '0.01' : '1'"
+                            autofocus
+                          />
+                        } @else {
+                          <input
+                            type="text"
+                            [(ngModel)]="item.editValue"
+                            class="edit-input"
+                            autofocus
+                          />
+                        }
+                        <div class="edit-actions">
+                          <button class="btn-icon btn-save" (click)="saveEdit(item)" [disabled]="isSaving()">
+                            <i class="ph ph-check"></i>
+                          </button>
+                          <button class="btn-icon btn-cancel" (click)="cancelEdit(item)" [disabled]="isSaving()">
+                            <i class="ph ph-x"></i>
+                          </button>
+                        </div>
+                      </div>
+                    } @else {
+                      <div class="value-display">
+                        <span class="display-value">{{ formatDisplayValue(item) }}</span>
+                        <button class="btn-icon btn-edit" (click)="startEdit(item)">
+                          <i class="ph ph-pencil-simple"></i>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Object/Array Settings -->
+        @if (getComplexSettings().length > 0) {
+          <div class="section-card">
+            <div class="section-header">
+              <div class="section-title">
+                <i class="ph ph-brackets-curly"></i>
+                <h3>Datos Complejos</h3>
+              </div>
+              <span class="section-count">{{ getComplexSettings().length }}</span>
+            </div>
+            <div class="section-body">
+              <div class="complex-list">
+                @for (item of getComplexSettings(); track item.key) {
+                  <div class="complex-item" [class.editing]="item.isEditing">
+                    <div class="complex-header">
+                      <div class="complex-info">
+                        <span class="complex-key">{{ formatKey(item.key) }}</span>
+                        <span class="complex-type">
+                          <i class="ph" [ngClass]="getTypeIcon(item.type)"></i>
+                          {{ getTypeLabel(item.type) }}
+                        </span>
+                      </div>
+                      @if (!item.isEditing) {
+                        <button class="btn btn-sm btn-ghost" (click)="startEdit(item)">
+                          <i class="ph ph-pencil-simple"></i>
+                          Editar
+                        </button>
+                      }
+                    </div>
+                    @if (item.isEditing) {
+                      <div class="complex-edit">
+                        <textarea
+                          [(ngModel)]="item.editValue"
+                          class="edit-textarea"
+                          rows="6"
+                        ></textarea>
+                        <div class="edit-actions-row">
+                          <button class="btn btn-sm btn-primary" (click)="saveEdit(item)" [disabled]="isSaving()">
+                            <i class="ph ph-check"></i>
+                            Guardar
+                          </button>
+                          <button class="btn btn-sm btn-secondary" (click)="cancelEdit(item)" [disabled]="isSaving()">
+                            <i class="ph ph-x"></i>
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    } @else {
+                      <div class="complex-preview">
+                        <code>{{ formatDisplayValue(item) }}</code>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

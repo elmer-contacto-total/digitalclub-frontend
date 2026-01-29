@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HolapeAngular</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <!-- Polyfill for Node.js globals required by SockJS/STOMP -->
+  <script>
+    var global = global || window;
+    var process = process || { env: { DEBUG: undefined } };
+    var Buffer = Buffer || { isBuffer: function() { return false; } };
+  </script>
+</head>
+<body>
+  <app-root></app-root>
+</body>
+</html>

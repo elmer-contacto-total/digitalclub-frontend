@@ -1,0 +1,334 @@
+// CRM Settings Form Styles
+// Uses design tokens for light/dark mode support
+// PARIDAD: Rails admin/crm_info_settings/_form.html.erb
+
+.crm-settings-form-container {
+  padding: var(--space-6);
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+// Page Header
+.page-header {
+  margin-bottom: var(--space-6);
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  text-decoration: none;
+  margin-bottom: var(--space-4);
+  transition: color var(--duration-fast);
+
+  &:hover {
+    color: var(--accent-default);
+  }
+
+  i {
+    font-size: 16px;
+  }
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.header-info {
+  h1 {
+    margin: 0 0 var(--space-1) 0;
+    font-size: var(--text-2xl);
+    font-weight: var(--font-semibold);
+    color: var(--fg-default);
+  }
+
+  .client-name {
+    font-size: var(--text-base);
+    color: var(--fg-muted);
+  }
+}
+
+// Loading
+.loading-container {
+  padding: var(--space-12);
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+}
+
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  color: var(--fg-muted);
+
+  i {
+    font-size: 24px;
+  }
+}
+
+// Form Card
+.form-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-muted);
+  background-color: var(--bg-subtle);
+
+  h3 {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--font-semibold);
+    color: var(--fg-default);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+
+    i {
+      color: var(--fg-muted);
+    }
+  }
+}
+
+.card-body {
+  padding: var(--space-5);
+}
+
+// Alert
+.alert {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+  font-size: var(--text-sm);
+
+  i {
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+}
+
+.alert-error {
+  background-color: var(--error-subtle);
+  color: var(--error-text);
+  border: 1px solid var(--error-default);
+}
+
+// Form Fields
+.form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+
+  > label {
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    color: var(--fg-default);
+
+    .required {
+      color: var(--error-default);
+    }
+  }
+}
+
+.form-input {
+  width: 100%;
+  height: var(--input-height);
+  padding: 0 var(--space-3);
+  font-size: var(--text-base);
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  color: var(--fg-default);
+  transition: all var(--duration-normal);
+
+  &::placeholder {
+    color: var(--fg-subtle);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--input-border-focus);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
+  }
+
+  &[readonly] {
+    background-color: var(--bg-muted);
+    cursor: not-allowed;
+  }
+}
+
+.form-select {
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  padding-right: var(--space-8);
+}
+
+.form-hint {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.form-error {
+  font-size: var(--text-xs);
+  color: var(--error-default);
+}
+
+// Checkbox
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  user-select: none;
+
+  input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+  }
+}
+
+.checkbox-custom {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast);
+  flex-shrink: 0;
+
+  &::after {
+    content: '';
+    position: absolute;
+    display: none;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .checkbox-label:hover & {
+    border-color: var(--accent-default);
+  }
+
+  input:checked ~ & {
+    background-color: var(--accent-default);
+    border-color: var(--accent-default);
+
+    &::after {
+      display: block;
+    }
+  }
+
+  input:focus ~ & {
+    box-shadow: 0 0 0 3px var(--accent-subtle);
+  }
+}
+
+.checkbox-text {
+  font-size: var(--text-base);
+  color: var(--fg-default);
+}
+
+// Form Actions
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-muted);
+}
+
+// Buttons
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--btn-height);
+  padding: 0 var(--space-4);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-normal);
+  white-space: nowrap;
+  text-decoration: none;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  i {
+    font-size: 16px;
+  }
+}
+
+.btn-primary {
+  background-color: var(--accent-default);
+  color: white;
+
+  &:hover:not(:disabled) {
+    background-color: var(--accent-emphasis);
+  }
+}
+
+.btn-secondary {
+  background-color: var(--bg-muted);
+  border-color: var(--border-default);
+  color: var(--fg-default);
+
+  &:hover:not(:disabled) {
+    background-color: var(--bg-emphasis);
+  }
+}
+
+// Responsive
+@media (max-width: 640px) {
+  .crm-settings-form-container {
+    padding: var(--space-4);
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+
+    .btn {
+      width: 100%;
+    }
+  }
+}

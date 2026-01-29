@@ -1,0 +1,213 @@
+<!-- Sidebar - PARIDAD: Rails _sidebar_*.html.erb -->
+
+<!-- Mobile Overlay -->
+@if (mobileOpen()) {
+  <div class="sidebar-overlay" (click)="onClose()"></div>
+}
+
+<aside
+  class="sidebar"
+  [class.collapsed]="collapsed()"
+  [class.mobile-open]="mobileOpen()"
+>
+  <!-- Inner container for content (handles overflow) -->
+  <div class="sidebar-inner">
+    <!-- Brand -->
+    <div class="sidebar-brand">
+      <div class="brand-logo">
+        <!-- Custom 3D box icon matching Rails -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+          <line x1="12" y1="22.08" x2="12" y2="12" />
+        </svg>
+      </div>
+      @if (!collapsed()) {
+        <div class="brand-info">
+          <span class="brand-name">{{ appName }}</span>
+          <span class="brand-version">{{ appVersion }}</span>
+        </div>
+      }
+      <!-- Mobile close button -->
+      <button
+        type="button"
+        class="sidebar-close"
+        (click)="onClose()"
+        aria-label="Cerrar menú"
+      >
+        <i class="ph ph-x"></i>
+      </button>
+    </div>
+
+    <!-- User Info (non-collapsed) -->
+    @if (!collapsed()) {
+      <div class="sidebar-user">
+        <div class="user-avatar">
+          @if (currentUser()?.avatarData) {
+            <img [src]="currentUser()?.avatarData" alt="Avatar" />
+          } @else {
+            <span>{{ userInitials() }}</span>
+          }
+        </div>
+        <div class="user-info">
+          <span class="user-name">{{ currentUser()?.fullName }}</span>
+          <span class="user-role">{{ roleDisplayName() }}</span>
+        </div>
+      </div>
+    }
+
+    <!-- Navigation -->
+    <nav class="sidebar-nav">
+      @for (section of navigation(); track section.id; let isFirst = $first) {
+        <div class="nav-section">
+          <!-- Active Organization Selector (Super Admin only, after Organizations section) -->
+          @if (isSuperAdmin() && section.id === 'organizations') {
+            <!-- Organizations section title and link -->
+            @if (section.title && !collapsed()) {
+              <div class="nav-section-title">{{ section.title }}</div>
+            }
+            <ul class="nav-list">
+              @for (item of section.items; track item.id) {
+                <li class="nav-item" [attr.data-tooltip]="collapsed() ? item.label : null">
+                  <a
+                    class="nav-link"
+                    [routerLink]="item.route"
+                    routerLinkActive="active"
+                    [routerLinkActiveOptions]="{ exact: item.route === '/app/dashboard' }"
+                    (click)="onNavItemClick()"
+                    [title]="collapsed() ? item.label : ''"
+                  >
+                    <i class="nav-icon ph {{ item.icon }}"></i>
+                    @if (!collapsed()) {
+                      <span class="nav-label">{{ item.label }}</span>
+                      @if (item.badge) {
+                        <span class="nav-badge" [ngClass]="item.badgeClass || 'badge-primary'">
+                          {{ item.badge }}
+                        </span>
+                      }
+                    }
+                  </a>
+                </li>
+              }
+            </ul>
+
+            <!-- Active Organization Selector (only when expanded) -->
+            @if (!collapsed()) {
+              <div class="nav-section-title active-org-title">ORGANIZACIÓN ACTIVA</div>
+              <div class="active-org-selector">
+                @if (loadingClients()) {
+                  <div class="loading-spinner">
+                    <i class="ph ph-spinner ph-spin"></i>
+                    <span>Cargando...</span>
+                  </div>
+                } @else {
+                  <select
+                    class="form-select"
+                    [value]="activeClient()?.id"
+                    (change)="onActiveClientChange($event)"
+                  >
+                    @for (client of availableClients(); track client.id) {
+                      <option [value]="client.id" [selected]="client.id === activeClient()?.id">
+                        {{ client.name }}
+                      </option>
+                    }
+                  </select>
+                }
+              </div>
+            }
+            <!-- When collapsed, organization selector is hidden - only the "Organizaciones" link icon is shown -->
+          } @else {
+            <!-- Regular sections -->
+            @if (section.title && !collapsed()) {
+              <div class="nav-section-title">{{ section.title }}</div>
+            }
+
+            <ul class="nav-list">
+              @for (item of section.items; track item.id) {
+                <li class="nav-item" [attr.data-tooltip]="collapsed() ? item.label : null">
+                  @if (item.children && item.children.length > 0) {
+                    <!-- Expandable item -->
+                    <button
+                      type="button"
+                      class="nav-link nav-link-expandable"
+                      [class.expanded]="isSectionExpanded(item.id)"
+                      (click)="toggleSection(item.id)"
+                      [title]="collapsed() ? item.label : ''"
+                    >
+                      <i class="nav-icon ph {{ item.icon }}"></i>
+                      @if (!collapsed()) {
+                        <span class="nav-label">{{ item.label }}</span>
+                        <i class="nav-arrow ph" [class.ph-caret-down]="isSectionExpanded(item.id)" [class.ph-caret-right]="!isSectionExpanded(item.id)"></i>
+                      }
+                    </button>
+
+                    @if (isSectionExpanded(item.id) && !collapsed()) {
+                      <ul class="nav-submenu">
+                        @for (child of item.children; track child.id) {
+                          <li class="nav-item">
+                            <a
+                              class="nav-link"
+                              [routerLink]="child.route"
+                              routerLinkActive="active"
+                              (click)="onNavItemClick()"
+                            >
+                              <span class="nav-label">{{ child.label }}</span>
+                              @if (child.badge) {
+                                <span class="nav-badge" [ngClass]="child.badgeClass || 'badge-primary'">
+                                  {{ child.badge }}
+                                </span>
+                              }
+                            </a>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  } @else {
+                    <!-- Single item -->
+                    <a
+                      class="nav-link"
+                      [routerLink]="item.route"
+                      [queryParams]="item.queryParams"
+                      routerLinkActive="active"
+                      [routerLinkActiveOptions]="{ exact: item.route === '/app/dashboard' && !item.queryParams }"
+                      (click)="onNavItemClick()"
+                      [title]="collapsed() ? item.label : ''"
+                    >
+                      <i class="nav-icon ph {{ item.icon }}"></i>
+                      @if (!collapsed()) {
+                        <span class="nav-label">{{ item.label }}</span>
+                        @if (item.badge) {
+                          <span class="nav-badge" [ngClass]="item.badgeClass || 'badge-primary'">
+                            {{ item.badge }}
+                          </span>
+                        }
+                      }
+                    </a>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+    </nav>
+
+    <!-- Footer (non-collapsed) -->
+    @if (!collapsed()) {
+      <div class="sidebar-footer">
+        <span>Monitor WhatsApp Service</span>
+      </div>
+    }
+  </div><!-- End sidebar-inner -->
+
+  <!-- Collapse Toggle Button (outside inner container, always visible) -->
+  <button
+    type="button"
+    class="sidebar-collapse-btn"
+    (click)="onToggleCollapse()"
+    [attr.aria-label]="collapsed() ? 'Expandir menú' : 'Colapsar menú'"
+    [title]="collapsed() ? 'Expandir menú' : 'Colapsar menú'"
+  >
+    <i class="ph" [class.ph-caret-left]="!collapsed()" [class.ph-caret-right]="collapsed()"></i>
+  </button>
+</aside>

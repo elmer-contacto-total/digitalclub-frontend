@@ -1,0 +1,129 @@
+// ============================================
+// CSS RESET & BASE STYLES
+// ============================================
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--fg-default);
+  background-color: var(--bg-base);
+  min-height: 100vh;
+  transition: background-color var(--duration-normal), color var(--duration-normal);
+}
+
+// Typography
+h1, h2, h3, h4, h5, h6 {
+  font-weight: var(--font-semibold);
+  line-height: 1.25;
+  color: var(--fg-default);
+}
+
+h1 { font-size: var(--text-2xl); }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-lg); }
+h4 { font-size: var(--text-base); }
+
+p {
+  margin-bottom: var(--space-4);
+}
+
+a {
+  color: var(--accent-default);
+  text-decoration: none;
+  transition: color var(--duration-fast);
+
+  &:hover {
+    color: var(--accent-emphasis);
+  }
+}
+
+// Lists
+ul, ol {
+  list-style: none;
+}
+
+// Images
+img, svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+// Forms
+input, button, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+// Autofill styles - Override browser defaults for dark mode compatibility
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--input-bg) inset !important;
+  -webkit-text-fill-color: var(--fg-default) !important;
+  box-shadow: 0 0 0 1000px var(--input-bg) inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: var(--fg-default);
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+// Focus styles
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+// Selection
+::selection {
+  background-color: var(--accent-muted);
+  color: var(--fg-default);
+}
+
+// Scrollbar styling
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+
+  &:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+}
+
+// Firefox scrollbar
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-bg);
+}

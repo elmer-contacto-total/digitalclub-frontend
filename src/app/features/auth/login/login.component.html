@@ -1,0 +1,110 @@
+<div class="auth-page">
+  <div class="auth-card card">
+    <!-- Logo -->
+    <div class="auth-logo">
+      <app-logo />
+    </div>
+
+    <!-- Header -->
+    <div class="auth-header">
+      <h1>Iniciar Sesión</h1>
+      <p>Ingrese sus credenciales para acceder al sistema</p>
+    </div>
+
+    <!-- Error Alert -->
+    @if (errorMessage()) {
+      <div class="alert alert-error">
+        <i class="ph ph-warning-circle"></i>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    <!-- Login Form -->
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+      <!-- Email Field -->
+      <div class="form-group">
+        <label for="email" class="form-label">Correo Electrónico</label>
+        <div class="input-with-icon">
+          <i class="ph ph-envelope"></i>
+          <input
+            type="email"
+            id="email"
+            formControlName="email"
+            class="form-input"
+            [class.is-invalid]="emailControl?.invalid && emailControl?.touched"
+            placeholder="correo@ejemplo.com"
+            autocomplete="email"
+          />
+        </div>
+        @if (emailControl?.invalid && emailControl?.touched) {
+          <span class="form-error">
+            @if (emailControl?.errors?.['required']) {
+              El correo electrónico es requerido
+            } @else if (emailControl?.errors?.['email']) {
+              Ingrese un correo electrónico válido
+            }
+          </span>
+        }
+      </div>
+
+      <!-- Password Field -->
+      <div class="form-group">
+        <label for="password" class="form-label">Contraseña</label>
+        <div class="input-with-icon">
+          <i class="ph ph-lock"></i>
+          <input
+            [type]="showPassword() ? 'text' : 'password'"
+            id="password"
+            formControlName="password"
+            class="form-input"
+            [class.is-invalid]="passwordControl?.invalid && passwordControl?.touched"
+            placeholder="••••••••"
+            autocomplete="current-password"
+          />
+          <button
+            type="button"
+            class="toggle-password"
+            (click)="togglePasswordVisibility()"
+            tabindex="-1"
+          >
+            <i class="ph" [class.ph-eye]="!showPassword()" [class.ph-eye-slash]="showPassword()"></i>
+          </button>
+        </div>
+        @if (passwordControl?.invalid && passwordControl?.touched) {
+          <span class="form-error">
+            @if (passwordControl?.errors?.['required']) {
+              La contraseña es requerida
+            } @else if (passwordControl?.errors?.['minlength']) {
+              La contraseña debe tener al menos 6 caracteres
+            }
+          </span>
+        }
+      </div>
+
+      <!-- Forgot Password Link -->
+      <div class="forgot-link">
+        <a routerLink="/auth/forgot-password">¿Olvidó su contraseña?</a>
+      </div>
+
+      <!-- Submit Button -->
+      <button
+        type="submit"
+        class="btn btn-primary btn-block"
+        [disabled]="isLoading() || loginForm.invalid"
+      >
+        @if (isLoading()) {
+          <i class="ph ph-circle-notch spinner"></i>
+          Verificando...
+        } @else {
+          <i class="ph ph-sign-in"></i>
+          Iniciar Sesión
+        }
+      </button>
+    </form>
+
+    <!-- Footer -->
+    <div class="auth-footer">
+      <span>Monitor WhatsApp Service v1.0.2</span>
+    </div>
+  </div>
+</div>

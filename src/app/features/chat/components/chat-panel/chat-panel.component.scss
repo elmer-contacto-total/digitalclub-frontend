@@ -1,0 +1,58 @@
+/**
+ * Chat Panel Component Styles
+ * Uses design system CSS variables for light/dark mode support
+ */
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--card-bg);
+}
+
+.loading-overlay {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  color: var(--fg-muted);
+
+  span {
+    font-size: var(--text-sm);
+  }
+}
+
+.error-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+
+  i {
+    font-size: 48px;
+    margin-bottom: var(--space-3);
+    color: var(--danger-default);
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-default);
+  border-top-color: var(--accent-default);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

@@ -1,0 +1,341 @@
+/**
+ * Chat Header Component Styles
+ * Uses design system CSS variables for light/dark mode support
+ */
+
+.chat-header {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.header-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.avatar {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: var(--radius-full);
+  background: var(--accent-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .initials {
+    color: white;
+    font-weight: var(--font-semibold);
+    font-size: var(--text-base);
+  }
+}
+
+.client-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.client-name {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--fg-default);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  .codigo {
+    font-weight: var(--font-normal);
+    color: var(--fg-muted);
+    font-size: var(--text-sm);
+  }
+}
+
+.client-contact {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: 2px;
+
+  span {
+    font-size: var(--text-xs);
+    color: var(--fg-muted);
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+
+    i {
+      font-size: 11px;
+    }
+  }
+}
+
+.status-indicators {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+
+  i {
+    font-size: var(--text-xs);
+  }
+}
+
+.ticket-badge {
+  background: var(--info-subtle);
+  color: var(--info-default);
+}
+
+.warning-badge {
+  background: var(--warning-subtle);
+  color: var(--warning-emphasis);
+}
+
+.alert-badge {
+  background: var(--danger-subtle);
+  color: var(--danger-default);
+}
+
+.header-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.action-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+  transition: background var(--duration-normal);
+
+  &:hover {
+    background: var(--bg-muted);
+  }
+
+  i {
+    font-size: 18px;
+  }
+}
+
+.header-details {
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-subtle);
+  border-top: 1px solid var(--border-default);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.detail-section {
+  h4 {
+    margin: 0 0 var(--space-2) 0;
+    font-size: var(--text-xs);
+    font-weight: var(--font-semibold);
+    text-transform: uppercase;
+    color: var(--fg-subtle);
+    letter-spacing: 0.5px;
+  }
+}
+
+.crm-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.crm-field {
+  font-size: var(--text-sm);
+
+  .field-label {
+    color: var(--fg-muted);
+  }
+
+  .field-value {
+    color: var(--fg-default);
+    margin-left: var(--space-1);
+  }
+}
+
+.agent-info {
+  font-size: var(--text-sm);
+  color: var(--fg-default);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+
+  i {
+    color: var(--fg-muted);
+  }
+}
+
+.ticket-info {
+  font-size: var(--text-sm);
+}
+
+.ticket-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+
+  > span:first-child {
+    color: var(--fg-muted);
+  }
+
+  .status {
+    font-weight: var(--font-medium);
+
+    &.open {
+      color: var(--success-default);
+    }
+
+    &.closed {
+      color: var(--fg-subtle);
+    }
+  }
+}
+
+// Close Buttons Row
+.close-buttons-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-default);
+  justify-content: flex-end;
+}
+
+.close-type-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--accent-default);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--duration-normal);
+
+  &:hover:not(:disabled) {
+    background: var(--accent-emphasis);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  i {
+    font-size: var(--text-sm);
+  }
+}
+
+// Custom Fields - Datos de Cobranza
+.header-custom-fields {
+  padding: var(--space-2) var(--space-4);
+  background: var(--info-subtle);
+  border-bottom: 1px solid var(--border-default);
+  font-size: var(--text-xs);
+  color: var(--fg-default);
+
+  .custom-field-line {
+    margin: 0 0 var(--space-1) 0;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    strong {
+      color: var(--fg-muted);
+    }
+  }
+}
+
+// CRM Fields visible in header
+.header-crm-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-default);
+  font-size: var(--text-xs);
+
+  .crm-field-item {
+    color: var(--fg-default);
+
+    strong {
+      color: var(--fg-muted);
+    }
+  }
+}
+
+// WhatsApp Message Type Toggle
+.message-type-toggle {
+  margin-left: var(--space-2);
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  user-select: none;
+
+  input {
+    display: none;
+  }
+}
+
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--fg-subtle);
+  border-radius: 10px;
+  transition: background var(--duration-normal);
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    transition: transform var(--duration-normal);
+  }
+
+  input:checked + & {
+    background: var(--accent-default);
+
+    &::after {
+      transform: translateX(16px);
+    }
+  }
+}
+
+.toggle-text {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  font-weight: var(--font-medium);
+}

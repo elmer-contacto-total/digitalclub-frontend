@@ -1,0 +1,142 @@
+<!-- CRM Settings Form - PARIDAD: Rails admin/crm_info_settings/_form.html.erb -->
+<div class="crm-settings-form-container">
+  <!-- Page Header -->
+  <div class="page-header">
+    <a routerLink="/app/clients" class="back-link">
+      <i class="ph ph-arrow-left"></i>
+      Volver a Organizaciones
+    </a>
+    <div class="header-content">
+      <div class="header-info">
+        <h1>{{ isEditMode() ? 'Editar' : 'Nueva' }} Configuración CRM</h1>
+        @if (clientName()) {
+          <span class="client-name">{{ clientName() }}</span>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  @if (isLoading()) {
+    <div class="loading-container">
+      <div class="loading-spinner">
+        <i class="ph ph-spinner ph-spin"></i>
+        <span>Cargando...</span>
+      </div>
+    </div>
+  }
+
+  <!-- Form -->
+  @if (!isLoading()) {
+    <div class="form-card">
+      <div class="card-header">
+        <h3>
+          <i class="ph ph-tree-structure"></i>
+          Configuración de Columna
+        </h3>
+      </div>
+      <div class="card-body">
+        <form (ngSubmit)="onSubmit()" #settingForm="ngForm">
+          <!-- Error notification -->
+          @if (errorMessage()) {
+            <div class="alert alert-error">
+              <i class="ph ph-warning-circle"></i>
+              {{ errorMessage() }}
+            </div>
+          }
+
+          <div class="form-fields">
+            <!-- Column Position -->
+            <div class="form-group">
+              <label for="columnPosition">
+                Posición de columna en archivo de importación
+              </label>
+              <input
+                type="number"
+                id="columnPosition"
+                name="columnPosition"
+                class="form-input"
+                [(ngModel)]="formData.columnPosition"
+                [readonly]="true"
+                min="1"
+              />
+              <span class="form-hint">
+                El valor de la columna 1 debe ser único
+              </span>
+            </div>
+
+            <!-- Column Label -->
+            <div class="form-group">
+              <label for="columnLabel">
+                Etiqueta de columna en archivo de importación
+                <span class="required">*</span>
+              </label>
+              <input
+                type="text"
+                id="columnLabel"
+                name="columnLabel"
+                class="form-input"
+                [(ngModel)]="formData.columnLabel"
+                required
+                #columnLabelInput="ngModel"
+                placeholder="Ej: Nombre del cliente"
+              />
+              @if (columnLabelInput.invalid && columnLabelInput.touched) {
+                <span class="form-error">La etiqueta de columna es requerida</span>
+              }
+            </div>
+
+            <!-- Column Type -->
+            <div class="form-group">
+              <label for="columnType">Tipo de columna</label>
+              <select
+                id="columnType"
+                name="columnType"
+                class="form-input form-select"
+                [(ngModel)]="formData.columnType"
+              >
+                @for (option of columnTypeOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </div>
+
+            <!-- Column Visible -->
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="columnVisible"
+                  class="form-checkbox"
+                  [(ngModel)]="formData.columnVisible"
+                />
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Visible en CRM</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Form Actions -->
+          <div class="form-actions">
+            <a
+              [routerLink]="['/app/clients', clientId(), 'crm_info_settings']"
+              class="btn btn-secondary"
+            >
+              Cancelar
+            </a>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="settingForm.invalid || isSaving()"
+            >
+              @if (isSaving()) {
+                <i class="ph ph-spinner ph-spin"></i>
+              }
+              Grabar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+</div>

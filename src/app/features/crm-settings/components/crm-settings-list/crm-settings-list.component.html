@@ -1,0 +1,255 @@
+<!-- CRM Settings List - PARIDAD: Rails admin/crm_info_settings/index.html.erb -->
+<div class="crm-container">
+  <!-- Back Link -->
+  <a routerLink="/app/clients" class="back-link">
+    <i class="ph ph-arrow-left"></i>
+    Volver a Organizaciones
+  </a>
+
+  <!-- Hero Header -->
+  <div class="hero-card">
+    <div class="hero-main">
+      <div class="hero-icon">
+        <i class="ph ph-tree-structure"></i>
+      </div>
+      <div class="hero-info">
+        <h1>Configuraciones de CRM</h1>
+        @if (clientName()) {
+          <p class="hero-subtitle">{{ clientName() }}</p>
+        }
+      </div>
+    </div>
+    <div class="hero-actions">
+      <button type="button" class="btn btn-white" (click)="openCreateModal()">
+        <i class="ph ph-plus"></i>
+        Nueva Configuración
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar">
+    <div class="stat-item">
+      <i class="ph ph-list-numbers"></i>
+      <span class="stat-value">{{ settings().length }}</span>
+      <span class="stat-label">Columnas</span>
+    </div>
+    <div class="stat-item">
+      <i class="ph ph-eye"></i>
+      <span class="stat-value">{{ getVisibleCount() }}</span>
+      <span class="stat-label">Visibles</span>
+    </div>
+    <div class="stat-item">
+      <i class="ph ph-eye-slash"></i>
+      <span class="stat-value">{{ settings().length - getVisibleCount() }}</span>
+      <span class="stat-label">Ocultas</span>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  @if (isLoading()) {
+    <div class="loading-card">
+      <i class="ph ph-spinner ph-spin"></i>
+      <span>Cargando configuraciones...</span>
+    </div>
+  }
+
+  <!-- Content -->
+  @if (!isLoading()) {
+    @if (settings().length === 0) {
+      <div class="empty-card">
+        <div class="empty-icon">
+          <i class="ph ph-tree-structure"></i>
+        </div>
+        <h3>Sin configuraciones</h3>
+        <p>No hay columnas CRM configuradas para este cliente.</p>
+        <a [routerLink]="['new']" class="btn btn-primary">
+          <i class="ph ph-plus"></i>
+          Crear primera columna
+        </a>
+      </div>
+    } @else {
+      <!-- Columns List -->
+      <div class="columns-card">
+        <div class="card-header">
+          <div class="header-title">
+            <i class="ph ph-table"></i>
+            <h3>Columnas de Importación</h3>
+          </div>
+        </div>
+        <div class="columns-list">
+          @for (setting of settings(); track setting.id) {
+            <div class="column-item" [class.visible]="setting.column_visible">
+              <div class="column-position">
+                <span class="position-number">{{ setting.column_position }}</span>
+              </div>
+              <div class="column-info">
+                <span class="column-label">{{ setting.column_label }}</span>
+                <div class="column-meta">
+                  <span class="meta-type">
+                    <i class="ph ph-tag"></i>
+                    {{ getColumnTypeLabel(setting.column_type) }}
+                  </span>
+                  <span class="meta-visibility" [class.visible]="setting.column_visible">
+                    <i class="ph" [class.ph-eye]="setting.column_visible" [class.ph-eye-slash]="!setting.column_visible"></i>
+                    {{ setting.column_visible ? 'Visible' : 'Oculta' }}
+                  </span>
+                </div>
+              </div>
+              <div class="column-actions">
+                <a
+                  [routerLink]="[setting.id, 'edit']"
+                  class="btn-action"
+                  title="Editar"
+                >
+                  <i class="ph ph-pencil-simple"></i>
+                </a>
+                <button
+                  type="button"
+                  class="btn-action btn-danger"
+                  (click)="confirmDelete(setting)"
+                  [disabled]="isDeleting().has(setting.id)"
+                  title="Eliminar"
+                >
+                  @if (isDeleting().has(setting.id)) {
+                    <i class="ph ph-spinner ph-spin"></i>
+                  } @else {
+                    <i class="ph ph-trash"></i>
+                  }
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+
+  <!-- Delete Confirmation Dialog -->
+  @if (showDeleteModal()) {
+    <div class="modal-overlay" (click)="cancelDelete()">
+      <div class="modal-dialog" (click)="$event.stopPropagation()">
+        <div class="modal-icon">
+          <i class="ph ph-warning"></i>
+        </div>
+        <h3>Eliminar Columna</h3>
+        <p>¿Estás seguro de eliminar la columna <strong>"{{ settingToDelete()?.column_label }}"</strong>?</p>
+        <p class="modal-warning">Esta acción no se puede deshacer.</p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" (click)="cancelDelete()">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger"
+            (click)="deleteSetting()"
+            [disabled]="isDeleting().has(settingToDelete()?.id || 0)"
+          >
+            @if (isDeleting().has(settingToDelete()?.id || 0)) {
+              <i class="ph ph-spinner ph-spin"></i>
+            } @else {
+              <i class="ph ph-trash"></i>
+            }
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Create Configuration Modal -->
+  @if (showCreateModal()) {
+    <div class="modal-overlay" (click)="cancelCreate()">
+      <div class="modal-dialog modal-form" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div class="modal-title">
+            <i class="ph ph-plus-circle"></i>
+            <h3>Nueva Configuración CRM</h3>
+          </div>
+          <button type="button" class="modal-close" (click)="cancelCreate()">
+            <i class="ph ph-x"></i>
+          </button>
+        </div>
+        <form (ngSubmit)="createSetting()" class="modal-body">
+          <!-- Column Position (Auto) -->
+          <div class="form-group">
+            <label for="columnPosition">
+              Posición de columna
+            </label>
+            <input
+              type="number"
+              id="columnPosition"
+              class="form-input"
+              [value]="getNextPosition()"
+              readonly
+            />
+            <span class="form-hint">Se asigna automáticamente</span>
+          </div>
+
+          <!-- Column Label -->
+          <div class="form-group">
+            <label for="columnLabel">
+              Etiqueta de columna
+              <span class="required">*</span>
+            </label>
+            <input
+              type="text"
+              id="columnLabel"
+              class="form-input"
+              [(ngModel)]="createFormData.columnLabel"
+              name="columnLabel"
+              placeholder="Ej: Nombre del cliente"
+              required
+            />
+          </div>
+
+          <!-- Column Type -->
+          <div class="form-group">
+            <label for="columnType">Tipo de columna</label>
+            <select
+              id="columnType"
+              class="form-input"
+              [(ngModel)]="createFormData.columnType"
+              name="columnType"
+            >
+              @for (option of columnTypeOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </div>
+
+          <!-- Column Visible -->
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input
+                type="checkbox"
+                [(ngModel)]="createFormData.columnVisible"
+                name="columnVisible"
+                class="form-checkbox"
+              />
+              <span class="checkbox-text">Visible en CRM</span>
+            </label>
+          </div>
+
+          <div class="modal-form-actions">
+            <button type="button" class="btn btn-secondary" (click)="cancelCreate()">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="isCreating() || !createFormData.columnLabel.trim()"
+            >
+              @if (isCreating()) {
+                <i class="ph ph-spinner ph-spin"></i>
+              } @else {
+                <i class="ph ph-floppy-disk"></i>
+              }
+              Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+</div>

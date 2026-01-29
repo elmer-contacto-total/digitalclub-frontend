@@ -1,0 +1,101 @@
+/**
+ * Message List Component Styles
+ * Uses design system CSS variables for light/dark mode support
+ */
+
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--chat-bg, var(--bg-subtle));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+
+  i {
+    font-size: 48px;
+    margin-bottom: var(--space-3);
+    opacity: 0.5;
+  }
+
+  p {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+}
+
+.message-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.date-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: var(--space-4) 0 var(--space-3);
+
+  .date-label {
+    background: var(--card-bg);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    color: var(--fg-muted);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-left: var(--space-2);
+  width: fit-content;
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.typing-dots {
+  display: flex;
+  gap: var(--space-1);
+
+  span {
+    width: 8px;
+    height: 8px;
+    background: var(--fg-muted);
+    border-radius: 50%;
+    animation: typing 1.4s ease-in-out infinite;
+
+    &:nth-child(1) { animation-delay: 0s; }
+    &:nth-child(2) { animation-delay: 0.2s; }
+    &:nth-child(3) { animation-delay: 0.4s; }
+  }
+}
+
+.typing-text {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}

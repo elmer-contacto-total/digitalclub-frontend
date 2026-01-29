@@ -1,0 +1,463 @@
+// Client List Styles
+// Uses design tokens for light/dark mode support
+// PARIDAD: Rails admin/clients/index.html.erb
+
+.client-list-container {
+  padding: var(--space-6);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+// Page Header
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-6);
+  gap: var(--space-4);
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+  }
+}
+
+.page-header-content {
+  flex: 1;
+}
+
+.page-title {
+  margin: 0 0 var(--space-1) 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--fg-default);
+}
+
+.page-subtitle {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--fg-muted);
+}
+
+.page-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+// Toolbar
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  max-width: 400px;
+  position: relative;
+
+  i {
+    position: absolute;
+    left: var(--space-3);
+    color: var(--fg-subtle);
+    font-size: 18px;
+  }
+
+  .form-input {
+    padding-left: var(--space-8);
+    width: 100%;
+  }
+
+  @media (max-width: 640px) {
+    max-width: none;
+  }
+}
+
+.toolbar-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.record-count {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+// Loading/Empty States
+.loading-container,
+.empty-container {
+  padding: var(--space-8);
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+}
+
+// Table Card
+.table-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+// Data Table
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-base);
+
+  th,
+  td {
+    padding: var(--space-3) var(--space-4);
+    text-align: left;
+    border-bottom: 1px solid var(--table-border);
+  }
+
+  th {
+    font-weight: var(--font-semibold);
+    color: var(--fg-muted);
+    background-color: var(--table-header-bg);
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    transition: background-color var(--duration-fast);
+
+    &:hover {
+      background-color: var(--table-row-hover);
+    }
+
+    &:last-child td {
+      border-bottom: none;
+    }
+  }
+}
+
+// Cell Styles
+.cell-primary {
+  font-weight: var(--font-medium);
+  color: var(--fg-default);
+}
+
+.cell-secondary {
+  color: var(--fg-muted);
+}
+
+.cell-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg-default);
+}
+
+.cell-platform {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  max-width: 250px;
+  display: block;
+}
+
+// Actions Column
+.actions-col {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+// Dropdown
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-toggle {
+  .caret {
+    font-size: 12px;
+    transition: transform var(--duration-fast);
+  }
+
+  .dropdown-label {
+    @media (max-width: 768px) {
+      display: none;
+    }
+  }
+}
+
+.dropdown.open .dropdown-toggle .caret {
+  transform: rotate(180deg);
+}
+
+// Dropdown menu con position fixed (portal pattern)
+.dropdown-menu-fixed {
+  position: fixed;
+  min-width: 200px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  z-index: var(--z-dropdown);
+  overflow: hidden;
+  animation: dropdownFadeIn var(--duration-normal) ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--fg-default);
+  text-align: left;
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--duration-fast);
+
+  &:hover {
+    background-color: var(--bg-muted);
+  }
+
+  i {
+    font-size: 18px;
+    color: var(--fg-muted);
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+}
+
+.dropdown-item-warning {
+  color: var(--warning-text);
+
+  i {
+    color: var(--warning-default);
+  }
+
+  &:hover {
+    background-color: var(--warning-subtle);
+  }
+}
+
+.dropdown-item-danger {
+  color: var(--error-text);
+
+  i {
+    color: var(--error-default);
+  }
+
+  &:hover {
+    background-color: var(--error-subtle);
+  }
+}
+
+.dropdown-divider {
+  height: 1px;
+  background-color: var(--border-muted);
+  margin: var(--space-1) 0;
+}
+
+// Buttons
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--btn-height);
+  padding: 0 var(--space-4);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-normal);
+  white-space: nowrap;
+  text-decoration: none;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  i {
+    font-size: 16px;
+  }
+}
+
+.btn-sm {
+  height: var(--btn-height-sm);
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+
+  i {
+    font-size: 14px;
+  }
+
+  span {
+    @media (max-width: 1200px) {
+      display: none;
+    }
+  }
+}
+
+.btn-primary {
+  background-color: var(--accent-default);
+  color: white;
+
+  &:hover:not(:disabled) {
+    background-color: var(--accent-emphasis);
+  }
+}
+
+.btn-secondary {
+  background-color: var(--bg-muted);
+  border-color: var(--border-default);
+  color: var(--fg-default);
+
+  &:hover:not(:disabled) {
+    background-color: var(--bg-emphasis);
+  }
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--fg-muted);
+
+  &:hover:not(:disabled) {
+    background-color: var(--bg-muted);
+    color: var(--fg-default);
+  }
+}
+
+.btn-warning-ghost {
+  background-color: transparent;
+  color: var(--warning-default);
+
+  &:hover:not(:disabled) {
+    background-color: var(--warning-subtle);
+  }
+}
+
+.btn-danger {
+  background-color: transparent;
+  color: var(--error-default);
+
+  &:hover:not(:disabled) {
+    background-color: var(--error-subtle);
+  }
+}
+
+// Badges
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--badge-height);
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.badge-default {
+  background-color: var(--bg-muted);
+  color: var(--fg-muted);
+}
+
+.badge-primary {
+  background-color: var(--accent-subtle);
+  color: var(--accent-emphasis);
+}
+
+.badge-success {
+  background-color: var(--success-subtle);
+  color: var(--success-text);
+}
+
+.badge-error {
+  background-color: var(--error-subtle);
+  color: var(--error-text);
+}
+
+// Form Input (for search)
+.form-input {
+  width: 100%;
+  height: var(--input-height);
+  padding: 0 var(--space-3);
+  font-size: var(--text-base);
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  color: var(--fg-default);
+  transition: all var(--duration-normal);
+
+  &::placeholder {
+    color: var(--fg-subtle);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--input-border-focus);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
+  }
+}
+
+// Responsive Adjustments
+@media (max-width: 1024px) {
+  .client-list-container {
+    padding: var(--space-4);
+  }
+
+  .data-table {
+    font-size: var(--text-sm);
+
+    th,
+    td {
+      padding: var(--space-2) var(--space-3);
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    margin-bottom: var(--space-4);
+  }
+
+  .toolbar {
+    padding: var(--space-3);
+  }
+}

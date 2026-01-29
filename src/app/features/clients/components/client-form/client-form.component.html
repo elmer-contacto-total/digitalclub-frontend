@@ -1,0 +1,418 @@
+<!-- Client Form - PARIDAD: Rails admin/clients/_form.html.erb -->
+<div class="client-form-container">
+  @if (isLoading()) {
+    <app-loading-spinner [overlay]="true" message="Cargando..." />
+  }
+
+  <!-- Back Link -->
+  <a routerLink="/app/clients" class="back-link">
+    <i class="ph ph-arrow-left"></i>
+    Volver a Organizaciones
+  </a>
+
+  <!-- Hero Card -->
+  <div class="hero-card">
+    <div class="hero-main">
+      <div class="hero-icon">
+        <i class="ph" [class.ph-buildings]="isEditMode()" [class.ph-plus-circle]="!isEditMode()"></i>
+      </div>
+      <div class="hero-info">
+        <h1>{{ isEditMode() ? 'Editar Organización' : 'Nueva Organización' }}</h1>
+        <p class="hero-subtitle">{{ isEditMode() ? 'Actualiza los datos de la organización' : 'Completa los datos de la nueva organización' }}</p>
+      </div>
+    </div>
+  </div>
+
+  <form (ngSubmit)="onSubmit()" class="form-layout">
+    <div class="form-grid">
+      <!-- Left Column: Detalles -->
+      <div class="form-column">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">
+              <i class="ph ph-info"></i>
+              Detalles
+            </h5>
+
+            <!-- Nombre -->
+            <div class="form-group" [class.has-error]="errors['name']">
+              <label for="name">Nombre <span class="required">*</span></label>
+              <input
+                type="text"
+                id="name"
+                [(ngModel)]="form.name"
+                name="name"
+                placeholder="Nombre de la organización"
+                [class.is-invalid]="errors['name']"
+              />
+              @if (errors['name']) {
+                <span class="error-text">
+                  <i class="ph ph-warning-circle"></i>
+                  {{ errors['name'] }}
+                </span>
+              }
+            </div>
+
+            <!-- Nombre de la Empresa -->
+            <div class="form-group" [class.has-error]="errors['companyName']">
+              <label for="companyName">Nombre de la Empresa <span class="required">*</span></label>
+              <input
+                type="text"
+                id="companyName"
+                [(ngModel)]="form.companyName"
+                name="companyName"
+                placeholder="Razón social o nombre comercial"
+                [class.is-invalid]="errors['companyName']"
+              />
+              @if (errors['companyName']) {
+                <span class="error-text">
+                  <i class="ph ph-warning-circle"></i>
+                  {{ errors['companyName'] }}
+                </span>
+              }
+            </div>
+
+            <!-- Tipo de Documento -->
+            <div class="form-group" [class.has-error]="errors['docType']">
+              <label for="docType">Tipo de Documento <span class="required">*</span></label>
+              <select
+                id="docType"
+                [(ngModel)]="form.docType"
+                name="docType"
+                [class.is-invalid]="errors['docType']"
+              >
+                <option value="">Seleccionar...</option>
+                @for (entry of docTypes; track entry.value) {
+                  <option [value]="entry.value">{{ entry.label }}</option>
+                }
+              </select>
+              @if (errors['docType']) {
+                <span class="error-text">
+                  <i class="ph ph-warning-circle"></i>
+                  {{ errors['docType'] }}
+                </span>
+              }
+            </div>
+
+            <!-- Número de Documento -->
+            <div class="form-group" [class.has-error]="errors['docNumber']">
+              <label for="docNumber">
+                Número de Documento
+                @if (form.docType) {
+                  <span class="required">*</span>
+                }
+              </label>
+              <input
+                type="text"
+                id="docNumber"
+                [(ngModel)]="form.docNumber"
+                name="docNumber"
+                [placeholder]="form.docType === 'ruc' ? 'Ingrese 11 dígitos' : form.docType === 'dni' ? 'Ingrese 8 dígitos' : 'RUC o DNI'"
+                [class.is-invalid]="errors['docNumber']"
+                maxlength="11"
+              />
+              @if (errors['docNumber']) {
+                <span class="error-text">
+                  <i class="ph ph-warning-circle"></i>
+                  {{ errors['docNumber'] }}
+                </span>
+              }
+              @if (form.docType && !errors['docNumber']) {
+                <span class="hint-text">
+                  @if (form.docType === 'ruc') {
+                    El RUC debe tener 11 dígitos numéricos
+                  } @else if (form.docType === 'dni') {
+                    El DNI debe tener 8 dígitos numéricos
+                  }
+                </span>
+              }
+            </div>
+
+            <!-- Tipo de Plataforma -->
+            <div class="form-group" [class.has-error]="errors['clientType']">
+              <label for="clientType">Tipo de Plataforma <span class="required">*</span></label>
+              <select
+                id="clientType"
+                [(ngModel)]="form.clientType"
+                name="clientType"
+                [class.is-invalid]="errors['clientType']"
+              >
+                <option value="">Seleccionar...</option>
+                @for (entry of clientTypes; track entry.value) {
+                  <option [value]="entry.value">{{ entry.label }}</option>
+                }
+              </select>
+              @if (errors['clientType']) {
+                <span class="error-text">
+                  <i class="ph ph-warning-circle"></i>
+                  {{ errors['clientType'] }}
+                </span>
+              }
+            </div>
+
+            <!-- Estado -->
+            <div class="form-group">
+              <label for="status">Estado</label>
+              <select
+                id="status"
+                [(ngModel)]="form.status"
+                name="status"
+              >
+                @for (entry of statuses; track entry.value) {
+                  <option [value]="entry.value">{{ entry.label }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Estructura (condicional) -->
+      @if (clientsHaveStructure) {
+        <div class="form-column">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">
+                <i class="ph ph-tree-structure"></i>
+                Estructura
+              </h5>
+
+              <p class="structure-hint">
+                <i class="ph ph-info"></i>
+                Configure la jerarquía de roles para esta organización. Los niveles marcados como "Activo" estarán disponibles.
+              </p>
+
+              <!-- Admin Level 0 (Administrador) - Siempre activo -->
+              <div class="structure-row">
+                <div class="structure-checkbox">
+                  <input
+                    type="checkbox"
+                    id="existsAdminLevel0"
+                    [(ngModel)]="structure.existsAdminLevel0"
+                    name="existsAdminLevel0"
+                    disabled
+                  />
+                  <label for="existsAdminLevel0">Activo</label>
+                </div>
+                <div class="structure-input">
+                  <label for="adminLevel0">Nombre Admin</label>
+                  <input
+                    type="text"
+                    id="adminLevel0"
+                    [(ngModel)]="structure.adminLevel0"
+                    name="adminLevel0"
+                    readonly
+                    class="readonly-field"
+                  />
+                </div>
+              </div>
+
+              <!-- Manager Level 1 -->
+              <div class="structure-row" [class.has-error]="errors['managerLevel1']">
+                <div class="structure-checkbox">
+                  <input
+                    type="checkbox"
+                    id="existsManagerLevel1"
+                    [(ngModel)]="structure.existsManagerLevel1"
+                    name="existsManagerLevel1"
+                    (change)="onManagerLevel1Change()"
+                  />
+                  <label for="existsManagerLevel1">Activo</label>
+                </div>
+                <div class="structure-input">
+                  <label for="managerLevel1">
+                    Nomenclatura Gerente Nivel 1
+                    @if (structure.existsManagerLevel1) {
+                      <span class="required">*</span>
+                    }
+                  </label>
+                  <input
+                    type="text"
+                    id="managerLevel1"
+                    [(ngModel)]="structure.managerLevel1"
+                    name="managerLevel1"
+                    placeholder="Ej: Gerente Regional"
+                    [class.is-invalid]="errors['managerLevel1']"
+                    [disabled]="!structure.existsManagerLevel1"
+                  />
+                  @if (errors['managerLevel1']) {
+                    <span class="error-text">
+                      <i class="ph ph-warning-circle"></i>
+                      {{ errors['managerLevel1'] }}
+                    </span>
+                  }
+                </div>
+              </div>
+
+              <!-- Manager Level 2 -->
+              <div class="structure-row" [class.has-error]="errors['managerLevel2']">
+                <div class="structure-checkbox">
+                  <input
+                    type="checkbox"
+                    id="existsManagerLevel2"
+                    [(ngModel)]="structure.existsManagerLevel2"
+                    name="existsManagerLevel2"
+                    (change)="onManagerLevel2Change()"
+                  />
+                  <label for="existsManagerLevel2">Activo</label>
+                </div>
+                <div class="structure-input">
+                  <label for="managerLevel2">
+                    Nomenclatura Gerente Nivel 2
+                    @if (structure.existsManagerLevel2) {
+                      <span class="required">*</span>
+                    }
+                  </label>
+                  <input
+                    type="text"
+                    id="managerLevel2"
+                    [(ngModel)]="structure.managerLevel2"
+                    name="managerLevel2"
+                    placeholder="Ej: Gerente de Zona"
+                    [class.is-invalid]="errors['managerLevel2']"
+                    [disabled]="!structure.existsManagerLevel2"
+                  />
+                  @if (errors['managerLevel2']) {
+                    <span class="error-text">
+                      <i class="ph ph-warning-circle"></i>
+                      {{ errors['managerLevel2'] }}
+                    </span>
+                  }
+                </div>
+              </div>
+
+              <!-- Manager Level 3 -->
+              <div class="structure-row" [class.has-error]="errors['managerLevel3']">
+                <div class="structure-checkbox">
+                  <input
+                    type="checkbox"
+                    id="existsManagerLevel3"
+                    [(ngModel)]="structure.existsManagerLevel3"
+                    name="existsManagerLevel3"
+                    (change)="onManagerLevel3Change()"
+                  />
+                  <label for="existsManagerLevel3">Activo</label>
+                </div>
+                <div class="structure-input">
+                  <label for="managerLevel3">
+                    Nomenclatura Gerente Nivel 3
+                    @if (structure.existsManagerLevel3) {
+                      <span class="required">*</span>
+                    }
+                  </label>
+                  <input
+                    type="text"
+                    id="managerLevel3"
+                    [(ngModel)]="structure.managerLevel3"
+                    name="managerLevel3"
+                    placeholder="Ej: Jefe de Área"
+                    [class.is-invalid]="errors['managerLevel3']"
+                    [disabled]="!structure.existsManagerLevel3"
+                  />
+                  @if (errors['managerLevel3']) {
+                    <span class="error-text">
+                      <i class="ph ph-warning-circle"></i>
+                      {{ errors['managerLevel3'] }}
+                    </span>
+                  }
+                </div>
+              </div>
+
+              <!-- Manager Level 4 (Supervisor) - Siempre activo -->
+              <div class="structure-row">
+                <div class="structure-checkbox">
+                  <input
+                    type="checkbox"
+                    id="existsManagerLevel4"
+                    [(ngModel)]="structure.existsManagerLevel4"
+                    name="existsManagerLevel4"
+                    disabled
+                  />
+                  <label for="existsManagerLevel4">Activo</label>
+                </div>
+                <div class="structure-input">
+                  <label for="managerLevel4">Nomenclatura Gerente Nivel 4</label>
+                  <input
+                    type="text"
+                    id="managerLevel4"
+                    [(ngModel)]="structure.managerLevel4"
+                    name="managerLevel4"
+                    readonly
+                    class="readonly-field"
+                  />
+                </div>
+              </div>
+
+              <!-- Agent - Siempre activo -->
+              <div class="structure-row">
+                <div class="structure-checkbox">
+                  <input
+                    type="checkbox"
+                    id="existsAgent"
+                    [(ngModel)]="structure.existsAgent"
+                    name="existsAgent"
+                    disabled
+                  />
+                  <label for="existsAgent">Activo</label>
+                </div>
+                <div class="structure-input">
+                  <label for="agent">Nomenclatura Agente</label>
+                  <input
+                    type="text"
+                    id="agent"
+                    [(ngModel)]="structure.agent"
+                    name="agent"
+                    readonly
+                    class="readonly-field"
+                  />
+                </div>
+              </div>
+
+              <!-- Client Level 6 - Siempre activo -->
+              <div class="structure-row">
+                <div class="structure-checkbox">
+                  <input
+                    type="checkbox"
+                    id="existsClientLevel6"
+                    [(ngModel)]="structure.existsClientLevel6"
+                    name="existsClientLevel6"
+                    disabled
+                  />
+                  <label for="existsClientLevel6">Activo</label>
+                </div>
+                <div class="structure-input">
+                  <label for="clientLevel6">Nombre Cliente Final</label>
+                  <input
+                    type="text"
+                    id="clientLevel6"
+                    [(ngModel)]="structure.clientLevel6"
+                    name="clientLevel6"
+                    readonly
+                    class="readonly-field"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Form Actions -->
+    <div class="form-actions">
+      <button type="submit" class="btn btn-success" [disabled]="isSaving()">
+        @if (isSaving()) {
+          <i class="ph ph-spinner ph-spin"></i>
+          Guardando...
+        } @else {
+          <i class="ph ph-floppy-disk"></i>
+          Grabar
+        }
+      </button>
+      <a routerLink="/app/clients" class="btn btn-secondary">
+        <i class="ph ph-x"></i>
+        Cancelar
+      </a>
+    </div>
+  </form>
+</div>

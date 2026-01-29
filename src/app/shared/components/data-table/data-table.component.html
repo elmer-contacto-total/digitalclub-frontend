@@ -1,0 +1,100 @@
+<div class="data-table-wrapper">
+  <!-- Loading overlay -->
+  @if (loading()) {
+    <app-loading-spinner [overlay]="true" message="Cargando..." />
+  }
+
+  <!-- Table -->
+  <div class="table-container">
+    <table class="data-table" [class.hoverable]="hoverable()">
+      <thead>
+        <tr>
+          <!-- Selection checkbox -->
+          @if (selectable()) {
+            <th class="th-checkbox">
+              <input
+                type="checkbox"
+                [checked]="isAllSelected()"
+                [indeterminate]="selectedRows().size > 0 && !isAllSelected()"
+                (change)="toggleAllSelection()"
+              />
+            </th>
+          }
+
+          <!-- Column headers -->
+          @for (column of columns(); track column.key) {
+            <th
+              [style.width]="column.width"
+              [style.text-align]="column.align || 'left'"
+              [class.sortable]="column.sortable"
+              (click)="column.sortable ? onSort(column) : null"
+            >
+              <div class="th-content">
+                <span>{{ column.label }}</span>
+                @if (column.sortable) {
+                  <i class="sort-icon ph {{ getSortIcon(column) }}"></i>
+                }
+              </div>
+            </th>
+          }
+        </tr>
+      </thead>
+
+      <tbody>
+        @if (displayedData().length === 0 && !loading()) {
+          <tr>
+            <td [attr.colspan]="columns().length + (selectable() ? 1 : 0)">
+              <app-empty-state
+                [icon]="emptyIcon()"
+                [title]="emptyTitle()"
+                [description]="emptyDescription()"
+              />
+            </td>
+          </tr>
+        } @else {
+          @for (row of displayedData(); track $index; let i = $index) {
+            <tr
+              [class.selected]="isRowSelected(i)"
+              (click)="onRowClick(row, i)"
+            >
+              <!-- Selection checkbox -->
+              @if (selectable()) {
+                <td class="td-checkbox" (click)="$event.stopPropagation()">
+                  <input
+                    type="checkbox"
+                    [checked]="isRowSelected(i)"
+                    (change)="toggleRowSelection(i)"
+                  />
+                </td>
+              }
+
+              <!-- Data cells -->
+              @for (column of columns(); track column.key) {
+                <td [style.text-align]="column.align || 'left'">
+                  @if (column.template) {
+                    <ng-container
+                      *ngTemplateOutlet="column.template; context: { $implicit: row, row: row, index: i }"
+                    />
+                  } @else {
+                    {{ getCellValue(row, column.key) }}
+                  }
+                </td>
+              }
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  @if (paginated() && computedTotalItems() > 0) {
+    <app-pagination
+      [currentPage]="currentPage()"
+      [totalItems]="computedTotalItems()"
+      [pageSize]="pageSize()"
+      (pageChange)="onPageChange($event)"
+      (pageSizeChange)="onPageSizeChange($event)"
+    />
+  }
+</div>

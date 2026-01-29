@@ -1,0 +1,172 @@
+<!-- Client List - PARIDAD: Rails admin/clients/index.html.erb -->
+<div class="client-list-container">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="page-header-content">
+      <h1 class="page-title">Organizaciones</h1>
+      <p class="page-subtitle">Administra las organizaciones del sistema</p>
+    </div>
+    <div class="page-actions">
+      <a routerLink="new" class="btn btn-primary">
+        <i class="ph ph-plus"></i>
+        Nueva Organización
+      </a>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="search-box">
+      <i class="ph ph-magnifying-glass"></i>
+      <input
+        type="text"
+        class="form-input"
+        placeholder="Buscar por nombre, empresa o documento..."
+        [(ngModel)]="searchTerm"
+        (input)="onSearch()"
+      />
+    </div>
+    <div class="toolbar-info">
+      <span class="record-count">
+        {{ filteredClients().length }} de {{ clients().length }} registros
+      </span>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <div class="loading-container">
+      <app-loading-spinner [overlay]="false" message="Cargando organizaciones..." />
+    </div>
+  } @else if (filteredClients().length === 0) {
+    <div class="empty-container">
+      <app-empty-state
+        icon="ph-buildings"
+        title="No hay organizaciones"
+        [description]="searchTerm() ? 'No se encontraron organizaciones con ese criterio' : 'Aún no hay organizaciones registradas'"
+      />
+    </div>
+  } @else {
+    <!-- Data Table -->
+    <div class="table-card">
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Empresa</th>
+              <th>Tipo de Documento</th>
+              <th>Número de Documento</th>
+              <th>Plataforma</th>
+              <th>Estado</th>
+              <th class="actions-col">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (client of filteredClients(); track client.id) {
+              <tr>
+                <td>
+                  <div class="cell-primary">{{ client.name }}</div>
+                </td>
+                <td>
+                  <div class="cell-secondary">{{ client.companyName || '-' }}</div>
+                </td>
+                <td>
+                  <span class="badge badge-default">{{ getDocTypeLabel(client.docType) }}</span>
+                </td>
+                <td>
+                  <span class="cell-mono">{{ client.docNumber || '-' }}</span>
+                </td>
+                <td>
+                  <span class="cell-platform">{{ getClientTypeLabel(client.clientType) }}</span>
+                </td>
+                <td>
+                  <span class="badge" [class.badge-success]="client.status === ClientStatus.ACTIVE" [class.badge-error]="client.status !== ClientStatus.ACTIVE">
+                    {{ client.status === ClientStatus.ACTIVE ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </td>
+                <td class="actions-col">
+                  <div class="dropdown" [class.open]="openDropdownId === client.id">
+                    <button
+                      class="btn btn-sm btn-secondary dropdown-toggle"
+                      (click)="toggleDropdown(client.id, $event)"
+                      [attr.aria-expanded]="openDropdownId === client.id"
+                      aria-haspopup="true"
+                    >
+                      <i class="ph ph-dots-three-outline-vertical"></i>
+                      <span class="dropdown-label">Acciones</span>
+                      <i class="ph ph-caret-down caret"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+
+  <!-- Dropdown Menu (Portal - rendered outside table to avoid overflow issues) -->
+  @if (openDropdownId !== null) {
+    <div
+      class="dropdown-menu dropdown-menu-fixed"
+      [ngStyle]="dropdownStyle"
+      role="menu"
+    >
+      @for (client of filteredClients(); track client.id) {
+        @if (client.id === openDropdownId) {
+          <a [routerLink]="[client.id]" class="dropdown-item" role="menuitem" (click)="closeDropdown()">
+            <i class="ph ph-eye"></i>
+            Ver detalles
+          </a>
+          <a [routerLink]="[client.id, 'edit']" class="dropdown-item" role="menuitem" (click)="closeDropdown()">
+            <i class="ph ph-pencil-simple"></i>
+            Editar
+          </a>
+          <div class="dropdown-divider" role="separator"></div>
+          <a [routerLink]="[client.id, 'settings']" class="dropdown-item" role="menuitem" (click)="closeDropdown()">
+            <i class="ph ph-gear"></i>
+            Configuración
+          </a>
+          <a [routerLink]="[client.id, 'crm_info_settings']" class="dropdown-item" role="menuitem" (click)="closeDropdown()">
+            <i class="ph ph-tree-structure"></i>
+            CRM
+          </a>
+          <div class="dropdown-divider" role="separator"></div>
+          <button class="dropdown-item dropdown-item-warning" role="menuitem" (click)="confirmDeleteProspects(client); closeDropdown()">
+            <i class="ph ph-user-minus"></i>
+            Borrar Prospectos
+          </button>
+          <button class="dropdown-item dropdown-item-danger" role="menuitem" (click)="confirmDelete(client); closeDropdown()">
+            <i class="ph ph-trash"></i>
+            Eliminar
+          </button>
+        }
+      }
+    </div>
+  }
+
+  <!-- Delete Prospects Confirmation -->
+  @if (clientToDeleteProspects()) {
+    <app-confirm-dialog
+      title="Borrar Prospectos"
+      [message]="'¿Estás seguro? Esto eliminará TODOS los prospectos y sus mensajes asociados para ' + clientToDeleteProspects()!.name + '. Esta acción no se puede deshacer.'"
+      confirmText="Borrar Prospectos"
+      confirmClass="btn-warning"
+      (confirm)="deleteProspects()"
+      (cancel)="clientToDeleteProspects.set(null)"
+    />
+  }
+
+  <!-- Delete Client Confirmation -->
+  @if (clientToDelete()) {
+    <app-confirm-dialog
+      title="Eliminar Organización"
+      [message]="'¿Está seguro de eliminar la organización ' + clientToDelete()!.name + '?'"
+      confirmText="Eliminar"
+      confirmClass="btn-danger"
+      (confirm)="deleteClient()"
+      (cancel)="clientToDelete.set(null)"
+    />
+  }
+</div>

@@ -1,0 +1,51 @@
+<!-- Admin Layout - PARIDAD: Rails admin.html.erb -->
+<div class="admin-layout" [class.sidebar-collapsed]="sidebarCollapsed()">
+  <!-- Impersonation Toolbar - PARIDAD: Rails _admin_login_as_toolbar.html.erb -->
+  <app-impersonation-toolbar />
+
+  <!-- Sidebar -->
+  <app-sidebar
+    [collapsed]="sidebarCollapsed()"
+    [mobileOpen]="sidebarMobileOpen()"
+    (close)="closeMobileSidebar()"
+    (toggleCollapse)="toggleSidebarCollapse()"
+  />
+
+  <!-- Main wrapper -->
+  <div class="main-wrapper">
+    <!-- Header -->
+    <app-header (toggleSidebar)="toggleSidebar()" />
+
+    <!-- Main content -->
+    <main class="main-content">
+      <router-outlet />
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+      <div class="footer-left">
+        <span>Monitor WhatsApp Service &copy; {{ currentYear }}</span>
+      </div>
+      <div class="footer-right">
+        <a href="/help" class="footer-link">Ayuda</a>
+        <span class="footer-divider">|</span>
+        <a href="/privacy" class="footer-link">Privacidad</a>
+        <span class="footer-divider">|</span>
+        <a href="/terms" class="footer-link">Términos</a>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container">
+    @for (toast of toasts(); track toast.id) {
+      <div class="toast toast-{{ toast.type }}" (click)="dismissToast(toast.id)">
+        <i class="ph {{ getToastIcon(toast.type) }}"></i>
+        <span>{{ toast.message }}</span>
+        <button type="button" class="toast-close" aria-label="Cerrar">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,171 @@
+<!-- Header - PARIDAD: Rails _header.html.erb -->
+<header class="header" (clickOutside)="closeAllMenus()">
+  <div class="header-left">
+    <!-- Hamburger Toggle -->
+    <button
+      type="button"
+      class="btn btn-ghost header-toggle"
+      (click)="onToggleSidebar()"
+      aria-label="Toggle sidebar"
+    >
+      <i class="ph ph-list"></i>
+    </button>
+
+    <!-- Search Bar -->
+    <div class="header-search">
+      <i class="ph ph-magnifying-glass search-icon"></i>
+      <input
+        type="text"
+        class="search-input"
+        placeholder="Buscar..."
+        [value]="searchQuery()"
+        (input)="searchQuery.set($any($event.target).value)"
+        (keyup.enter)="onSearch()"
+      />
+    </div>
+  </div>
+
+  <div class="header-right">
+    <!-- Theme Toggle -->
+    <button
+      type="button"
+      class="btn btn-ghost header-icon-btn"
+      (click)="onToggleTheme()"
+      [attr.aria-label]="isDarkMode() ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+    >
+      @if (isDarkMode()) {
+        <i class="ph ph-sun"></i>
+      } @else {
+        <i class="ph ph-moon"></i>
+      }
+    </button>
+
+    <!-- Notifications -->
+    <div class="header-dropdown">
+      <button
+        type="button"
+        class="btn btn-ghost header-icon-btn"
+        (click)="onToggleNotifications()"
+        aria-label="Notificaciones"
+      >
+        <i class="ph ph-bell"></i>
+        @if (notificationsCount() > 0) {
+          <span class="notification-badge">{{ notificationsCount() }}</span>
+        }
+      </button>
+
+      @if (showNotifications()) {
+        <div class="dropdown-menu dropdown-notifications">
+          <div class="dropdown-header">
+            <span>Notificaciones</span>
+            <a routerLink="/admin/alerts" class="dropdown-link">Mostrar Todas</a>
+          </div>
+          <div class="dropdown-body">
+            <!-- Sample notifications -->
+            <a class="notification-item" routerLink="/admin/alerts">
+              <div class="notification-icon bg-info">
+                <i class="ph ph-info"></i>
+              </div>
+              <div class="notification-content">
+                <p class="notification-text">Nueva alerta del sistema</p>
+                <span class="notification-time">Hace 5 minutos</span>
+              </div>
+            </a>
+            <a class="notification-item" routerLink="/admin/alerts">
+              <div class="notification-icon bg-success">
+                <i class="ph ph-check"></i>
+              </div>
+              <div class="notification-content">
+                <p class="notification-text">Importación completada</p>
+                <span class="notification-time">Hace 1 hora</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Language Switcher -->
+    <div class="header-dropdown">
+      <button
+        type="button"
+        class="btn btn-ghost header-icon-btn"
+        (click)="onToggleLanguageMenu()"
+        aria-label="Cambiar idioma"
+      >
+        <span class="flag-icon">{{ currentLanguage().flag === 'es' ? '🇪🇸' : '🇺🇸' }}</span>
+      </button>
+
+      @if (showLanguageMenu()) {
+        <div class="dropdown-menu dropdown-language">
+          @for (lang of languages; track lang.code) {
+            <button
+              type="button"
+              class="dropdown-item"
+              [class.active]="currentLanguage().code === lang.code"
+              (click)="onSelectLanguage(lang)"
+            >
+              <span class="flag-icon">{{ lang.flag === 'es' ? '🇪🇸' : '🇺🇸' }}</span>
+              <span>{{ lang.label }}</span>
+            </button>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- User Profile Dropdown -->
+    <div class="header-dropdown">
+      <button
+        type="button"
+        class="btn btn-ghost header-user-btn"
+        (click)="onToggleUserMenu()"
+        aria-label="Menú de usuario"
+      >
+        <div class="avatar avatar-sm">
+          @if (currentUser()?.avatarData) {
+            <img [src]="currentUser()?.avatarData" alt="Avatar" />
+          } @else {
+            <span>{{ userInitials() }}</span>
+          }
+        </div>
+        <i class="ph ph-caret-down"></i>
+      </button>
+
+      @if (showUserMenu()) {
+        <div class="dropdown-menu dropdown-user">
+          <div class="dropdown-user-info">
+            <div class="avatar">
+              @if (currentUser()?.avatarData) {
+                <img [src]="currentUser()?.avatarData" alt="Avatar" />
+              } @else {
+                <span>{{ userInitials() }}</span>
+              }
+            </div>
+            <div class="user-details">
+              <span class="user-name">{{ currentUser()?.fullName }}</span>
+              <span class="user-email">{{ currentUser()?.email }}</span>
+            </div>
+          </div>
+          <div class="dropdown-divider"></div>
+          <a routerLink="/admin/profile" class="dropdown-item">
+            <i class="ph ph-user"></i>
+            <span>Mi Perfil</span>
+          </a>
+          <a routerLink="/admin/settings" class="dropdown-item">
+            <i class="ph ph-gear"></i>
+            <span>Ajustes</span>
+          </a>
+          <a routerLink="/help" class="dropdown-item">
+            <i class="ph ph-question"></i>
+            <span>Ayuda</span>
+          </a>
+          <div class="dropdown-divider"></div>
+          <button type="button" class="dropdown-item text-danger" (click)="onLogout()">
+            <i class="ph ph-sign-out"></i>
+            <span>Cerrar Sesión</span>
+          </button>
+        </div>
+      }
+    </div>
+  </div>
+</header>

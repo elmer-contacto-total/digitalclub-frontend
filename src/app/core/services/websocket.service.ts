@@ -1,0 +1,422 @@
+/**
+ * WebSocket Service using STOMP over SockJS
+ * PARIDAD SPRING BOOT: WebSocketConfig.java (STOMP endpoint /ws)
+ *
+ * Provides real-time messaging capabilities for chat functionality.
+ */
+import { Injectable, inject, signal, computed, OnDestroy } from '@angular/core';
+import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
+import { environment } from '../../../environments/environment';
+import { AuthService } from './auth.service';
+import { Message } from '../models/message.model';
+import { Subject, Observable } from 'rxjs';
+
+// ===== TYPES =====
+
+export type WebSocketStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+
+/**
+ * Message received via WebSocket
+ */
+export interface WsMessage {
+  type: 'NEW_MESSAGE' | 'MESSAGE_READ' | 'TYPING' | 'ONLINE_STATUS' | 'TICKET_UPDATE' | 'ALERT';
+  payload: unknown;
+}
+
+/**
+ * New message payload
+ */
+export interface WsNewMessagePayload {
+  message: Message;
+  senderId: number;
+  recipientId: number;
+  ticketId?: number;
+}
+
+/**
+ * Typing indicator payload
+ */
+export interface WsTypingPayload {
+  userId: number;
+  ticketId: number;
+  isTyping: boolean;
+}
+
+/**
+ * Online status payload
+ */
+export interface WsOnlineStatusPayload {
+  userId: number;
+  online: boolean;
+  lastSeen?: string;
+}
+
+/**
+ * Ticket update payload
+ */
+export interface WsTicketUpdatePayload {
+  ticketId: number;
+  action: 'created' | 'closed' | 'updated' | 'reassigned';
+  agentId?: number;
+}
+
+/**
+ * Alert payload
+ */
+export interface WsAlertPayload {
+  id: number;
+  alertType: string;
+  title: string;
+  body: string;
+  severity: string;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class WebSocketService implements OnDestroy {
+  private authService = inject(AuthService);
+
+  private stompClient: Client | null = null;
+  private subscriptions: StompSubscription[] = [];
+  private reconnectAttempts = 0;
+  private readonly maxReconnectAttempts = 10;
+
+  // State signals
+  private _status = signal<WebSocketStatus>('disconnected');
+  private _lastError = signal<string | null>(null);
+
+  // Public signals
+  readonly status = this._status.asReadonly();
+  readonly lastError = this._lastError.asReadonly();
+  readonly isConnected = computed(() => this._status() === 'connected');
+
+  // Message subjects for different event types
+  private messageSubject = new Subject<WsNewMessagePayload>();
+  private typingSubject = new Subject<WsTypingPayload>();
+  private onlineStatusSubject = new Subject<WsOnlineStatusPayload>();
+  private ticketUpdateSubject = new Subject<WsTicketUpdatePayload>();
+  private alertSubject = new Subject<WsAlertPayload>();
+
+  // Public observables
+  readonly messages$ = this.messageSubject.asObservable();
+  readonly typing$ = this.typingSubject.asObservable();
+  readonly onlineStatus$ = this.onlineStatusSubject.asObservable();
+  readonly ticketUpdates$ = this.ticketUpdateSubject.asObservable();
+  readonly alerts$ = this.alertSubject.asObservable();
+
+  /**
+   * Connect to WebSocket server
+   */
+  connect(): void {
+    if (this.stompClient?.active) {
+      return;
+    }
+
+    const token = this.authService.getToken();
+    if (!token) {
+      this._lastError.set('No authentication token available');
+      return;
+    }
+
+    this._status.set('connecting');
+    this._lastError.set(null);
+
+    try {
+      this.stompClient = new Client({
+        // Use SockJS for fallback support
+        webSocketFactory: () => new SockJS(`${environment.apiUrl}/ws`),
+
+        // Connection headers with auth token
+        connectHeaders: {
+          Authorization: `Bearer ${token}`
+        },
+
+        // Debug logging (disable in production)
+        debug: (str) => {
+          if (!environment.production) {
+            console.log('[STOMP]', str);
+          }
+        },
+
+        // Reconnection settings
+        reconnectDelay: 5000,
+        heartbeatIncoming: 4000,
+        heartbeatOutgoing: 4000,
+
+        // Connection handlers
+        onConnect: () => this.onConnect(),
+        onDisconnect: () => this.onDisconnect(),
+        onStompError: (frame) => this.onStompError(frame),
+        onWebSocketClose: (event) => this.onWebSocketClose(event),
+        onWebSocketError: (event) => this.onWebSocketError(event)
+      });
+
+      this.stompClient.activate();
+    } catch (error) {
+      this._status.set('error');
+      this._lastError.set('Failed to create WebSocket connection');
+      console.error('WebSocket connection error:', error);
+    }
+  }
+
+  /**
+   * Disconnect from WebSocket server
+   */
+  disconnect(): void {
+    this.reconnectAttempts = 0;
+
+    // Unsubscribe from all subscriptions
+    this.subscriptions.forEach(sub => sub.unsubscribe());
+    this.subscriptions = [];
+
+    if (this.stompClient) {
+      this.stompClient.deactivate();
+      this.stompClient = null;
+    }
+
+    this._status.set('disconnected');
+  }
+
+  /**
+   * Subscribe to user-specific messages
+   * PARIDAD SPRING BOOT: /user/{userId}/queue/messages
+   */
+  subscribeToUserMessages(userId: number): void {
+    if (!this.stompClient?.active) {
+      console.warn('Cannot subscribe: WebSocket not connected');
+      return;
+    }
+
+    const sub = this.stompClient.subscribe(
+      `/user/${userId}/queue/messages`,
+      (message: IMessage) => this.handleMessage(message)
+    );
+    this.subscriptions.push(sub);
+  }
+
+  /**
+   * Subscribe to ticket-specific messages
+   * PARIDAD SPRING BOOT: /topic/ticket.{ticketId}
+   */
+  subscribeToTicket(ticketId: number): () => void {
+    if (!this.stompClient?.active) {
+      console.warn('Cannot subscribe: WebSocket not connected');
+      return () => {};
+    }
+
+    const sub = this.stompClient.subscribe(
+      `/topic/ticket.${ticketId}`,
+      (message: IMessage) => this.handleMessage(message)
+    );
+    this.subscriptions.push(sub);
+
+    // Return unsubscribe function
+    return () => {
+      sub.unsubscribe();
+      const index = this.subscriptions.indexOf(sub);
+      if (index > -1) {
+        this.subscriptions.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Subscribe to alerts for user
+   * PARIDAD SPRING BOOT: /user/{userId}/queue/alerts
+   */
+  subscribeToAlerts(userId: number): void {
+    if (!this.stompClient?.active) {
+      console.warn('Cannot subscribe: WebSocket not connected');
+      return;
+    }
+
+    const sub = this.stompClient.subscribe(
+      `/user/${userId}/queue/alerts`,
+      (message: IMessage) => {
+        try {
+          const payload = JSON.parse(message.body) as WsAlertPayload;
+          this.alertSubject.next(payload);
+        } catch (e) {
+          console.error('Failed to parse alert message:', e);
+        }
+      }
+    );
+    this.subscriptions.push(sub);
+  }
+
+  /**
+   * Send a chat message via WebSocket
+   * PARIDAD SPRING BOOT: @MessageMapping("/chat.send")
+   */
+  sendMessage(recipientId: number, content: string, ticketId?: number): void {
+    if (!this.stompClient?.active) {
+      console.warn('Cannot send: WebSocket not connected');
+      return;
+    }
+
+    this.stompClient.publish({
+      destination: '/app/chat.send',
+      body: JSON.stringify({
+        recipientId,
+        content,
+        ticketId
+      })
+    });
+  }
+
+  /**
+   * Send typing indicator
+   * PARIDAD SPRING BOOT: @MessageMapping("/ticket.{ticketId}.typing")
+   */
+  sendTypingIndicator(ticketId: number, isTyping: boolean): void {
+    if (!this.stompClient?.active) return;
+
+    this.stompClient.publish({
+      destination: `/app/ticket.${ticketId}.typing`,
+      body: JSON.stringify({ isTyping })
+    });
+  }
+
+  /**
+   * Send message read receipt
+   * PARIDAD SPRING BOOT: @MessageMapping("/message.read")
+   */
+  sendReadReceipt(messageId: number): void {
+    if (!this.stompClient?.active) return;
+
+    this.stompClient.publish({
+      destination: '/app/message.read',
+      body: JSON.stringify({ messageId })
+    });
+  }
+
+  /**
+   * Update online presence
+   * PARIDAD SPRING BOOT: @MessageMapping("/presence")
+   */
+  sendPresenceUpdate(online: boolean): void {
+    if (!this.stompClient?.active) return;
+
+    this.stompClient.publish({
+      destination: '/app/presence',
+      body: JSON.stringify({ online })
+    });
+  }
+
+  /**
+   * Handle connection established
+   */
+  private onConnect(): void {
+    this._status.set('connected');
+    this.reconnectAttempts = 0;
+    this._lastError.set(null);
+
+    // Auto-subscribe to user messages and alerts
+    const user = this.authService.currentUser();
+    if (user) {
+      this.subscribeToUserMessages(user.id);
+      this.subscribeToAlerts(user.id);
+
+      // Send online presence
+      this.sendPresenceUpdate(true);
+    }
+
+    console.log('[WebSocket] Connected to STOMP server');
+  }
+
+  /**
+   * Handle disconnection
+   */
+  private onDisconnect(): void {
+    this._status.set('disconnected');
+    console.log('[WebSocket] Disconnected from STOMP server');
+  }
+
+  /**
+   * Handle STOMP protocol error
+   */
+  private onStompError(frame: any): void {
+    this._status.set('error');
+    this._lastError.set(frame.headers?.message || 'STOMP protocol error');
+    console.error('[WebSocket] STOMP error:', frame);
+  }
+
+  /**
+   * Handle WebSocket close
+   */
+  private onWebSocketClose(event: CloseEvent): void {
+    if (!event.wasClean && this.reconnectAttempts < this.maxReconnectAttempts) {
+      this._status.set('reconnecting');
+      this.reconnectAttempts++;
+      console.log(`[WebSocket] Reconnecting... attempt ${this.reconnectAttempts}`);
+    }
+  }
+
+  /**
+   * Handle WebSocket error
+   */
+  private onWebSocketError(event: Event): void {
+    this._status.set('error');
+    this._lastError.set('WebSocket connection error');
+    console.error('[WebSocket] Error:', event);
+  }
+
+  /**
+   * Handle incoming STOMP message
+   */
+  private handleMessage(message: IMessage): void {
+    try {
+      const data = JSON.parse(message.body) as WsMessage;
+
+      switch (data.type) {
+        case 'NEW_MESSAGE':
+          this.messageSubject.next(data.payload as WsNewMessagePayload);
+          break;
+
+        case 'MESSAGE_READ':
+          // Handle read receipt - could emit to subject if needed
+          break;
+
+        case 'TYPING':
+          this.typingSubject.next(data.payload as WsTypingPayload);
+          break;
+
+        case 'ONLINE_STATUS':
+          this.onlineStatusSubject.next(data.payload as WsOnlineStatusPayload);
+          break;
+
+        case 'TICKET_UPDATE':
+          this.ticketUpdateSubject.next(data.payload as WsTicketUpdatePayload);
+          break;
+
+        case 'ALERT':
+          this.alertSubject.next(data.payload as WsAlertPayload);
+          break;
+
+        default:
+          // For messages without type wrapper (direct message payload)
+          if ((data as any).message || (data as any).content) {
+            this.messageSubject.next(data as unknown as WsNewMessagePayload);
+          }
+      }
+    } catch (error) {
+      console.error('[WebSocket] Failed to parse message:', error);
+    }
+  }
+
+  /**
+   * Cleanup on service destroy
+   */
+  ngOnDestroy(): void {
+    this.sendPresenceUpdate(false);
+    this.disconnect();
+
+    this.messageSubject.complete();
+    this.typingSubject.complete();
+    this.onlineStatusSubject.complete();
+    this.ticketUpdateSubject.complete();
+    this.alertSubject.complete();
+  }
+}

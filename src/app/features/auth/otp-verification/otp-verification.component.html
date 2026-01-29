@@ -1,0 +1,92 @@
+<div class="auth-page">
+  <div class="auth-card card">
+    <!-- Logo -->
+    <div class="auth-logo">
+      <app-logo />
+    </div>
+
+    <!-- Header -->
+    <div class="auth-header">
+      <h1>Verificación de Seguridad</h1>
+      <p>Ingrese el código de 6 dígitos enviado a su dispositivo</p>
+    </div>
+
+    <!-- OTP Form -->
+    <form [formGroup]="otpForm" (ngSubmit)="onSubmit()">
+      <!-- OTP Inputs -->
+      <div class="form-group">
+        <div class="otp-inputs">
+          @for (digit of otpDigits; track $index) {
+            <input
+              type="text"
+              class="otp-digit"
+              [class.filled]="digit()"
+              [class.is-invalid]="hasError()"
+              maxlength="1"
+              inputmode="numeric"
+              autocomplete="off"
+              [value]="digit()"
+              (input)="onDigitInput($event, $index)"
+              (keydown)="onDigitKeydown($event, $index)"
+              (paste)="onPaste($event)"
+              #digitInput
+            />
+          }
+        </div>
+        @if (hasError()) {
+          <span class="form-error text-center">El código ingresado es incorrecto</span>
+        }
+      </div>
+
+      <!-- Submit Button -->
+      <button
+        type="submit"
+        class="btn btn-primary btn-block"
+        [disabled]="isLoading() || !isComplete()"
+      >
+        @if (isLoading()) {
+          <i class="ph ph-circle-notch spinner"></i>
+          Verificando...
+        } @else {
+          <i class="ph ph-check"></i>
+          Verificar Código
+        }
+      </button>
+
+      <!-- Actions -->
+      <div class="otp-actions">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          [disabled]="resendCooldown() > 0 || isResending()"
+          (click)="resendOtp()"
+        >
+          @if (isResending()) {
+            <i class="ph ph-circle-notch spinner"></i>
+            Reenviando...
+          } @else if (resendCooldown() > 0) {
+            <i class="ph ph-clock"></i>
+            Reenviar en {{ resendCooldown() }}s
+          } @else {
+            <i class="ph ph-arrow-clockwise"></i>
+            Reenviar código
+          }
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          (click)="goBack()"
+        >
+          <i class="ph ph-arrow-left"></i>
+          Volver al login
+        </button>
+      </div>
+    </form>
+
+    <!-- Footer -->
+    <div class="auth-footer">
+      <span>Monitor WhatsApp Service v1.0.2</span>
+    </div>
+  </div>
+</div>

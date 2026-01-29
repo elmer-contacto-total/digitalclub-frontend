@@ -1,0 +1,148 @@
+<div class="dashboard-container">
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-left">
+      <h1 class="dashboard-title">Tablero Principal</h1>
+      @if (currentUser(); as user) {
+        <p class="user-greeting">
+          Bienvenido, <strong>{{ user.firstName }} {{ user.lastName }}</strong>
+          <span class="user-role">({{ getRoleLabel(user.role) }})</span>
+        </p>
+      }
+    </div>
+
+    <div class="header-actions">
+      <button
+        type="button"
+        class="btn btn-icon"
+        [disabled]="isLoading()"
+        (click)="loadKpis()"
+        title="Refrescar datos"
+      >
+        <i class="ph" [class.ph-arrow-clockwise]="!isLoading()" [class.ph-circle-notch]="isLoading()" [class.spinning]="isLoading()"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Period Selector -->
+  <div class="period-section">
+    <app-period-selector
+      [selectedPeriod]="selectedPeriod()"
+      (periodChange)="onPeriodChange($event)"
+      (customRangeChange)="onCustomRangeChange($event)"
+    />
+  </div>
+
+  <!-- Filters Row -->
+  @if (availableObjectTypes().length > 0 || canExport()) {
+    <div class="filters-section">
+      <div class="filters-left">
+        @if (availableObjectTypes().length > 0) {
+          <app-object-filter
+            [objectTypes]="availableObjectTypes()"
+            [selectedObject]="selectedObject()"
+            [selectedOption]="selectedOption()"
+            [dropdownOptions]="dropdownOptions()"
+            [showExportButton]="false"
+            (objectChange)="onObjectChange($event)"
+            (optionChange)="onOptionChange($event)"
+          />
+        }
+      </div>
+
+      <div class="filters-right">
+        <!-- Close Type KPIs columns are automatically shown based on client settings -->
+        <!-- (client_settings.ticket_close_types from backend) -->
+
+        <!-- Export Buttons -->
+        @if (canExport()) {
+          <div class="export-buttons">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              (click)="onExport()"
+              [disabled]="isLoading()"
+            >
+              <i class="ph ph-file-csv"></i>
+              Exportar KPIs
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              (click)="onExportContacts()"
+              [disabled]="isLoading()"
+            >
+              <i class="ph ph-users"></i>
+              Exportar Contactos
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Comparison Label -->
+  @if (comparisonLabel() && !isLoading()) {
+    <div class="comparison-info">
+      <i class="ph ph-chart-line-up"></i>
+      <span>Comparación: {{ comparisonLabel() }}</span>
+    </div>
+  }
+
+  <!-- Loading State -->
+  @if (isLoading()) {
+    <div class="loading-overlay">
+      <div class="spinner">
+        <i class="ph ph-circle-notch"></i>
+      </div>
+      <p>Cargando KPIs...</p>
+    </div>
+  }
+
+  <!-- Error State -->
+  @if (hasError() && !isLoading()) {
+    <div class="error-state">
+      <i class="ph ph-warning-circle"></i>
+      <h3>Error al cargar los datos</h3>
+      <p>No se pudieron cargar los KPIs. Verifique su conexión e intente nuevamente.</p>
+      <button class="btn btn-primary" (click)="loadKpis()">
+        <i class="ph ph-arrow-clockwise"></i>
+        Reintentar
+      </button>
+    </div>
+  }
+
+  <!-- KPI Cards Grid -->
+  @if (!hasError() && !isLoading()) {
+    <div class="kpi-grid">
+      @for (card of visibleKpiCards(); track card.key) {
+        <app-kpi-card
+          [title]="card.title"
+          [value]="getKpiValue(card.key)"
+          [percentage]="getKpiPercentage(card.key)"
+          [tooltip]="card.tooltip"
+          [unit]="card.unit || ''"
+          [icon]="card.icon || 'ph-chart-line'"
+          [invertColor]="card.invertColor || false"
+          [comparisonLabel]="comparisonLabel()"
+        />
+      }
+    </div>
+
+    <!-- KPI Detailed Table -->
+    @if (individualKpiRows().length > 0) {
+      <div class="table-section">
+        <app-kpi-table
+          [rows]="individualKpiRows()"
+          [showCloseTypeKpis]="showCloseTypeKpis()"
+        />
+      </div>
+    } @else if (selectedOption() === 'Todos') {
+      <div class="empty-table-state">
+        <i class="ph ph-users-three"></i>
+        <h3>Sin datos de agentes</h3>
+        <p>No hay agentes con KPIs registrados en el período seleccionado.</p>
+      </div>
+    }
+  }
+</div>

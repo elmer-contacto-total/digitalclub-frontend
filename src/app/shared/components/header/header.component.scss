@@ -1,0 +1,344 @@
+// Header Component Styles
+// PARIDAD: Rails header styling
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-height);
+  padding: 0 var(--space-4);
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border-default);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+// Toggle button
+.header-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 1.25rem;
+
+  @media (min-width: 1024px) {
+    display: none;
+  }
+}
+
+// Search
+.header-search {
+  position: relative;
+  display: none;
+
+  @media (min-width: 768px) {
+    display: block;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: var(--space-3);
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--fg-muted);
+  }
+
+  .search-input {
+    width: 280px;
+    padding: var(--space-2) var(--space-3) var(--space-2) var(--space-8);
+    background: var(--input-bg);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    color: var(--fg-default);
+    font-size: 0.875rem;
+    transition: all var(--duration-fast);
+
+    &::placeholder {
+      color: var(--fg-muted);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--accent-default);
+      box-shadow: 0 0 0 3px var(--accent-subtle);
+    }
+  }
+}
+
+// Icon buttons
+.header-icon-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 1.25rem;
+  border-radius: var(--radius-md);
+
+  .notification-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    background: var(--error-default);
+    color: white;
+    font-size: 0.625rem;
+    font-weight: 600;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.flag-icon {
+  font-size: 1.25rem;
+}
+
+// User button
+.header-user-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+
+  .ph-caret-down {
+    font-size: 0.75rem;
+    color: var(--fg-muted);
+  }
+}
+
+// Dropdowns
+.header-dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  min-width: 200px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-dropdown);
+  animation: dropdown-enter var(--duration-fast) ease-out;
+}
+
+@keyframes dropdown-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-default);
+  font-weight: 600;
+  font-size: 0.875rem;
+
+  .dropdown-link {
+    color: var(--accent-default);
+    font-weight: 500;
+    font-size: 0.75rem;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.dropdown-body {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  color: var(--fg-default);
+  font-size: 0.875rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--duration-fast);
+
+  &:hover {
+    background: var(--bg-subtle);
+  }
+
+  &.active {
+    background: var(--accent-subtle);
+    color: var(--accent-default);
+  }
+
+  &.text-danger {
+    color: var(--error-default);
+  }
+
+  i {
+    font-size: 1.125rem;
+    color: var(--fg-muted);
+  }
+
+  &.text-danger i {
+    color: var(--error-default);
+  }
+}
+
+.dropdown-divider {
+  height: 1px;
+  margin: var(--space-2) 0;
+  background: var(--border-default);
+}
+
+// Notifications dropdown
+.dropdown-notifications {
+  width: 320px;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  text-decoration: none;
+  color: var(--fg-default);
+  transition: background var(--duration-fast);
+
+  &:hover {
+    background: var(--bg-subtle);
+  }
+}
+
+.notification-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  i {
+    color: white;
+    font-size: 1rem;
+  }
+
+  &.bg-info {
+    background: var(--info-default);
+  }
+
+  &.bg-success {
+    background: var(--success-default);
+  }
+
+  &.bg-warning {
+    background: var(--warning-default);
+  }
+
+  &.bg-danger {
+    background: var(--error-default);
+  }
+}
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--fg-default);
+  line-height: 1.4;
+}
+
+.notification-time {
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
+// Language dropdown
+.dropdown-language {
+  min-width: 140px;
+
+  .dropdown-item {
+    gap: var(--space-2);
+  }
+}
+
+// User dropdown
+.dropdown-user {
+  width: 260px;
+}
+
+.dropdown-user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+  }
+
+  .user-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .user-name {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    color: var(--fg-default);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .user-email {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--fg-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

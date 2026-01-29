@@ -1,0 +1,517 @@
+<!-- Client Detail - PARIDAD: Rails admin/clients/show.html.erb -->
+<div class="client-detail-container">
+  @if (isLoading()) {
+    <app-loading-spinner [overlay]="true" message="Cargando cliente..." />
+  } @else if (client()) {
+    <!-- Back Link -->
+    @if (isSuperAdmin()) {
+      <a routerLink="/app/clients" class="back-link">
+        <i class="ph ph-arrow-left"></i>
+        Volver a Organizaciones
+      </a>
+    }
+
+    <!-- Hero Header Card -->
+    <div class="hero-card">
+      <div class="hero-main">
+        <div class="hero-avatar">
+          <i class="ph ph-buildings"></i>
+        </div>
+        <div class="hero-info">
+          <div class="hero-title-row">
+            <h1>{{ client()!.name }}</h1>
+            <span class="status-badge" [class.active]="isClientActive()">
+              <i class="ph" [class.ph-check-circle]="isClientActive()" [class.ph-x-circle]="!isClientActive()"></i>
+              {{ isClientActive() ? 'Activo' : 'Inactivo' }}
+            </span>
+          </div>
+          <p class="hero-subtitle">
+            @if (client()!.companyName) {
+              {{ client()!.companyName }}
+            } @else {
+              Organización
+            }
+          </p>
+          <div class="hero-meta">
+            <span class="meta-item">
+              <i class="ph ph-identification-badge"></i>
+              ID: {{ client()!.id }}
+            </span>
+            @if (client()!.docNumber) {
+              <span class="meta-item">
+                <i class="ph ph-file-text"></i>
+                {{ getDocTypeLabel(client()!.docType) }}: {{ client()!.docNumber }}
+              </span>
+            }
+            <span class="meta-item">
+              <i class="ph ph-device-mobile"></i>
+              {{ getClientTypeLabel(client()!.clientType) }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="hero-actions">
+        @if (canEdit()) {
+          <a [routerLink]="['/app/clients', client()!.id, 'edit']" class="btn btn-primary">
+            <i class="ph ph-pencil-simple"></i>
+            Editar
+          </a>
+        }
+        <a [routerLink]="['/app/clients', client()!.id, 'settings']" class="btn btn-secondary">
+          <i class="ph ph-gear"></i>
+          Configuración
+        </a>
+        <a [routerLink]="['/app/clients', client()!.id, 'crm_info_settings']" class="btn btn-secondary">
+          <i class="ph ph-tree-structure"></i>
+          CRM
+        </a>
+      </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="ph ph-calendar"></i>
+        </div>
+        <div class="stat-content">
+          <span class="stat-label">Fecha de Creación</span>
+          <span class="stat-value">{{ formatDateTime(client()!.createdAt) }}</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="ph ph-clock-clockwise"></i>
+        </div>
+        <div class="stat-content">
+          <span class="stat-label">Última Actualización</span>
+          <span class="stat-value">{{ formatDateTime(client()!.updatedAt) }}</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon whatsapp" [class.connected]="client()!.whatsappNumber">
+          <i class="ph ph-whatsapp-logo"></i>
+        </div>
+        <div class="stat-content">
+          <span class="stat-label">WhatsApp</span>
+          <span class="stat-value">{{ client()!.whatsappNumber || 'No configurado' }}</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon timezone">
+          <i class="ph ph-globe"></i>
+        </div>
+        <div class="stat-content">
+          <span class="stat-label">Zona Horaria</span>
+          <span class="stat-value">{{ client()!.timeZone || 'Por defecto' }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-container">
+      <div class="tabs">
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'info'"
+          (click)="activeTab.set('info')"
+        >
+          <i class="ph ph-info"></i>
+          <span>Información</span>
+        </button>
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'structure'"
+          (click)="activeTab.set('structure')"
+        >
+          <i class="ph ph-tree-structure"></i>
+          <span>Estructura</span>
+        </button>
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'settings'"
+          (click)="activeTab.set('settings'); loadSettings()"
+        >
+          <i class="ph ph-gear"></i>
+          <span>Configuración</span>
+        </button>
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'whatsapp'"
+          (click)="activeTab.set('whatsapp'); loadWhatsAppConfig()"
+        >
+          <i class="ph ph-whatsapp-logo"></i>
+          <span>WhatsApp</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      @switch (activeTab()) {
+        <!-- Info Tab -->
+        @case ('info') {
+          <div class="content-grid">
+            <!-- Basic Info Card -->
+            <div class="info-card">
+              <div class="card-header">
+                <h3>
+                  <i class="ph ph-identification-card"></i>
+                  Datos Básicos
+                </h3>
+              </div>
+              <div class="card-body">
+                <div class="detail-list">
+                  <div class="detail-item">
+                    <span class="detail-label">Nombre</span>
+                    <span class="detail-value">{{ client()!.name }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Razón Social</span>
+                    <span class="detail-value">{{ client()!.companyName || '-' }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Estado</span>
+                    <span class="detail-value">
+                      <span class="inline-badge" [class.active]="isClientActive()">
+                        {{ isClientActive() ? 'Activo' : 'Inactivo' }}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Document Info Card -->
+            <div class="info-card">
+              <div class="card-header">
+                <h3>
+                  <i class="ph ph-file-text"></i>
+                  Documentación
+                </h3>
+              </div>
+              <div class="card-body">
+                <div class="detail-list">
+                  <div class="detail-item">
+                    <span class="detail-label">Tipo de Documento</span>
+                    <span class="detail-value">{{ getDocTypeLabel(client()!.docType) }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Número de Documento</span>
+                    <span class="detail-value mono">{{ client()!.docNumber || '-' }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Platform Info Card -->
+            <div class="info-card">
+              <div class="card-header">
+                <h3>
+                  <i class="ph ph-device-mobile"></i>
+                  Plataforma
+                </h3>
+              </div>
+              <div class="card-body">
+                <div class="detail-list">
+                  <div class="detail-item">
+                    <span class="detail-label">Tipo de Cliente</span>
+                    <span class="detail-value">{{ getClientTypeLabel(client()!.clientType) }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Zona Horaria</span>
+                    <span class="detail-value">{{ client()!.timeZone || 'No especificado' }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- System Info Card -->
+            <div class="info-card">
+              <div class="card-header">
+                <h3>
+                  <i class="ph ph-database"></i>
+                  Sistema
+                </h3>
+              </div>
+              <div class="card-body">
+                <div class="detail-list">
+                  <div class="detail-item">
+                    <span class="detail-label">ID</span>
+                    <span class="detail-value mono">{{ client()!.id }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Creado</span>
+                    <span class="detail-value">{{ formatDateTime(client()!.createdAt) }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Actualizado</span>
+                    <span class="detail-value">{{ formatDateTime(client()!.updatedAt) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Structure Tab -->
+        @case ('structure') {
+          <div class="info-card full-width">
+            <div class="card-header">
+              <h3>
+                <i class="ph ph-tree-structure"></i>
+                Estructura Organizacional
+              </h3>
+              @if (canEdit()) {
+                <a [routerLink]="['/app/clients', client()!.id, 'edit']" class="btn btn-sm btn-secondary">
+                  <i class="ph ph-pencil-simple"></i>
+                  Editar
+                </a>
+              }
+            </div>
+            <div class="card-body">
+              @if (client()!.clientStructure) {
+                <div class="structure-timeline">
+                  <!-- Admin Level 0 -->
+                  <div class="timeline-item active">
+                    <div class="timeline-marker">
+                      <span>0</span>
+                    </div>
+                    <div class="timeline-content">
+                      <div class="timeline-header">
+                        <span class="timeline-title">{{ client()!.clientStructure!.adminLevel0 || 'Administrador' }}</span>
+                        <span class="timeline-badge active">Activo</span>
+                      </div>
+                      <span class="timeline-subtitle">Nivel Administrativo</span>
+                    </div>
+                  </div>
+
+                  <!-- Manager Level 1 -->
+                  <div class="timeline-item" [class.active]="client()!.clientStructure!.existsManagerLevel1">
+                    <div class="timeline-marker">
+                      <span>1</span>
+                    </div>
+                    <div class="timeline-content">
+                      <div class="timeline-header">
+                        <span class="timeline-title">{{ client()!.clientStructure!.managerLevel1 || 'Gerente Nivel 1' }}</span>
+                        <span class="timeline-badge" [class.active]="client()!.clientStructure!.existsManagerLevel1">
+                          {{ client()!.clientStructure!.existsManagerLevel1 ? 'Activo' : 'Inactivo' }}
+                        </span>
+                      </div>
+                      <span class="timeline-subtitle">Nivel Gerencial</span>
+                    </div>
+                  </div>
+
+                  <!-- Manager Level 2 -->
+                  <div class="timeline-item" [class.active]="client()!.clientStructure!.existsManagerLevel2">
+                    <div class="timeline-marker">
+                      <span>2</span>
+                    </div>
+                    <div class="timeline-content">
+                      <div class="timeline-header">
+                        <span class="timeline-title">{{ client()!.clientStructure!.managerLevel2 || 'Gerente Nivel 2' }}</span>
+                        <span class="timeline-badge" [class.active]="client()!.clientStructure!.existsManagerLevel2">
+                          {{ client()!.clientStructure!.existsManagerLevel2 ? 'Activo' : 'Inactivo' }}
+                        </span>
+                      </div>
+                      <span class="timeline-subtitle">Nivel Gerencial</span>
+                    </div>
+                  </div>
+
+                  <!-- Manager Level 3 -->
+                  <div class="timeline-item" [class.active]="client()!.clientStructure!.existsManagerLevel3">
+                    <div class="timeline-marker">
+                      <span>3</span>
+                    </div>
+                    <div class="timeline-content">
+                      <div class="timeline-header">
+                        <span class="timeline-title">{{ client()!.clientStructure!.managerLevel3 || 'Gerente Nivel 3' }}</span>
+                        <span class="timeline-badge" [class.active]="client()!.clientStructure!.existsManagerLevel3">
+                          {{ client()!.clientStructure!.existsManagerLevel3 ? 'Activo' : 'Inactivo' }}
+                        </span>
+                      </div>
+                      <span class="timeline-subtitle">Nivel Gerencial</span>
+                    </div>
+                  </div>
+
+                  <!-- Manager Level 4 - Supervisor -->
+                  <div class="timeline-item" [class.active]="client()!.clientStructure!.existsManagerLevel4">
+                    <div class="timeline-marker">
+                      <span>4</span>
+                    </div>
+                    <div class="timeline-content">
+                      <div class="timeline-header">
+                        <span class="timeline-title">{{ client()!.clientStructure!.managerLevel4 || 'Supervisor' }}</span>
+                        <span class="timeline-badge" [class.active]="client()!.clientStructure!.existsManagerLevel4">
+                          {{ client()!.clientStructure!.existsManagerLevel4 ? 'Activo' : 'Inactivo' }}
+                        </span>
+                      </div>
+                      <span class="timeline-subtitle">Nivel Supervisión</span>
+                    </div>
+                  </div>
+
+                  <!-- Agent Level -->
+                  <div class="timeline-item" [class.active]="client()!.clientStructure!.existsAgent">
+                    <div class="timeline-marker">
+                      <span>5</span>
+                    </div>
+                    <div class="timeline-content">
+                      <div class="timeline-header">
+                        <span class="timeline-title">{{ client()!.clientStructure!.agent || 'Agente' }}</span>
+                        <span class="timeline-badge" [class.active]="client()!.clientStructure!.existsAgent">
+                          {{ client()!.clientStructure!.existsAgent ? 'Activo' : 'Inactivo' }}
+                        </span>
+                      </div>
+                      <span class="timeline-subtitle">Nivel Operativo</span>
+                    </div>
+                  </div>
+
+                  <!-- Client Level 6 -->
+                  <div class="timeline-item active last">
+                    <div class="timeline-marker">
+                      <span>6</span>
+                    </div>
+                    <div class="timeline-content">
+                      <div class="timeline-header">
+                        <span class="timeline-title">{{ client()!.clientStructure!.clientLevel6 || 'Cliente Final' }}</span>
+                        <span class="timeline-badge active">Activo</span>
+                      </div>
+                      <span class="timeline-subtitle">Cliente / Prospecto</span>
+                    </div>
+                  </div>
+                </div>
+              } @else {
+                <div class="empty-state">
+                  <i class="ph ph-tree-structure"></i>
+                  <p>No hay estructura definida para este cliente</p>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Settings Tab -->
+        @case ('settings') {
+          <div class="info-card full-width">
+            <div class="card-header">
+              <h3>
+                <i class="ph ph-gear"></i>
+                Configuraciones
+              </h3>
+              <a [routerLink]="['/app/clients', client()!.id, 'settings']" class="btn btn-sm btn-primary">
+                <i class="ph ph-pencil-simple"></i>
+                Editar
+              </a>
+            </div>
+            <div class="card-body">
+              @if (isLoadingSettings()) {
+                <div class="loading-inline">
+                  <i class="ph ph-spinner ph-spin"></i>
+                  Cargando configuraciones...
+                </div>
+              } @else if (settings()) {
+                @if (getSettingsKeys().length > 0) {
+                  <div class="settings-grid">
+                    @for (key of getSettingsKeys(); track key) {
+                      <div class="setting-card">
+                        <div class="setting-header">
+                          <span class="setting-key">{{ key }}</span>
+                          <span class="setting-type">{{ getSettingType(settings()![key]) }}</span>
+                        </div>
+                        <div class="setting-value">
+                          {{ formatSettingValue(settings()![key]) }}
+                        </div>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="empty-state">
+                    <i class="ph ph-gear"></i>
+                    <p>No hay configuraciones definidas</p>
+                  </div>
+                }
+              }
+            </div>
+          </div>
+        }
+
+        <!-- WhatsApp Tab -->
+        @case ('whatsapp') {
+          <div class="info-card full-width">
+            <div class="card-header">
+              <h3>
+                <i class="ph ph-whatsapp-logo"></i>
+                WhatsApp Business
+              </h3>
+            </div>
+            <div class="card-body">
+              @if (isLoadingWhatsApp()) {
+                <div class="loading-inline">
+                  <i class="ph ph-spinner ph-spin"></i>
+                  Cargando configuración...
+                </div>
+              } @else if (whatsappConfig()) {
+                <div class="whatsapp-hero" [class.connected]="whatsappConfig()!.whatsapp_access_token_configured">
+                  <div class="whatsapp-icon">
+                    <i class="ph ph-whatsapp-logo"></i>
+                  </div>
+                  <div class="whatsapp-info">
+                    <span class="whatsapp-status">
+                      {{ whatsappConfig()!.whatsapp_access_token_configured ? 'Conectado' : 'No conectado' }}
+                    </span>
+                    @if (whatsappConfig()!.whatsapp_access_token_configured && client()!.whatsappVerifiedName) {
+                      <span class="whatsapp-name">{{ client()!.whatsappVerifiedName }}</span>
+                    }
+                  </div>
+                </div>
+
+                @if (whatsappConfig()!.whatsapp_access_token_configured) {
+                  <div class="whatsapp-details">
+                    <div class="detail-item">
+                      <span class="detail-label">Número de teléfono</span>
+                      <span class="detail-value">{{ client()!.whatsappNumber || '-' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Nombre verificado</span>
+                      <span class="detail-value">{{ client()!.whatsappVerifiedName || '-' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Phone Number ID</span>
+                      <span class="detail-value mono">{{ whatsappConfig()!.whatsapp_phone_number_id || '-' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Business Account ID</span>
+                      <span class="detail-value mono">{{ whatsappConfig()!.whatsapp_business_account_id || '-' }}</span>
+                    </div>
+                  </div>
+                } @else {
+                  <div class="whatsapp-cta">
+                    <p>Conecta tu cuenta de WhatsApp Business para enviar mensajes a tus clientes.</p>
+                    <a routerLink="/app/whatsapp_onboarding" class="btn btn-success">
+                      <i class="ph ph-whatsapp-logo"></i>
+                      Conectar WhatsApp
+                    </a>
+                  </div>
+                }
+              }
+            </div>
+          </div>
+        }
+      }
+    </div>
+  } @else {
+    <div class="not-found">
+      <div class="not-found-icon">
+        <i class="ph ph-buildings"></i>
+      </div>
+      <h2>Cliente no encontrado</h2>
+      <p>El cliente que buscas no existe o ha sido eliminado.</p>
+      <a routerLink="/app/clients" class="btn btn-primary">
+        <i class="ph ph-arrow-left"></i>
+        Volver a Organizaciones
+      </a>
+    </div>
+  }
+</div>

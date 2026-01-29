@@ -1,0 +1,107 @@
+// Data Table Component Styles
+// PARIDAD: Rails table styling
+
+.data-table-wrapper {
+  position: relative;
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+
+  th, td {
+    padding: var(--space-3) var(--space-4);
+    text-align: left;
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  th {
+    background: var(--table-header-bg);
+    font-weight: 600;
+    color: var(--fg-default);
+    white-space: nowrap;
+
+    &.sortable {
+      cursor: pointer;
+      user-select: none;
+
+      &:hover {
+        background: var(--bg-subtle);
+      }
+    }
+  }
+
+  .th-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .sort-icon {
+    font-size: 0.875rem;
+    color: var(--fg-muted);
+  }
+
+  td {
+    color: var(--fg-default);
+    vertical-align: middle;
+  }
+
+  tbody tr {
+    transition: background var(--duration-fast);
+
+    &:last-child td {
+      border-bottom: none;
+    }
+  }
+
+  &.hoverable tbody tr:hover {
+    background: var(--table-row-hover);
+    cursor: pointer;
+  }
+
+  tbody tr.selected {
+    background: var(--accent-subtle);
+  }
+}
+
+// Checkbox columns
+.th-checkbox,
+.td-checkbox {
+  width: 48px;
+  text-align: center !important;
+
+  input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent-default);
+  }
+}
+
+// Empty state within table
+.data-table tbody tr td:has(app-empty-state) {
+  padding: 0;
+
+  app-empty-state {
+    padding: var(--space-8) var(--space-4);
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .data-table {
+    th, td {
+      padding: var(--space-2) var(--space-3);
+    }
+  }
+}
