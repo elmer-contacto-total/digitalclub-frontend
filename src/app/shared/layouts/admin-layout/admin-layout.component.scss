@@ -12,6 +12,7 @@
   display: flex;
   flex-direction: column;
   margin-left: var(--sidebar-width);
+  padding-top: var(--header-height); // Space for fixed header
   transition: margin-left var(--duration-normal);
   min-height: 100vh;
 

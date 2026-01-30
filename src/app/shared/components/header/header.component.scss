@@ -9,10 +9,23 @@
   padding: 0 var(--space-4);
   background: var(--header-bg);
   border-bottom: 1px solid var(--border-default);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: var(--sidebar-width);
+  right: 0;
   z-index: var(--z-header);
   -webkit-app-region: drag; // Make header draggable in Electron
+  transition: left var(--duration-normal);
+
+  // When sidebar is collapsed
+  :host-context(.sidebar-collapsed) & {
+    left: var(--sidebar-collapsed);
+  }
+
+  // Mobile - no sidebar offset
+  @media (max-width: 1023px) {
+    left: 0;
+  }
 }
 
 // Elements inside header should not be draggable
@@ -149,8 +162,8 @@
   background: var(--card-bg);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  z-index: var(--z-dropdown);
+  box-shadow: var(--shadow-xl);
+  z-index: calc(var(--z-header) + 100); // Always above everything
   animation: dropdown-enter var(--duration-fast) ease-out;
 }
 
