@@ -3,12 +3,22 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { ChatSelectedEvent, PhoneDetectedEvent } from '../models/crm-contact.model';
 
 /**
+ * Bounds data from Electron
+ */
+interface WhatsAppBounds {
+  angularWidth: number;
+  whatsappWidth: number;
+}
+
+/**
  * Electron API interface exposed via preload script
  */
 interface ElectronAPI {
   // Events that Angular listens to
   onChatSelected(callback: (data: ChatSelectedEvent) => void): void;
   onPhoneDetected(callback: (data: PhoneDetectedEvent) => void): void;
+  onWhatsAppBoundsChanged(callback: (data: WhatsAppBounds) => void): void;
+  onWhatsAppVisibilityChanged(callback: (data: { visible: boolean }) => void): void;
   removeAllListeners(channel: string): void;
 
   // Methods that Angular can call
@@ -20,6 +30,10 @@ interface ElectronAPI {
   showWhatsApp?(): Promise<boolean>;
   hideWhatsApp?(): Promise<boolean>;
   isWhatsAppVisible?(): Promise<boolean>;
+
+  // WhatsApp Theme control
+  setWhatsAppTheme?(theme: 'light' | 'dark'): Promise<{ success: boolean; theme: string }>;
+  getAngularBounds?(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
 }
 
 declare global {
@@ -44,11 +58,15 @@ export class ElectronService {
   private chatSelectedSubject = new BehaviorSubject<ChatSelectedEvent | null>(null);
   private phoneDetectedSubject = new BehaviorSubject<PhoneDetectedEvent | null>(null);
   private isElectronSubject = new BehaviorSubject<boolean>(false);
+  private whatsappVisibleSubject = new BehaviorSubject<boolean>(false);
+  private whatsappBoundsSubject = new BehaviorSubject<WhatsAppBounds | null>(null);
 
   // Public observables
   readonly chatSelected$: Observable<ChatSelectedEvent | null> = this.chatSelectedSubject.asObservable();
   readonly phoneDetected$: Observable<PhoneDetectedEvent | null> = this.phoneDetectedSubject.asObservable();
   readonly isElectron$: Observable<boolean> = this.isElectronSubject.asObservable();
+  readonly whatsappVisible$: Observable<boolean> = this.whatsappVisibleSubject.asObservable();
+  readonly whatsappBounds$: Observable<WhatsAppBounds | null> = this.whatsappBoundsSubject.asObservable();
 
   constructor() {
     this.detectElectron();
@@ -112,6 +130,22 @@ export class ElectronService {
       this.ngZone.run(() => {
         console.log('[ElectronService] Phone detected:', data);
         this.phoneDetectedSubject.next(data);
+      });
+    });
+
+    // Listen for WhatsApp visibility changes
+    window.electronAPI.onWhatsAppVisibilityChanged((data: { visible: boolean }) => {
+      this.ngZone.run(() => {
+        console.log('[ElectronService] WhatsApp visibility changed:', data.visible);
+        this.whatsappVisibleSubject.next(data.visible);
+      });
+    });
+
+    // Listen for WhatsApp bounds changes
+    window.electronAPI.onWhatsAppBoundsChanged((data: WhatsAppBounds) => {
+      this.ngZone.run(() => {
+        console.log('[ElectronService] WhatsApp bounds changed:', data);
+        this.whatsappBoundsSubject.next(data);
       });
     });
   }
@@ -203,12 +237,61 @@ export class ElectronService {
   }
 
   /**
+   * Get current WhatsApp visibility state (synchronous)
+   */
+  get whatsappVisible(): boolean {
+    return this.whatsappVisibleSubject.value;
+  }
+
+  /**
+   * Get current angular bounds (synchronous)
+   */
+  get currentBounds(): WhatsAppBounds | null {
+    return this.whatsappBoundsSubject.value;
+  }
+
+  /**
+   * Set WhatsApp theme to match Angular app theme
+   * @param theme 'light' or 'dark'
+   */
+  async setWhatsAppTheme(theme: 'light' | 'dark'): Promise<boolean> {
+    if (window.electronAPI?.setWhatsAppTheme) {
+      try {
+        const result = await window.electronAPI.setWhatsAppTheme(theme);
+        console.log('[ElectronService] WhatsApp theme set:', result);
+        return result.success;
+      } catch (error) {
+        console.error('[ElectronService] Error setting WhatsApp theme:', error);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Get Angular bounds from Electron
+   */
+  async getAngularBounds(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null> {
+    if (window.electronAPI?.getAngularBounds) {
+      try {
+        return await window.electronAPI.getAngularBounds();
+      } catch (error) {
+        console.error('[ElectronService] Error getting Angular bounds:', error);
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Cleanup listeners on service destroy
    */
   destroy(): void {
     if (window.electronAPI?.removeAllListeners) {
       window.electronAPI.removeAllListeners('chat-selected');
       window.electronAPI.removeAllListeners('phone-detected');
+      window.electronAPI.removeAllListeners('whatsapp-visibility-changed');
+      window.electronAPI.removeAllListeners('whatsapp-bounds-changed');
     }
   }
 }

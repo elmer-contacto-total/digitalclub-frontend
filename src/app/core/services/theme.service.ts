@@ -1,4 +1,4 @@
-import { Injectable, signal, effect } from '@angular/core';
+import { Injectable, signal, effect, inject } from '@angular/core';
 
 export type Theme = 'light' | 'dark';
 
@@ -20,10 +20,28 @@ export class ThemeService {
       const currentTheme = this.theme();
       document.body.setAttribute('data-theme', currentTheme);
       localStorage.setItem(THEME_KEY, currentTheme);
+
+      // Sync theme to WhatsApp in Electron
+      this.syncWhatsAppTheme(currentTheme);
     });
 
     // Listen for system theme changes
     this.watchSystemTheme();
+  }
+
+  /**
+   * Sync theme to WhatsApp Web in Electron
+   */
+  private async syncWhatsAppTheme(theme: Theme): Promise<void> {
+    // Lazy import to avoid circular dependency
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.setWhatsAppTheme) {
+      try {
+        await (window as any).electronAPI.setWhatsAppTheme(theme);
+        console.log('[ThemeService] WhatsApp theme synced:', theme);
+      } catch (error) {
+        console.error('[ThemeService] Error syncing WhatsApp theme:', error);
+      }
+    }
   }
 
   /**

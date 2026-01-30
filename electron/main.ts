@@ -38,6 +38,165 @@ const MEDIA_API_URL = process.env.MEDIA_API_URL || 'http://localhost:8080/api/me
 // Estado dinámico del layout
 let sidebarCollapsed = false;
 
+// Estado del tema actual
+let currentTheme: 'light' | 'dark' = 'dark';
+
+// CSS para adaptar WhatsApp Web al tema de la app
+function getWhatsAppThemeCSS(theme: 'light' | 'dark'): string {
+  if (theme === 'light') {
+    // WhatsApp Web ya es claro por defecto, solo ajustamos algunos elementos
+    return `
+      /* Light mode - Ajustes menores para consistencia */
+      :root {
+        --whatsapp-bg: #f0f2f5 !important;
+      }
+    `;
+  } else {
+    // Dark mode - Forzar tema oscuro en WhatsApp Web
+    return `
+      /* Dark mode - Forzar tema oscuro */
+      :root {
+        --whatsapp-bg: #111b21 !important;
+        --primary-background: #111b21 !important;
+        --secondary-background: #202c33 !important;
+        --conversation-panel-background: #0b141a !important;
+        --incoming-background: #202c33 !important;
+        --outgoing-background: #005c4b !important;
+        --primary: #00a884 !important;
+        --primary-strong: #06cf9c !important;
+        --input-background: #2a3942 !important;
+        --search-input-background: #202c33 !important;
+        --panel-header-background: #202c33 !important;
+        --dropdown-background: #233138 !important;
+        --border-default: #2a3942 !important;
+        --primary-title: #e9edef !important;
+        --secondary-title: #8696a0 !important;
+        --bubble-meta: #8696a0 !important;
+      }
+
+      /* Fondo principal */
+      body, #app, ._2Ts6i, ._3K4-L, .two, .app-wrapper-web {
+        background-color: #111b21 !important;
+      }
+
+      /* Panel izquierdo (lista de chats) */
+      ._2Ts6i._3RGKj, [data-testid="chat-list"], #pane-side {
+        background-color: #111b21 !important;
+      }
+
+      /* Header del panel */
+      header, ._3WByx, ._2YpE6 {
+        background-color: #202c33 !important;
+      }
+
+      /* Items de chat */
+      ._1N4rE, ._199zF, ._2nY6U, [data-testid="cell-frame-container"] {
+        background-color: #111b21 !important;
+      }
+      ._1N4rE:hover, ._199zF:hover, [data-testid="cell-frame-container"]:hover {
+        background-color: #202c33 !important;
+      }
+
+      /* Chat activo */
+      ._1N4rE._3mMX1, [aria-selected="true"] {
+        background-color: #2a3942 !important;
+      }
+
+      /* Panel derecho (conversación) */
+      #main, ._3GlyB, ._1_keJ {
+        background-color: #0b141a !important;
+      }
+
+      /* Burbujas de mensaje */
+      .message-in ._21Ahp, .message-in .copyable-text-block {
+        background-color: #202c33 !important;
+      }
+      .message-out ._21Ahp, .message-out .copyable-text-block {
+        background-color: #005c4b !important;
+      }
+
+      /* Input de mensaje */
+      ._2_1wd, ._13NKt, .copyable-text {
+        background-color: #2a3942 !important;
+        color: #e9edef !important;
+      }
+      footer, ._2BU3P {
+        background-color: #202c33 !important;
+      }
+
+      /* Textos */
+      ._11JPr, .ZObjg, ._1wjpf, span[dir="auto"], ._11JPr span {
+        color: #e9edef !important;
+      }
+      ._3Pwfx, ._3ko75, ._3fs13, .Hy9nV, ._2h0YK {
+        color: #8696a0 !important;
+      }
+
+      /* Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px !important;
+        height: 6px !important;
+      }
+      ::-webkit-scrollbar-track {
+        background: #111b21 !important;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #374045 !important;
+        border-radius: 3px !important;
+      }
+
+      /* Panel de info/media */
+      ._1JAUF, .X7YrQ, ._2LSbZ {
+        background-color: #111b21 !important;
+      }
+
+      /* Dropdown/popups */
+      ._3wfTE, ._3P6xr, .uagWh {
+        background-color: #233138 !important;
+      }
+
+      /* Search box */
+      ._1awRl, ._2_1wd.copyable-text {
+        background-color: #202c33 !important;
+        border-color: #2a3942 !important;
+      }
+
+      /* Dividers */
+      ._3OvU8, .P6z4j {
+        border-color: #2a3942 !important;
+      }
+    `;
+  }
+}
+
+// Inyectar CSS de tema en WhatsApp
+async function applyWhatsAppTheme(theme: 'light' | 'dark'): Promise<void> {
+  if (!whatsappView) return;
+
+  currentTheme = theme;
+  const css = getWhatsAppThemeCSS(theme);
+
+  try {
+    await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        // Remover CSS de tema anterior
+        const existing = document.getElementById('hablape-theme-css');
+        if (existing) existing.remove();
+
+        // Inyectar nuevo CSS
+        const style = document.createElement('style');
+        style.id = 'hablape-theme-css';
+        style.textContent = ${JSON.stringify(css)};
+        document.head.appendChild(style);
+
+        console.log('[HablaPe] Tema aplicado:', '${theme}');
+      })()
+    `, true);
+  } catch (err) {
+    console.error('[HablaPe] Error aplicando tema a WhatsApp:', err);
+  }
+}
+
 // ==================== FUNCIONES DE ENVÍO AL BACKEND ====================
 
 /**
@@ -299,9 +458,13 @@ function createWhatsAppView(): void {
       .catch(err => console.error('[HablaPe] Error aplicando anti-fingerprinting:', err));
   });
 
-  // Aplicar zoom cuando cargue
+  // Aplicar zoom y tema cuando cargue
   whatsappView.webContents.on('did-finish-load', () => {
     whatsappView?.webContents.setZoomFactor(0.80);
+    // Aplicar tema actual después de un pequeño delay para que WhatsApp termine de renderizar
+    setTimeout(() => {
+      applyWhatsAppTheme(currentTheme);
+    }, 1000);
   });
 
   whatsappView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
@@ -397,6 +560,12 @@ function updateWhatsAppViewBounds(): void {
     y: headerHeight,
     width: whatsappWidth,
     height: height - headerHeight
+  });
+
+  // Notificar a Angular del ancho disponible
+  mainWindow.webContents.send('whatsapp-bounds-changed', {
+    angularWidth: targetX,
+    whatsappWidth: whatsappWidth
   });
 }
 
@@ -990,6 +1159,29 @@ function setupIPC(): void {
   ipcMain.handle('scan-new-messages', async (_, telefono: string) => {
     const messages = await scanChatMessages(telefono);
     return messages;
+  });
+
+  // Cambiar tema de WhatsApp
+  ipcMain.handle('set-whatsapp-theme', async (_, theme: 'light' | 'dark') => {
+    await applyWhatsAppTheme(theme);
+    return { success: true, theme };
+  });
+
+  // Obtener ancho disponible para Angular
+  ipcMain.handle('get-angular-bounds', () => {
+    if (!mainWindow) return null;
+    const [width] = mainWindow.getContentSize();
+    if (whatsappVisible) {
+      const whatsappWidth = Math.floor(width / 2);
+      return {
+        angularWidth: width - whatsappWidth,
+        whatsappVisible: true
+      };
+    }
+    return {
+      angularWidth: width,
+      whatsappVisible: false
+    };
   });
 }
 

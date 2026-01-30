@@ -96,6 +96,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.invoke('scan-new-messages', telefono);
   },
 
+  // === Tema de WhatsApp ===
+  // Cambiar tema de WhatsApp (light/dark)
+  setWhatsAppTheme: (theme: 'light' | 'dark'): Promise<{ success: boolean; theme: string }> => {
+    return ipcRenderer.invoke('set-whatsapp-theme', theme);
+  },
+
+  // Obtener bounds disponibles para Angular
+  getAngularBounds: (): Promise<{ angularWidth: number; whatsappVisible: boolean } | null> => {
+    return ipcRenderer.invoke('get-angular-bounds');
+  },
+
+  // Evento cuando cambian los bounds de WhatsApp
+  onWhatsAppBoundsChanged: (callback: (data: { angularWidth: number; whatsappWidth: number }) => void) => {
+    ipcRenderer.on('whatsapp-bounds-changed', (_, data) => callback(data));
+  },
+
+  // Evento cuando cambia la visibilidad de WhatsApp
+  onWhatsAppVisibilityChanged: (callback: (data: { visible: boolean }) => void) => {
+    ipcRenderer.on('whatsapp-visibility-changed', (_, data) => callback(data));
+  },
+
   // Limpiar listeners
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel);
@@ -160,6 +181,11 @@ declare global {
       isWhatsAppVisible: () => Promise<boolean>;
       scanMessages: (telefono: string) => Promise<ScannedMessage[]>;
       scanNewMessages: (telefono: string) => Promise<ScannedMessage[]>;
+      // Tema de WhatsApp
+      setWhatsAppTheme: (theme: 'light' | 'dark') => Promise<{ success: boolean; theme: string }>;
+      getAngularBounds: () => Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
+      onWhatsAppBoundsChanged: (callback: (data: { angularWidth: number; whatsappWidth: number }) => void) => void;
+      onWhatsAppVisibilityChanged: (callback: (data: { visible: boolean }) => void) => void;
       removeAllListeners: (channel: string) => void;
     };
   }

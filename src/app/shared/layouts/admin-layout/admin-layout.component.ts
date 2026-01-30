@@ -1,10 +1,12 @@
-import { Component, signal, inject, HostListener } from '@angular/core';
+import { Component, signal, inject, HostListener, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { Subject, takeUntil } from 'rxjs';
 import { HeaderComponent } from '../../components/header/header.component';
 import { SidebarComponent } from '../../components/sidebar/sidebar.component';
 import { ImpersonationToolbarComponent } from '../../components/impersonation-toolbar/impersonation-toolbar.component';
 import { ToastService } from '../../../core/services/toast.service';
+import { ElectronService } from '../../../core/services/electron.service';
 
 @Component({
   selector: 'app-admin-layout',
@@ -13,18 +15,37 @@ import { ToastService } from '../../../core/services/toast.service';
   templateUrl: './admin-layout.component.html',
   styleUrl: './admin-layout.component.scss'
 })
-export class AdminLayoutComponent {
+export class AdminLayoutComponent implements OnInit, OnDestroy {
   private toastService = inject(ToastService);
+  private electronService = inject(ElectronService);
+  private destroy$ = new Subject<void>();
 
   // State
   sidebarCollapsed = signal(false);
   sidebarMobileOpen = signal(false);
+  whatsappVisible = signal(false);
 
   // Responsive handling
   private readonly MOBILE_BREAKPOINT = 1024;
 
   constructor() {
     this.checkViewport();
+  }
+
+  ngOnInit(): void {
+    // Listen for WhatsApp visibility changes from Electron
+    if (this.electronService.isElectron) {
+      this.electronService.whatsappVisible$
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(visible => {
+          this.whatsappVisible.set(visible);
+        });
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   @HostListener('window:resize')

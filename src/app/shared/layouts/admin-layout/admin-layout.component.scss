@@ -28,6 +28,20 @@
   }
 }
 
+// When WhatsApp Web is visible in Electron, constrain content to left 50%
+// The main-wrapper already has margin-left for sidebar, so we set width to fill up to 50vw
+.whatsapp-visible .main-wrapper {
+  width: calc(50vw - var(--sidebar-width));
+  max-width: calc(50vw - var(--sidebar-width));
+  flex: none;
+  transition: width var(--duration-normal), max-width var(--duration-normal);
+}
+
+.whatsapp-visible.sidebar-collapsed .main-wrapper {
+  width: calc(50vw - var(--sidebar-collapsed));
+  max-width: calc(50vw - var(--sidebar-collapsed));
+}
+
 // Main content
 .main-content {
   flex: 1;
