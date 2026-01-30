@@ -58,11 +58,11 @@
         <div class="dropdown-menu dropdown-notifications">
           <div class="dropdown-header">
             <span>Notificaciones</span>
-            <a routerLink="/admin/alerts" class="dropdown-link">Mostrar Todas</a>
+            <a routerLink="/app/alerts" class="dropdown-link" (click)="closeAllMenus()">Mostrar Todas</a>
           </div>
           <div class="dropdown-body">
             <!-- Sample notifications -->
-            <a class="notification-item" routerLink="/admin/alerts">
+            <a class="notification-item" routerLink="/app/alerts" (click)="closeAllMenus()">
               <div class="notification-icon bg-info">
                 <i class="ph ph-info"></i>
               </div>
@@ -71,7 +71,7 @@
                 <span class="notification-time">Hace 5 minutos</span>
               </div>
             </a>
-            <a class="notification-item" routerLink="/admin/alerts">
+            <a class="notification-item" routerLink="/app/alerts" (click)="closeAllMenus()">
               <div class="notification-icon bg-success">
                 <i class="ph ph-check"></i>
               </div>

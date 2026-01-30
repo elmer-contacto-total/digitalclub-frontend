@@ -1,6 +1,7 @@
 /**
  * Coming Soon Component
  * Placeholder for pages not yet implemented
+ * Supports light/dark mode via CSS variables
  */
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -42,7 +43,8 @@ import { Router, RouterLink } from '@angular/router';
       align-items: center;
       justify-content: center;
       min-height: calc(100vh - 200px);
-      padding: 24px;
+      padding: var(--space-6);
+      background: var(--bg-base);
     }
 
     .coming-soon-content {
@@ -53,49 +55,51 @@ import { Router, RouterLink } from '@angular/router';
     .icon-wrapper {
       width: 120px;
       height: 120px;
-      margin: 0 auto 24px;
-      background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
-      border-radius: 50%;
+      margin: 0 auto var(--space-6);
+      background: var(--bg-subtle);
+      border-radius: var(--radius-full);
       display: flex;
       align-items: center;
       justify-content: center;
+      border: 1px solid var(--border-default);
 
       i {
         font-size: 56px;
-        color: var(--primary-color, #25d366);
+        color: var(--accent-default);
       }
     }
 
     h1 {
-      font-size: 28px;
-      font-weight: 600;
-      color: var(--text-primary, #333);
-      margin: 0 0 12px;
+      font-size: var(--text-2xl);
+      font-weight: var(--font-semibold);
+      color: var(--fg-default);
+      margin: 0 0 var(--space-3);
     }
 
     .description {
-      font-size: 16px;
-      color: var(--text-secondary, #666);
-      margin: 0 0 8px;
+      font-size: var(--text-base);
+      color: var(--fg-muted);
+      margin: 0 0 var(--space-2);
       line-height: 1.5;
     }
 
     .current-route {
-      font-size: 13px;
-      color: var(--text-muted, #999);
-      margin: 0 0 24px;
+      font-size: var(--text-sm);
+      color: var(--fg-subtle);
+      margin: 0 0 var(--space-6);
 
       code {
-        background: var(--bg-secondary, #f5f5f5);
-        padding: 2px 8px;
-        border-radius: 4px;
+        background: var(--bg-muted);
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-md);
         font-family: 'Fira Code', monospace;
+        color: var(--fg-muted);
       }
     }
 
     .actions {
       display: flex;
-      gap: 12px;
+      gap: var(--space-3);
       justify-content: center;
       flex-wrap: wrap;
     }
@@ -103,14 +107,14 @@ import { Router, RouterLink } from '@angular/router';
     .btn-back, .btn-dashboard {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-5);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      font-weight: var(--font-medium);
       text-decoration: none;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all var(--duration-normal);
 
       i {
         font-size: 18px;
@@ -118,23 +122,24 @@ import { Router, RouterLink } from '@angular/router';
     }
 
     .btn-back {
-      background: white;
-      border: 1px solid var(--border-color, #e0e0e0);
-      color: var(--text-primary, #333);
+      background: var(--card-bg);
+      border: 1px solid var(--border-default);
+      color: var(--fg-default);
 
       &:hover {
-        background: var(--bg-hover, #f5f5f5);
-        border-color: var(--text-muted, #999);
+        background: var(--bg-subtle);
+        border-color: var(--border-emphasis);
       }
     }
 
     .btn-dashboard {
-      background: var(--primary-color, #25d366);
-      border: none;
+      background: var(--accent-default);
+      border: 1px solid var(--accent-default);
       color: white;
 
       &:hover {
-        background: var(--primary-dark, #128c7e);
+        background: var(--accent-emphasis);
+        border-color: var(--accent-emphasis);
       }
     }
   `]
