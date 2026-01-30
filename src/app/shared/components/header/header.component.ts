@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { ThemeService } from '../../../core/services/theme.service';
+import { ElectronService } from '../../../core/services/electron.service';
 import { getInitials } from '../../../core/models/user.model';
 
 @Component({
@@ -15,6 +16,7 @@ import { getInitials } from '../../../core/models/user.model';
 export class HeaderComponent {
   private authService = inject(AuthService);
   private themeService = inject(ThemeService);
+  private electronService = inject(ElectronService);
 
   // Outputs
   toggleSidebar = output<void>();
@@ -93,5 +95,38 @@ export class HeaderComponent {
     this.showUserMenu.set(false);
     this.showNotifications.set(false);
     this.showLanguageMenu.set(false);
+  }
+
+  // Electron window controls
+  get isElectron(): boolean {
+    return this.electronService.isElectron;
+  }
+
+  isMaximized = signal(false);
+
+  onMinimize(): void {
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.windowMinimize) {
+      (window as any).electronAPI.windowMinimize();
+    }
+  }
+
+  onMaximize(): void {
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.windowMaximize) {
+      (window as any).electronAPI.windowMaximize();
+      this.checkMaximized();
+    }
+  }
+
+  onClose(): void {
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.windowClose) {
+      (window as any).electronAPI.windowClose();
+    }
+  }
+
+  private async checkMaximized(): Promise<void> {
+    if (typeof window !== 'undefined' && (window as any).electronAPI?.windowIsMaximized) {
+      const maximized = await (window as any).electronAPI.windowIsMaximized();
+      this.isMaximized.set(maximized);
+    }
   }
 }
