@@ -99,12 +99,6 @@ export class ElectronService {
 
     const isElectron = hasElectronAPI || hasElectronUserAgent;
     this.isElectronSubject.next(isElectron);
-
-    if (isElectron) {
-      console.log('[ElectronService] Running in Electron environment');
-    } else {
-      console.log('[ElectronService] Running in browser environment');
-    }
   }
 
   /**
@@ -117,9 +111,7 @@ export class ElectronService {
 
     // Listen for chat selection events
     window.electronAPI.onChatSelected((data: ChatSelectedEvent) => {
-      // Run inside Angular zone to trigger change detection
       this.ngZone.run(() => {
-        console.log('[ElectronService] Chat selected:', data);
         this.chatSelectedSubject.next(data);
       });
     });
@@ -127,7 +119,6 @@ export class ElectronService {
     // Listen for phone detection events
     window.electronAPI.onPhoneDetected((data: PhoneDetectedEvent) => {
       this.ngZone.run(() => {
-        console.log('[ElectronService] Phone detected:', data);
         this.phoneDetectedSubject.next(data);
       });
     });
@@ -135,7 +126,6 @@ export class ElectronService {
     // Listen for WhatsApp visibility changes
     window.electronAPI.onWhatsAppVisibilityChanged((data: { visible: boolean }) => {
       this.ngZone.run(() => {
-        console.log('[ElectronService] WhatsApp visibility changed:', data.visible);
         this.whatsappVisibleSubject.next(data.visible);
       });
     });
@@ -143,7 +133,6 @@ export class ElectronService {
     // Listen for WhatsApp bounds changes
     window.electronAPI.onWhatsAppBoundsChanged((data: WhatsAppBounds) => {
       this.ngZone.run(() => {
-        console.log('[ElectronService] WhatsApp bounds changed:', data);
         this.whatsappBoundsSubject.next(data);
       });
     });
@@ -190,11 +179,8 @@ export class ElectronService {
   async showWhatsApp(): Promise<boolean> {
     if (window.electronAPI?.showWhatsApp) {
       try {
-        const result = await window.electronAPI.showWhatsApp();
-        console.log('[ElectronService] WhatsApp shown:', result);
-        return result;
-      } catch (error) {
-        console.error('[ElectronService] Error showing WhatsApp:', error);
+        return await window.electronAPI.showWhatsApp();
+      } catch {
         return false;
       }
     }
@@ -208,11 +194,8 @@ export class ElectronService {
   async hideWhatsApp(): Promise<boolean> {
     if (window.electronAPI?.hideWhatsApp) {
       try {
-        const result = await window.electronAPI.hideWhatsApp();
-        console.log('[ElectronService] WhatsApp hidden:', result);
-        return result;
-      } catch (error) {
-        console.error('[ElectronService] Error hiding WhatsApp:', error);
+        return await window.electronAPI.hideWhatsApp();
+      } catch {
         return false;
       }
     }
@@ -227,8 +210,7 @@ export class ElectronService {
     if (window.electronAPI?.isWhatsAppVisible) {
       try {
         return await window.electronAPI.isWhatsAppVisible();
-      } catch (error) {
-        console.error('[ElectronService] Error checking WhatsApp visibility:', error);
+      } catch {
         return false;
       }
     }

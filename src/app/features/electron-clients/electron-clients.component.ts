@@ -69,19 +69,13 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
 
     // Show WhatsApp Web view when entering this module
     if (this.electronService.isElectron) {
-      this.electronService.showWhatsApp().then(shown => {
-        if (shown) {
-          console.log('[ElectronClients] WhatsApp Web view activated');
-        }
-      });
+      this.electronService.showWhatsApp();
     }
 
     // Listen for chat selection from Electron
     this.electronService.chatSelected$.pipe(
       takeUntil(this.destroy$),
       switchMap((event: ChatSelectedEvent | null) => {
-        console.log('[ElectronClients] Chat event received:', event);
-
         if (!event) {
           this.resetState();
           return of(null);
@@ -92,7 +86,6 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
 
         // Si no hay teléfono pero hay nombre, buscar por nombre en el backend
         if (!event.phone) {
-          console.log('[ElectronClients] No phone in event, searching by name:', event.name);
           this.currentPhone.set(null);
 
           if (event.name && event.name.trim().length >= 2) {
@@ -104,12 +97,9 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         }
 
         this.currentPhone.set(event.phone);
-
-        console.log('[ElectronClients] Searching for phone:', event.phone);
         return this.contactsService.searchByPhone(event.phone);
       })
     ).subscribe(result => {
-      console.log('[ElectronClients] Search result:', result);
       if (result) {
         this.contact.set(result);
         this.viewState.set('contact');
@@ -143,11 +133,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     // Hide WhatsApp Web view when leaving this module
     if (this.electronService.isElectron) {
-      this.electronService.hideWhatsApp().then(hidden => {
-        if (hidden) {
-          console.log('[ElectronClients] WhatsApp Web view hidden');
-        }
-      });
+      this.electronService.hideWhatsApp();
     }
 
     this.destroy$.next();

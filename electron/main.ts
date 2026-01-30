@@ -673,12 +673,8 @@ async function scanChat(): Promise<void> {
         })()
       `, true);
 
-      // Log para debug
-      console.log('[HablaPe] Scan result:', JSON.stringify(result));
-
       // Si no hay datos válidos, salir
       if (result.debug) {
-        console.log('[HablaPe] Debug info:', result.debug);
         return;
       }
 
@@ -687,8 +683,6 @@ async function scanChat(): Promise<void> {
 
       if (identifier && identifier !== lastDetectedChat) {
         lastDetectedChat = identifier;
-
-        console.log('[HablaPe] Sending chat-selected:', { phone: result.phone, name: result.name, isPhone });
 
         // Enviar al renderer con la info de si es teléfono o nombre
         mainWindow.webContents.send('chat-selected', {
