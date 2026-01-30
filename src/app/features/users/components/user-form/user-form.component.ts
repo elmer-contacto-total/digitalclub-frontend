@@ -104,6 +104,19 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                 />
               </div>
             </div>
+
+            <div class="form-row">
+              <div class="form-group full-width">
+                <label for="importString">Nombre en archivo de importación</label>
+                <input
+                  id="importString"
+                  type="text"
+                  formControlName="importString"
+                  placeholder="Nombre usado para identificar al usuario en importaciones"
+                />
+                <span class="field-hint">Este nombre se usa para hacer match durante la importación de datos</span>
+              </div>
+            </div>
           </div>
 
           <!-- Role Section -->
@@ -119,9 +132,9 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                   [class.invalid]="isFieldInvalid('role')"
                   (change)="onRoleChange()"
                 >
-                  <option [value]="null" disabled>Seleccionar rol</option>
+                  <option [ngValue]="null" disabled>Seleccionar rol</option>
                   @for (role of availableRoles(); track role.value) {
-                    <option [value]="role.value">{{ role.label }}</option>
+                    <option [ngValue]="role.value">{{ role.label }}</option>
                   }
                 </select>
                 @if (isFieldInvalid('role')) {
@@ -132,9 +145,9 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
               <div class="form-group">
                 <label for="managerId">Manager</label>
                 <select id="managerId" formControlName="managerId">
-                  <option [value]="null">Sin manager asignado</option>
+                  <option [ngValue]="null">Sin manager asignado</option>
                   @for (manager of availableManagers(); track manager.id) {
-                    <option [value]="manager.id">{{ manager.fullName }} ({{ getRoleDisplayName(manager.role) }})</option>
+                    <option [ngValue]="manager.id">{{ manager.fullName }} ({{ getRoleDisplayName(manager.role) }})</option>
                   }
                 </select>
               </div>
@@ -145,9 +158,9 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                 <div class="form-group">
                   <label for="status">Estado</label>
                   <select id="status" formControlName="status">
-                    <option [value]="0">Activo</option>
-                    <option [value]="1">Inactivo</option>
-                    <option [value]="2">Pendiente</option>
+                    <option [ngValue]="0">Activo</option>
+                    <option [ngValue]="1">Inactivo</option>
+                    <option [ngValue]="2">Pendiente</option>
                   </select>
                 </div>
               </div>
@@ -235,6 +248,8 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       padding: 24px;
       max-width: 800px;
       margin: 0 auto;
+      background: var(--bg-base);
+      min-height: 100%;
     }
 
     .page-header {
@@ -244,12 +259,12 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: var(--text-secondary);
+        color: var(--fg-muted);
         text-decoration: none;
         font-size: 14px;
         margin-bottom: 8px;
 
-        &:hover { color: var(--primary-color); }
+        &:hover { color: var(--accent-default); }
 
         i { font-size: 18px; }
       }
@@ -258,14 +273,14 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         margin: 0;
         font-size: 24px;
         font-weight: 600;
-        color: var(--text-primary);
+        color: var(--fg-default);
       }
     }
 
     .form-card {
-      background: white;
+      background: var(--card-bg);
       border-radius: 12px;
-      border: 1px solid var(--border-color);
+      border: 1px solid var(--card-border);
       padding: 24px;
     }
 
@@ -278,9 +293,9 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         margin: 0 0 20px 0;
         font-size: 16px;
         font-weight: 600;
-        color: var(--text-primary);
+        color: var(--fg-default);
         padding-bottom: 12px;
-        border-bottom: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--border-default);
       }
     }
 
@@ -297,44 +312,66 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     .form-group {
       margin-bottom: 20px;
 
+      &.full-width {
+        grid-column: 1 / -1;
+      }
+
       label {
         display: block;
         margin-bottom: 8px;
         font-size: 14px;
         font-weight: 500;
-        color: var(--text-primary);
+        color: var(--fg-default);
 
-        .required { color: var(--danger-color, #dc2626); }
+        .required { color: var(--error-default); }
       }
 
       input, select {
         width: 100%;
         padding: 10px 12px;
-        border: 1px solid var(--border-color);
+        background: var(--input-bg);
+        border: 1px solid var(--input-border);
         border-radius: 8px;
         font-size: 14px;
+        color: var(--fg-default);
         transition: border-color 0.2s;
 
         &:focus {
           outline: none;
-          border-color: var(--primary-color);
+          border-color: var(--input-border-focus);
+          box-shadow: 0 0 0 3px var(--accent-subtle);
         }
 
         &.invalid {
-          border-color: var(--danger-color, #dc2626);
+          border-color: var(--error-default);
         }
 
         &[readonly] {
-          background: var(--bg-secondary);
-          color: var(--text-secondary);
+          background: var(--input-bg-readonly);
+          color: var(--fg-muted);
         }
+
+        &::placeholder {
+          color: var(--fg-subtle);
+        }
+      }
+
+      select {
+        cursor: pointer;
       }
 
       .error-message {
         display: block;
         margin-top: 6px;
         font-size: 12px;
-        color: var(--danger-color, #dc2626);
+        color: var(--error-default);
+      }
+
+      .field-hint {
+        display: block;
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--fg-subtle);
       }
     }
 
@@ -350,11 +387,11 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         transform: translateY(-50%);
         background: none;
         border: none;
-        color: var(--text-secondary);
+        color: var(--fg-muted);
         cursor: pointer;
         padding: 4px;
 
-        &:hover { color: var(--text-primary); }
+        &:hover { color: var(--fg-default); }
 
         i { font-size: 18px; }
       }
@@ -365,10 +402,10 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: #fef2f2;
-      border: 1px solid #fecaca;
+      background: var(--error-subtle);
+      border: 1px solid var(--error-default);
       border-radius: 8px;
-      color: #991b1b;
+      color: var(--error-text);
       font-size: 14px;
       margin-bottom: 24px;
 
@@ -380,7 +417,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       justify-content: flex-end;
       gap: 12px;
       padding-top: 20px;
-      border-top: 1px solid var(--border-color);
+      border-top: 1px solid var(--border-default);
     }
 
     .btn {
@@ -403,19 +440,19 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       }
 
       &.btn-primary {
-        background: var(--primary-color);
+        background: var(--accent-default);
         color: white;
         border: none;
 
-        &:hover:not(:disabled) { background: var(--primary-dark); }
+        &:hover:not(:disabled) { background: var(--accent-emphasis); }
       }
 
       &.btn-secondary {
-        background: white;
-        color: var(--text-primary);
-        border: 1px solid var(--border-color);
+        background: var(--card-bg);
+        color: var(--fg-default);
+        border: 1px solid var(--border-default);
 
-        &:hover { background: var(--bg-hover); }
+        &:hover { background: var(--bg-subtle); }
       }
     }
 
@@ -501,27 +538,36 @@ export class UserFormComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.initForm();
-    this.loadManagers();
-
-    // Check for edit mode
+    // Check for edit mode FIRST, before initializing the form
     const id = this.route.snapshot.params['id'];
     if (id && id !== 'new') {
       this.userId.set(parseInt(id, 10));
+    }
+
+    // Now initialize form with correct validators based on mode
+    this.initForm();
+    this.loadManagers();
+
+    // Load user data if in edit mode
+    if (this.isEditMode()) {
       this.loadUser(this.userId()!);
     }
   }
 
   private initForm(): void {
+    // Password validators only for create mode
+    const passwordValidators = this.isEditMode() ? [] : [Validators.required, Validators.minLength(8)];
+
     this.form = this.fb.group({
       firstName: ['', Validators.required],
       lastName: ['', Validators.required],
       email: ['', [Validators.required, Validators.email]],
       phone: [''],
+      importString: [''],
       role: [null, Validators.required],
       managerId: [null],
       status: [UserStatus.ACTIVE],
-      password: ['', this.isEditMode() ? [] : [Validators.required, Validators.minLength(8)]],
+      password: ['', passwordValidators],
       passwordConfirmation: ['']
     }, {
       validators: this.passwordMatchValidator
@@ -550,8 +596,15 @@ export class UserFormComponent implements OnInit {
     this.isLoading.set(true);
     this.userService.getUser(id).subscribe({
       next: (response) => {
-        this.existingUser.set(response.user);
-        this.patchForm(response.user);
+        console.log('User loaded for edit:', response);
+        if (response.user) {
+          this.existingUser.set(response.user);
+          this.patchForm(response.user);
+        } else {
+          // Handle case where response might be flat (backwards compatibility)
+          this.existingUser.set(response as any);
+          this.patchForm(response as any);
+        }
         this.isLoading.set(false);
       },
       error: (err) => {
@@ -563,19 +616,24 @@ export class UserFormComponent implements OnInit {
   }
 
   private patchForm(user: User): void {
+    console.log('Patching form with user:', user);
+
+    // Ensure role and status are numbers for select binding
+    const roleValue = typeof user.role === 'number' ? user.role : parseInt(String(user.role), 10);
+    const statusValue = typeof user.status === 'number' ? user.status : parseInt(String(user.status), 10);
+
     this.form.patchValue({
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      managerId: user.managerId,
-      status: user.status
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      importString: (user as any).importString || '',
+      role: roleValue,
+      managerId: user.managerId || null,
+      status: statusValue
     });
 
-    // Remove password validators for edit mode
-    this.form.get('password')?.clearValidators();
-    this.form.get('password')?.updateValueAndValidity();
+    console.log('Form values after patch:', this.form.value);
   }
 
   onRoleChange(): void {
@@ -619,7 +677,8 @@ export class UserFormComponent implements OnInit {
       phone: this.form.value.phone || '',
       password: this.form.value.password,
       role: parseInt(this.form.value.role, 10),
-      managerId: this.form.value.managerId || undefined
+      managerId: this.form.value.managerId || undefined,
+      importString: this.form.value.importString || undefined
     };
 
     this.userService.createUser(request).subscribe({
@@ -642,7 +701,8 @@ export class UserFormComponent implements OnInit {
       phone: this.form.value.phone || '',
       role: parseInt(this.form.value.role, 10),
       status: parseInt(this.form.value.status, 10),
-      managerId: this.form.value.managerId || undefined
+      managerId: this.form.value.managerId || undefined,
+      importString: this.form.value.importString || undefined
     };
 
     this.userService.updateUser(this.userId()!, request).subscribe({

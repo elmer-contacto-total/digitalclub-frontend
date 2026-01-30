@@ -16,7 +16,7 @@ export const USERS_ROUTES: Routes = [
     path: 'new',
     loadComponent: () => import('./components/user-form/user-form.component').then(m => m.UserFormComponent),
     title: 'Nuevo Usuario - MWS',
-    canActivate: [roleGuard([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF])]
+    canActivate: [roleGuard([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF, UserRole.MANAGER_LEVEL_4])]
   },
   {
     path: ':id',
@@ -27,7 +27,7 @@ export const USERS_ROUTES: Routes = [
     path: ':id/edit',
     loadComponent: () => import('./components/user-form/user-form.component').then(m => m.UserFormComponent),
     title: 'Editar Usuario - MWS',
-    canActivate: [roleGuard([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF])]
+    canActivate: [roleGuard([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF, UserRole.MANAGER_LEVEL_4])]
   }
 ];
 

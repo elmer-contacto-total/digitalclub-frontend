@@ -23,6 +23,7 @@ export interface CreateUserRequest {
   password: string;
   role: UserRole;
   managerId?: number;
+  importString?: string;  // PARIDAD RAILS: import_string field
 }
 
 export interface UpdateUserRequest {
@@ -32,7 +33,28 @@ export interface UpdateUserRequest {
   role?: UserRole;
   status?: UserStatus;
   managerId?: number;
+  importString?: string;  // PARIDAD RAILS: import_string field
 }
+
+// Maps for converting numeric enums to string names for backend
+const ROLE_TO_STRING: Record<UserRole, string> = {
+  [UserRole.STANDARD]: 'STANDARD',
+  [UserRole.SUPER_ADMIN]: 'SUPER_ADMIN',
+  [UserRole.ADMIN]: 'ADMIN',
+  [UserRole.MANAGER_LEVEL_1]: 'MANAGER_LEVEL_1',
+  [UserRole.MANAGER_LEVEL_2]: 'MANAGER_LEVEL_2',
+  [UserRole.MANAGER_LEVEL_3]: 'MANAGER_LEVEL_3',
+  [UserRole.MANAGER_LEVEL_4]: 'MANAGER_LEVEL_4',
+  [UserRole.AGENT]: 'AGENT',
+  [UserRole.STAFF]: 'STAFF',
+  [UserRole.WHATSAPP_BUSINESS]: 'WHATSAPP_BUSINESS'
+};
+
+const STATUS_TO_STRING: Record<UserStatus, string> = {
+  [UserStatus.ACTIVE]: 'ACTIVE',
+  [UserStatus.INACTIVE]: 'INACTIVE',
+  [UserStatus.PENDING]: 'PENDING'
+};
 
 export interface AssignUserRequest {
   agentId: number;
@@ -119,16 +141,46 @@ export class UserService {
 
   /**
    * Create new user
+   * Converts numeric role to string name for backend
    */
   createUser(request: CreateUserRequest): Observable<User> {
-    return this.http.post<User>(this.baseUrl, request);
+    // Convert numeric role to string name for Spring Boot backend
+    const backendRequest: Record<string, unknown> = {
+      email: request.email,
+      firstName: request.firstName,
+      lastName: request.lastName,
+      phone: request.phone,
+      password: request.password,
+      managerId: request.managerId,
+      importString: request.importString,
+      role: ROLE_TO_STRING[request.role] || 'STANDARD'
+    };
+
+    return this.http.post<User>(this.baseUrl, backendRequest);
   }
 
   /**
    * Update existing user
+   * Converts numeric role/status to string names for backend
    */
   updateUser(id: number, request: UpdateUserRequest): Observable<User> {
-    return this.http.put<User>(`${this.baseUrl}/${id}`, request);
+    // Convert numeric enums to string names for Spring Boot backend
+    const backendRequest: Record<string, unknown> = {
+      firstName: request.firstName,
+      lastName: request.lastName,
+      phone: request.phone,
+      managerId: request.managerId,
+      importString: request.importString
+    };
+
+    if (request.role !== undefined) {
+      backendRequest['role'] = ROLE_TO_STRING[request.role] || 'STANDARD';
+    }
+    if (request.status !== undefined) {
+      backendRequest['status'] = STATUS_TO_STRING[request.status] || 'ACTIVE';
+    }
+
+    return this.http.put<User>(`${this.baseUrl}/${id}`, backendRequest);
   }
 
   /**

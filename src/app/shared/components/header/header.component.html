@@ -147,15 +147,15 @@
             </div>
           </div>
           <div class="dropdown-divider"></div>
-          <a routerLink="/admin/profile" class="dropdown-item">
+          <a routerLink="/app/profile" class="dropdown-item" (click)="closeAllMenus()">
             <i class="ph ph-user"></i>
             <span>Mi Perfil</span>
           </a>
-          <a routerLink="/admin/settings" class="dropdown-item">
+          <a routerLink="/app/settings" class="dropdown-item" (click)="closeAllMenus()">
             <i class="ph ph-gear"></i>
             <span>Ajustes</span>
           </a>
-          <a routerLink="/help" class="dropdown-item">
+          <a routerLink="/app/help" class="dropdown-item" (click)="closeAllMenus()">
             <i class="ph ph-question"></i>
             <span>Ayuda</span>
           </a>

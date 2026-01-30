@@ -246,6 +246,8 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
   styles: [`
     .user-detail-container {
       padding: 24px;
+      background: var(--bg-base);
+      min-height: 100%;
     }
 
     .page-header {
@@ -255,12 +257,12 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        color: var(--text-secondary);
+        color: var(--fg-muted);
         text-decoration: none;
         font-size: 14px;
         margin-bottom: 16px;
 
-        &:hover { color: var(--primary-color); }
+        &:hover { color: var(--accent-default); }
       }
     }
 
@@ -282,7 +284,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       width: 48px;
       height: 48px;
       border-radius: 50%;
-      background: var(--primary-color);
+      background: var(--accent-default);
       color: white;
       display: flex;
       align-items: center;
@@ -309,7 +311,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
         margin: 0 0 8px 0;
         font-size: 28px;
         font-weight: 600;
-        color: var(--text-primary);
+        color: var(--fg-default);
       }
     }
 
@@ -340,22 +342,22 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       i { font-size: 18px; }
 
       &.btn-primary {
-        background: var(--primary-color);
+        background: var(--accent-default);
         color: white;
-        &:hover { background: var(--primary-dark); }
+        &:hover { background: var(--accent-emphasis); }
       }
 
       &.btn-secondary {
-        background: white;
-        color: var(--text-primary);
-        border: 1px solid var(--border-color);
-        &:hover { background: var(--bg-hover); }
+        background: var(--card-bg);
+        color: var(--fg-default);
+        border: 1px solid var(--border-default);
+        &:hover { background: var(--bg-subtle); }
       }
 
       &.btn-danger {
-        background: var(--danger-color, #dc2626);
+        background: var(--error-default);
         color: white;
-        &:hover { background: #b91c1c; }
+        &:hover { opacity: 0.9; }
       }
     }
 
@@ -370,9 +372,9 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     }
 
     .info-card {
-      background: white;
+      background: var(--card-bg);
       border-radius: 12px;
-      border: 1px solid var(--border-color);
+      border: 1px solid var(--card-border);
       padding: 24px;
 
       &.full-width {
@@ -383,9 +385,9 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
         margin: 0 0 20px 0;
         font-size: 16px;
         font-weight: 600;
-        color: var(--text-primary);
+        color: var(--fg-default);
         padding-bottom: 12px;
-        border-bottom: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--border-default);
       }
     }
 
@@ -404,7 +406,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
         display: block;
         font-size: 12px;
         font-weight: 500;
-        color: var(--text-secondary);
+        color: var(--fg-muted);
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 4px;
@@ -412,7 +414,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
 
       span {
         font-size: 14px;
-        color: var(--text-primary);
+        color: var(--fg-default);
 
         &.mono {
           font-family: 'Fira Code', monospace;
@@ -435,19 +437,19 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     }
 
     .role-badge {
-      background: var(--bg-secondary);
-      color: var(--text-primary);
+      background: var(--bg-muted);
+      color: var(--fg-default);
 
-      &.role-1 { background: #fef3c7; color: #92400e; }
-      &.role-2 { background: #dbeafe; color: #1e40af; }
-      &.role-7 { background: #d1fae5; color: #065f46; }
-      &.role-8 { background: #e0e7ff; color: #3730a3; }
+      &.role-1 { background: var(--warning-subtle); color: var(--warning-text); }
+      &.role-2 { background: var(--info-subtle); color: var(--info-text); }
+      &.role-7 { background: var(--success-subtle); color: var(--success-text); }
+      &.role-8 { background: var(--accent-subtle); color: var(--accent-default); }
     }
 
     .status-badge {
-      &.status-0 { background: #d1fae5; color: #065f46; }
-      &.status-1 { background: #fee2e2; color: #991b1b; }
-      &.status-2 { background: #fef3c7; color: #92400e; }
+      &.status-0 { background: var(--success-subtle); color: var(--success-text); }
+      &.status-1 { background: var(--error-subtle); color: var(--error-text); }
+      &.status-2 { background: var(--warning-subtle); color: var(--warning-text); }
     }
 
     .badge {
@@ -455,11 +457,12 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       padding: 2px 8px;
       border-radius: 4px;
       font-size: 12px;
-      background: var(--bg-secondary);
+      background: var(--bg-muted);
+      color: var(--fg-default);
 
       &.badge-warning {
-        background: #fef3c7;
-        color: #92400e;
+        background: var(--warning-subtle);
+        color: var(--warning-text);
       }
     }
 
@@ -474,18 +477,18 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       align-items: center;
       gap: 12px;
       padding: 12px;
-      background: var(--bg-secondary);
+      background: var(--bg-subtle);
       border-radius: 8px;
       text-decoration: none;
       transition: background 0.2s;
 
-      &:hover { background: var(--bg-hover); }
+      &:hover { background: var(--bg-muted); }
 
       .sub-avatar {
         width: 40px;
         height: 40px;
         border-radius: 50%;
-        background: var(--primary-color);
+        background: var(--accent-default);
         color: white;
         display: flex;
         align-items: center;
@@ -500,12 +503,12 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
         .sub-name {
           display: block;
           font-weight: 500;
-          color: var(--text-primary);
+          color: var(--fg-default);
         }
 
         .sub-email {
           font-size: 13px;
-          color: var(--text-secondary);
+          color: var(--fg-muted);
         }
       }
     }
@@ -516,13 +519,13 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
 
       i {
         font-size: 80px;
-        color: var(--text-muted);
+        color: var(--fg-subtle);
         margin-bottom: 24px;
       }
 
       h2 {
         margin: 0 0 24px 0;
-        color: var(--text-secondary);
+        color: var(--fg-muted);
       }
     }
   `]

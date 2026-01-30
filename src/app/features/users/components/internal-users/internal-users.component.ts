@@ -121,37 +121,40 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
     </div>
   `,
   styles: [`
-    .internal-users-container { padding: 24px; }
+    .internal-users-container { padding: 24px; background: var(--bg-base); min-height: 100%; }
     .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
-    .page-header h1 { margin: 0 0 4px 0; font-size: 24px; font-weight: 600; }
-    .subtitle { margin: 0; color: var(--text-secondary); font-size: 14px; }
+    .page-header h1 { margin: 0 0 4px 0; font-size: 24px; font-weight: 600; color: var(--fg-default); }
+    .subtitle { margin: 0; color: var(--fg-muted); font-size: 14px; }
     .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; text-decoration: none; }
-    .btn-primary { background: var(--primary-color); color: white; }
+    .btn-primary { background: var(--accent-default); color: white; }
+    .btn-primary:hover { background: var(--accent-emphasis); }
     .filters-bar { margin-bottom: 24px; }
     .search-box { position: relative; max-width: 400px; }
-    .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); }
-    .search-box input { width: 100%; padding: 10px 12px 10px 40px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; }
-    .table-container { background: white; border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden; }
+    .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--fg-muted); }
+    .search-box input { width: 100%; padding: 10px 12px 10px 40px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; font-size: 14px; color: var(--fg-default); }
+    .search-box input:focus { outline: none; border-color: var(--input-border-focus); box-shadow: 0 0 0 3px var(--accent-subtle); }
+    .search-box input::placeholder { color: var(--fg-subtle); }
+    .table-container { background: var(--card-bg); border-radius: 12px; border: 1px solid var(--card-border); overflow: hidden; }
     .data-table { width: 100%; border-collapse: collapse; }
-    .data-table th, .data-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border-color); }
-    .data-table th { background: var(--bg-secondary); font-weight: 600; font-size: 13px; color: var(--text-secondary); text-transform: uppercase; }
-    .data-table tbody tr:hover { background: var(--bg-hover); }
+    .data-table th, .data-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--table-border); color: var(--fg-default); }
+    .data-table th { background: var(--table-header-bg); font-weight: 600; font-size: 13px; color: var(--fg-muted); text-transform: uppercase; }
+    .data-table tbody tr:hover { background: var(--table-row-hover); }
     .user-cell { display: flex; align-items: center; gap: 12px; }
-    .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary-color); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
+    .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-default); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
     .user-name { font-weight: 500; }
     .role-badge, .status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-    .role-badge { background: var(--bg-secondary); }
-    .role-badge.role-1 { background: #fef3c7; color: #92400e; }
-    .role-badge.role-2 { background: #dbeafe; color: #1e40af; }
-    .role-badge.role-7 { background: #d1fae5; color: #065f46; }
-    .role-badge.role-8 { background: #e0e7ff; color: #3730a3; }
-    .status-badge.status-0 { background: #d1fae5; color: #065f46; }
-    .status-badge.status-1 { background: #fee2e2; color: #991b1b; }
+    .role-badge { background: var(--bg-muted); color: var(--fg-default); }
+    .role-badge.role-1 { background: var(--warning-subtle); color: var(--warning-text); }
+    .role-badge.role-2 { background: var(--info-subtle); color: var(--info-text); }
+    .role-badge.role-7 { background: var(--success-subtle); color: var(--success-text); }
+    .role-badge.role-8 { background: var(--accent-subtle); color: var(--accent-default); }
+    .status-badge.status-0 { background: var(--success-subtle); color: var(--success-text); }
+    .status-badge.status-1 { background: var(--error-subtle); color: var(--error-text); }
     .actions-col { width: 100px; text-align: center; }
-    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: var(--bg-secondary); color: var(--text-secondary); text-decoration: none; margin: 0 4px; }
-    .action-btn:hover { background: var(--primary-color); color: white; }
-    .table-footer { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; background: white; border-top: 1px solid var(--border-color); }
-    .records-info { font-size: 14px; color: var(--text-secondary); }
+    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: var(--bg-subtle); color: var(--fg-muted); text-decoration: none; margin: 0 4px; }
+    .action-btn:hover { background: var(--accent-default); color: white; }
+    .table-footer { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; background: var(--table-header-bg); border-top: 1px solid var(--border-default); }
+    .records-info { font-size: 14px; color: var(--fg-muted); }
   `]
 })
 export class InternalUsersComponent implements OnInit {

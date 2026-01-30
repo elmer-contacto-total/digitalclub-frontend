@@ -119,7 +119,7 @@ export const routes: Routes = [
       // Templates (implemented)
       {
         path: 'message_templates',
-        loadChildren: () => import('./features/message-templates/message-templates.routes').then(m => m.MESSAGE_TEMPLATES_ROUTES),
+        loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
         title: 'Plantillas - MWS'
       },
       // Bulk Messages (implemented)
@@ -131,7 +131,7 @@ export const routes: Routes = [
       // Template Bulk Sends (implemented)
       {
         path: 'template_bulk_sends',
-        loadChildren: () => import('./features/template-bulk-sends/template-bulk-sends.routes').then(m => m.TEMPLATE_BULK_SENDS_ROUTES),
+        loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
         title: 'Envíos Masivos - MWS'
       },
       // Canned Messages (implemented)
@@ -139,12 +139,6 @@ export const routes: Routes = [
         path: 'canned_messages',
         loadChildren: () => import('./features/canned-messages/canned-messages.routes').then(m => m.CANNED_MESSAGES_ROUTES),
         title: 'Mensajes Enlatados - MWS'
-      },
-      // Prospects (implemented)
-      {
-        path: 'prospects',
-        loadChildren: () => import('./features/prospects/prospects.routes').then(m => m.PROSPECTS_ROUTES),
-        title: 'Prospectos - MWS'
       },
       // Tickets (implemented)
       {
@@ -173,7 +167,7 @@ export const routes: Routes = [
       // Settings & Profile
       {
         path: 'profile',
-        loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
+        loadComponent: () => import('./features/profile/profile.component').then(m => m.ProfileComponent),
         title: 'Mi Perfil - MWS'
       },
       {
@@ -182,8 +176,13 @@ export const routes: Routes = [
         title: 'Ajustes - MWS'
       },
       {
+        path: 'help',
+        loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
+        title: 'Ayuda - MWS'
+      },
+      {
         path: 'login_as',
-        loadChildren: () => import('./features/login-as/login-as.routes').then(m => m.LOGIN_AS_ROUTES),
+        loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
         title: 'Iniciar Sesión Como - MWS'
       },
       {
