@@ -1,8 +1,9 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, tap, catchError, of, map } from 'rxjs';
+import { Observable, tap, catchError, of, map, throwError } from 'rxjs';
 import { StorageService } from './storage.service';
 import { AuthService } from './auth.service';
+import { ToastService } from './toast.service';
 import { environment } from '../../../environments/environment';
 
 /**
@@ -39,6 +40,7 @@ export class ActiveClientService {
   private http = inject(HttpClient);
   private storage = inject(StorageService);
   private authService = inject(AuthService);
+  private toast = inject(ToastService);
 
   // State
   private _activeClient = signal<ActiveClient | null>(null);
@@ -118,6 +120,11 @@ export class ActiveClientService {
       {}
     ).pipe(
       tap(response => {
+        // Verificar que la respuesta tenga token
+        if (!response.token) {
+          throw new Error('No se recibió token del servidor');
+        }
+
         // Actualizar el token con el nuevo clientId
         this.authService.updateToken(response.token, response.refreshToken);
 
@@ -126,25 +133,26 @@ export class ActiveClientService {
         this.storage.setString(ACTIVE_CLIENT_KEY, JSON.stringify(client));
 
         this._loading.set(false);
+        this.toast.success(`Organización cambiada a: ${client.name}`);
 
         if (reload) {
-          // Recargar la página para refrescar datos con el nuevo contexto de cliente
-          window.location.reload();
+          // Pequeño delay para asegurar que el token se guardó
+          setTimeout(() => {
+            window.location.reload();
+          }, 100);
         }
       }),
       catchError(error => {
         console.error('Error setting active client:', error);
         this._loading.set(false);
 
-        // Fallback: guardar solo en localStorage si el backend falla
-        this._activeClient.set(client);
-        this.storage.setString(ACTIVE_CLIENT_KEY, JSON.stringify(client));
+        // Mostrar error al usuario - NO hacer reload si falla
+        const errorMsg = error?.error?.error || error?.message || 'Error al cambiar organización';
+        this.toast.error(errorMsg);
 
-        if (reload) {
-          window.location.reload();
-        }
-
-        return of(void 0);
+        // NO hacer fallback al localStorage si el backend falla
+        // Esto evita estados inconsistentes
+        return throwError(() => error);
       }),
       map(() => void 0)
     );

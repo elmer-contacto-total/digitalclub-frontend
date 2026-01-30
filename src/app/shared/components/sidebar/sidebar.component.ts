@@ -129,7 +129,15 @@ export class SidebarComponent implements OnInit, OnDestroy {
     if (client) {
       this.activeClientService.setActiveClient(client, true)
         .pipe(takeUntil(this.destroy$))
-        .subscribe();
+        .subscribe({
+          error: () => {
+            // Restaurar el valor del select al cliente activo actual
+            const currentClient = this.activeClient();
+            if (currentClient) {
+              select.value = currentClient.id.toString();
+            }
+          }
+        });
     }
   }
 }
