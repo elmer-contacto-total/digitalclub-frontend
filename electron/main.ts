@@ -38,51 +38,6 @@ const MEDIA_API_URL = process.env.MEDIA_API_URL || 'http://localhost:8080/api/me
 // Estado dinámico del layout
 let sidebarCollapsed = false;
 
-// Estado del tema actual
-let currentTheme: 'light' | 'dark' = 'dark';
-
-// Aplicar tema nativo de WhatsApp Web (usa el sistema de temas interno de WhatsApp)
-async function applyWhatsAppTheme(theme: 'light' | 'dark'): Promise<void> {
-  if (!whatsappView) return;
-
-  currentTheme = theme;
-
-  try {
-    // WhatsApp Web usa localStorage para guardar el tema
-    // La clave es 'theme' y los valores son 'light', 'dark' o 'system'
-    await whatsappView.webContents.executeJavaScript(`
-      (function() {
-        try {
-          // Establecer el tema en localStorage de WhatsApp
-          localStorage.setItem('theme', '${theme}');
-
-          // Intentar disparar el cambio de tema en WhatsApp
-          // WhatsApp escucha cambios en el body class
-          if ('${theme}' === 'dark') {
-            document.body.classList.add('dark');
-            document.body.classList.remove('light');
-          } else {
-            document.body.classList.add('light');
-            document.body.classList.remove('dark');
-          }
-
-          // Disparar evento de storage para que WhatsApp detecte el cambio
-          window.dispatchEvent(new StorageEvent('storage', {
-            key: 'theme',
-            newValue: '${theme}',
-            storageArea: localStorage
-          }));
-
-          console.log('[HablaPe] Tema WhatsApp configurado:', '${theme}');
-        } catch (e) {
-          console.error('[HablaPe] Error configurando tema:', e);
-        }
-      })()
-    `, true);
-  } catch (err) {
-    console.error('[HablaPe] Error aplicando tema a WhatsApp:', err);
-  }
-}
 
 // ==================== FUNCIONES DE ENVÍO AL BACKEND ====================
 
@@ -345,13 +300,9 @@ function createWhatsAppView(): void {
       .catch(err => console.error('[HablaPe] Error aplicando anti-fingerprinting:', err));
   });
 
-  // Aplicar zoom y tema cuando cargue
+  // Aplicar zoom cuando cargue
   whatsappView.webContents.on('did-finish-load', () => {
     whatsappView?.webContents.setZoomFactor(0.80);
-    // Aplicar tema actual después de un pequeño delay para que WhatsApp termine de renderizar
-    setTimeout(() => {
-      applyWhatsAppTheme(currentTheme);
-    }, 1000);
   });
 
   whatsappView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
@@ -1046,12 +997,6 @@ function setupIPC(): void {
   ipcMain.handle('scan-new-messages', async (_, telefono: string) => {
     const messages = await scanChatMessages(telefono);
     return messages;
-  });
-
-  // Cambiar tema de WhatsApp
-  ipcMain.handle('set-whatsapp-theme', async (_, theme: 'light' | 'dark') => {
-    await applyWhatsAppTheme(theme);
-    return { success: true, theme };
   });
 
   // Obtener ancho disponible para Angular

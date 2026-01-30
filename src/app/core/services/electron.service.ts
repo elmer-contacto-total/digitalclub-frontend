@@ -31,8 +31,7 @@ interface ElectronAPI {
   hideWhatsApp?(): Promise<boolean>;
   isWhatsAppVisible?(): Promise<boolean>;
 
-  // WhatsApp Theme control
-  setWhatsAppTheme?(theme: 'light' | 'dark'): Promise<{ success: boolean; theme: string }>;
+  // Angular bounds
   getAngularBounds?(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
 }
 
@@ -248,24 +247,6 @@ export class ElectronService {
    */
   get currentBounds(): WhatsAppBounds | null {
     return this.whatsappBoundsSubject.value;
-  }
-
-  /**
-   * Set WhatsApp theme to match Angular app theme
-   * @param theme 'light' or 'dark'
-   */
-  async setWhatsAppTheme(theme: 'light' | 'dark'): Promise<boolean> {
-    if (window.electronAPI?.setWhatsAppTheme) {
-      try {
-        const result = await window.electronAPI.setWhatsAppTheme(theme);
-        console.log('[ElectronService] WhatsApp theme set:', result);
-        return result.success;
-      } catch (error) {
-        console.error('[ElectronService] Error setting WhatsApp theme:', error);
-        return false;
-      }
-    }
-    return false;
   }
 
   /**
