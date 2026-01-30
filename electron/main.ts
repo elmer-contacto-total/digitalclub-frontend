@@ -605,6 +605,58 @@ async function scanChat(): Promise<void> {
             }
           }
 
+          // Estrategia 6: Buscar en la lista de chats del sidebar (chat activo)
+          const sidePanel = document.querySelector('#pane-side');
+          if (sidePanel && chatName) {
+            // Buscar el chat activo (tiene aria-selected o está resaltado)
+            const activeChat = sidePanel.querySelector('[aria-selected="true"]') ||
+                              sidePanel.querySelector('[data-testid="cell-frame-container"][tabindex="-1"]') ||
+                              sidePanel.querySelector('div[style*="background"]');
+
+            if (activeChat) {
+              // Buscar data-id en el chat activo o sus padres
+              let parent = activeChat;
+              for (let i = 0; i < 5 && parent; i++) {
+                const dataId = parent.getAttribute && parent.getAttribute('data-id');
+                if (dataId && dataId.includes('@c.us')) {
+                  let phone = dataId.split('@')[0];
+                  phone = phone.replace(/^(true|false)_/, '');
+                  if (/^\\d{9,15}$/.test(phone)) {
+                    return { phone, name: chatName, source: 'sidebar-active' };
+                  }
+                }
+                parent = parent.parentElement;
+              }
+            }
+
+            // Buscar por el nombre del chat en el sidebar
+            const chatRows = sidePanel.querySelectorAll('[data-id*="@c.us"]');
+            for (const row of chatRows) {
+              const rowText = row.textContent || '';
+              if (rowText.includes(chatName)) {
+                const dataId = row.getAttribute('data-id');
+                if (dataId) {
+                  let phone = dataId.split('@')[0];
+                  phone = phone.replace(/^(true|false)_/, '');
+                  if (/^\\d{9,15}$/.test(phone)) {
+                    return { phone, name: chatName, source: 'sidebar-match' };
+                  }
+                }
+              }
+            }
+          }
+
+          // Estrategia 7: Buscar en cualquier elemento visible con el teléfono
+          const allText = mainArea.innerText || '';
+          const phonePatterns = allText.match(/\\+?51\\s?9\\d{2}\\s?\\d{3}\\s?\\d{3}/g) ||
+                               allText.match(/\\+?\\d{2,3}\\s?\\d{9,}/g);
+          if (phonePatterns && phonePatterns.length > 0) {
+            const phone = phonePatterns[0].replace(/[\\s\\+]/g, '');
+            if (phone.length >= 9) {
+              return { phone, name: chatName, source: 'text-pattern' };
+            }
+          }
+
           // Si no hay teléfono pero hay nombre, devolver solo el nombre
           if (chatName) {
             return { name: chatName, source: 'name-only' };
