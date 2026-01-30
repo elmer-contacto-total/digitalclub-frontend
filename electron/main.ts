@@ -543,33 +543,66 @@ async function scanChat(): Promise<void> {
             break;
           }
 
-          // Estrategia 1: Buscar el data-id en el contenedor del chat
+          // Estrategia 1: Buscar en el título/header del chat (más confiable)
+          // El título a veces muestra el número directamente
+          const titleSpans = header.querySelectorAll('span[title]');
+          for (const span of titleSpans) {
+            const title = span.getAttribute('title') || '';
+            // Buscar patrón de teléfono en el título
+            const phoneInTitle = title.match(/\\+?(\\d[\\d\\s\\-]{8,}\\d)/);
+            if (phoneInTitle) {
+              const phone = phoneInTitle[1].replace(/[\\s\\-]/g, '');
+              if (phone.length >= 9) {
+                return { phone, name: chatName, source: 'title-attr' };
+              }
+            }
+          }
+
+          // Estrategia 2: Buscar data-id en mensajes del chat
+          const messageElements = document.querySelectorAll('[data-id*="@c.us"]');
+          for (const el of messageElements) {
+            const dataId = el.getAttribute('data-id');
+            if (dataId && dataId.includes('@c.us')) {
+              let phone = dataId.split('@')[0];
+              phone = phone.replace(/^(true|false)_/, '');
+              // Validar que sea un número
+              if (/^\\d{9,15}$/.test(phone)) {
+                return { phone, name: chatName, source: 'message-data-id' };
+              }
+            }
+          }
+
+          // Estrategia 3: Buscar el data-id en el panel de conversación
           const conversationPanel = document.querySelector('[data-id]');
           if (conversationPanel) {
             const dataId = conversationPanel.getAttribute('data-id');
             if (dataId && dataId.includes('@c.us')) {
               let phone = dataId.split('@')[0];
               phone = phone.replace(/^(true|false)_/, '');
-              return { phone, name: chatName, source: 'data-id' };
+              if (/^\\d{9,15}$/.test(phone)) {
+                return { phone, name: chatName, source: 'data-id' };
+              }
             }
           }
 
-          // Estrategia 2: Buscar elementos con data-id que contenga @c.us
-          const elementsWithId = mainArea.querySelectorAll('[data-id*="@c.us"]');
-          for (const el of elementsWithId) {
-            const dataId = el.getAttribute('data-id');
-            if (dataId) {
-              let phone = dataId.split('@')[0];
-              phone = phone.replace(/^(true|false)_/, '');
-              return { phone, name: chatName, source: 'data-id-query' };
-            }
-          }
-
-          // Estrategia 3: Buscar en la URL o hash
+          // Estrategia 4: Buscar en la URL o hash
           const hash = window.location.hash;
           const phoneMatch = hash.match(/(\\d{10,15})@c\\.us/);
           if (phoneMatch) {
             return { phone: phoneMatch[1], name: chatName, source: 'url-hash' };
+          }
+
+          // Estrategia 5: Buscar aria-label con número de teléfono
+          const ariaElements = header.querySelectorAll('[aria-label]');
+          for (const el of ariaElements) {
+            const label = el.getAttribute('aria-label') || '';
+            const phoneInLabel = label.match(/\\+?(\\d[\\d\\s\\-]{8,}\\d)/);
+            if (phoneInLabel) {
+              const phone = phoneInLabel[1].replace(/[\\s\\-]/g, '');
+              if (phone.length >= 9) {
+                return { phone, name: chatName, source: 'aria-label' };
+              }
+            }
           }
 
           // Si no hay teléfono pero hay nombre, devolver solo el nombre
@@ -581,8 +614,12 @@ async function scanChat(): Promise<void> {
         })()
       `, true);
 
+      // Log para debug
+      console.log('[HablaPe] Scan result:', JSON.stringify(result));
+
       // Si no hay datos válidos, salir
       if (result.debug) {
+        console.log('[HablaPe] Debug info:', result.debug);
         return;
       }
 
@@ -591,6 +628,8 @@ async function scanChat(): Promise<void> {
 
       if (identifier && identifier !== lastDetectedChat) {
         lastDetectedChat = identifier;
+
+        console.log('[HablaPe] Sending chat-selected:', { phone: result.phone, name: result.name, isPhone });
 
         // Enviar al renderer con la info de si es teléfono o nombre
         mainWindow.webContents.send('chat-selected', {

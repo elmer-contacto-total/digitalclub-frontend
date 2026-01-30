@@ -80,8 +80,19 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     this.electronService.chatSelected$.pipe(
       takeUntil(this.destroy$),
       switchMap((event: ChatSelectedEvent | null) => {
-        if (!event || !event.phone) {
+        console.log('[ElectronClients] Chat event received:', event);
+
+        if (!event) {
           this.resetState();
+          return of(null);
+        }
+
+        // Si no hay teléfono pero hay nombre, mostrar estado vacío con el nombre
+        if (!event.phone) {
+          console.log('[ElectronClients] No phone in event, only name:', event.name);
+          this.currentName.set(event.name);
+          this.currentPhone.set(null);
+          this.viewState.set('empty');
           return of(null);
         }
 
@@ -89,9 +100,11 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         this.currentPhone.set(event.phone);
         this.currentName.set(event.name);
 
+        console.log('[ElectronClients] Searching for phone:', event.phone);
         return this.contactsService.searchByPhone(event.phone);
       })
     ).subscribe(result => {
+      console.log('[ElectronClients] Search result:', result);
       if (result) {
         this.contact.set(result);
         this.viewState.set('contact');

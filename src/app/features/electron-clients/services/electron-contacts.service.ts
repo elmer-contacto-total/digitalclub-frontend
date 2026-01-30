@@ -60,14 +60,17 @@ export class ElectronContactsService {
    */
   searchByPhone(phone: string): Observable<CrmContact | null> {
     const normalizedPhone = PhoneUtils.normalize(phone);
+    console.log('[ElectronContactsService] Searching phone:', phone, '-> normalized:', normalizedPhone);
 
     if (!PhoneUtils.isValid(normalizedPhone)) {
+      console.log('[ElectronContactsService] Invalid phone number');
       return of(null);
     }
 
     // Try to find in backend first
     return this.searchRegisteredContact(normalizedPhone).pipe(
       map(response => {
+        console.log('[ElectronContactsService] API response:', response);
         if (response.found && response.contact) {
           // Map Spring Boot response to RegisteredContact
           const registered: RegisteredContact = {
