@@ -217,9 +217,11 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
         { id: 'assignments', label: 'Asignaciones', icon: 'ph-user-switch', route: '/app/managers' },
         { id: 'agents', label: 'Agentes', icon: 'ph-users', route: '/app/supervisor_agents', badgeKey: 'subordinatesCount' },
         { id: 'clients', label: 'Clientes', icon: 'ph-identification-card', route: '/app/supervisor_clients', badgeKey: 'subordinatesClientsCount' },
-        { id: 'conversations', label: 'Conversaciones Activas', icon: 'ph-chat-circle', route: '/app/chat', badgeKey: 'activeConversationsCount' },
+        // PARIDAD: Rails admin_supervisor_clients_path(active_only: true)
+        { id: 'conversations', label: 'Conversaciones Activas', icon: 'ph-chat-circle', route: '/app/supervisor_clients', queryParams: { active_only: 'true' }, badgeKey: 'activeConversationsCount' },
         { id: 'messages-list', label: 'Mensajes', icon: 'ph-envelope', route: '/app/messages', badgeKey: 'messagesCount' },
-        { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/prospects', badgeKey: 'prospectsCount' }
+        // PARIDAD: Rails admin_agent_prospects_path
+        { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/agent_prospects', badgeKey: 'prospectsCount' }
       ]
     },
     {
@@ -350,9 +352,11 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
         { id: 'assignments', label: 'Asignaciones', icon: 'ph-user-switch', route: '/app/managers' },
         { id: 'agents', label: 'Agentes', icon: 'ph-users', route: '/app/supervisor_agents', badgeKey: 'subordinatesCount' },
         { id: 'clients', label: 'Clientes', icon: 'ph-identification-card', route: '/app/supervisor_clients', badgeKey: 'subordinatesClientsCount' },
-        { id: 'conversations', label: 'Conversaciones Activas', icon: 'ph-chat-circle', route: '/app/chat' },
+        // PARIDAD: Rails admin_supervisor_clients_path(active_only: true)
+        { id: 'conversations', label: 'Conversaciones Activas', icon: 'ph-chat-circle', route: '/app/supervisor_clients', queryParams: { active_only: 'true' } },
         { id: 'messages-list', label: 'Mensajes', icon: 'ph-envelope', route: '/app/messages', badgeKey: 'messagesCount' },
-        { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/prospects', badgeKey: 'prospectsCount' }
+        // PARIDAD: Rails admin_agent_prospects_path
+        { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/agent_prospects', badgeKey: 'prospectsCount' }
       ]
     },
     {
@@ -396,9 +400,11 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
         { id: 'assignments', label: 'Asignaciones', icon: 'ph-user-switch', route: '/app/managers' },
         { id: 'agents', label: 'Agentes', icon: 'ph-users', route: '/app/supervisor_agents', badgeKey: 'subordinatesCount' },
         { id: 'clients', label: 'Clientes', icon: 'ph-identification-card', route: '/app/supervisor_clients', badgeKey: 'subordinatesClientsCount' },
-        { id: 'conversations', label: 'Conversaciones Activas', icon: 'ph-chat-circle', route: '/app/chat' },
+        // PARIDAD: Rails admin_supervisor_clients_path(active_only: true)
+        { id: 'conversations', label: 'Conversaciones Activas', icon: 'ph-chat-circle', route: '/app/supervisor_clients', queryParams: { active_only: 'true' } },
         { id: 'messages-list', label: 'Mensajes', icon: 'ph-envelope', route: '/app/messages', badgeKey: 'messagesCount' },
-        { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/prospects', badgeKey: 'prospectsCount' }
+        // PARIDAD: Rails admin_agent_prospects_path
+        { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/agent_prospects', badgeKey: 'prospectsCount' }
       ]
     },
     {
@@ -442,9 +448,11 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
         { id: 'assignments', label: 'Asignaciones', icon: 'ph-user-switch', route: '/app/managers' },
         { id: 'agents', label: 'Agentes', icon: 'ph-users', route: '/app/supervisor_agents', badgeKey: 'subordinatesCount' },
         { id: 'clients', label: 'Clientes', icon: 'ph-identification-card', route: '/app/supervisor_clients', badgeKey: 'subordinatesClientsCount' },
-        { id: 'conversations', label: 'Conversaciones Activas', icon: 'ph-chat-circle', route: '/app/chat' },
+        // PARIDAD: Rails admin_supervisor_clients_path(active_only: true)
+        { id: 'conversations', label: 'Conversaciones Activas', icon: 'ph-chat-circle', route: '/app/supervisor_clients', queryParams: { active_only: 'true' } },
         { id: 'messages-list', label: 'Mensajes', icon: 'ph-envelope', route: '/app/messages', badgeKey: 'messagesCount' },
-        { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/prospects', badgeKey: 'prospectsCount' }
+        // PARIDAD: Rails admin_agent_prospects_path
+        { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/agent_prospects', badgeKey: 'prospectsCount' }
       ]
     },
     {
@@ -489,7 +497,8 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
         { id: 'clients', label: 'Clientes', icon: 'ph-identification-card', route: '/app/chat', badgeKey: 'subordinatesCount' },
         { id: 'conversations', label: 'Conversaciones Activas', icon: 'ph-chat-circle', route: '/app/chat' },
         { id: 'messages', label: 'Mensajes', icon: 'ph-envelope', route: '/app/messages', badgeKey: 'messagesCount' },
-        { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/prospects', badgeKey: 'prospectsCount' },
+        // PARIDAD: Rails admin_agent_prospects_path
+        { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/agent_prospects', badgeKey: 'prospectsCount' },
         { id: 'bulk-sends', label: 'Envíos Masivos', icon: 'ph-broadcast', route: '/app/template_bulk_sends' },
         { id: 'canned', label: 'Mensajes Enlatados', icon: 'ph-chat-text', route: '/app/canned_messages' }
       ]

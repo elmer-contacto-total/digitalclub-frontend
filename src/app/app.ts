@@ -30,7 +30,8 @@ export class App {
   private validateStorage(): void {
     try {
       // Try to read critical data to trigger cleanup of corrupted entries
-      this.storageService.get('auth_token');
+      // Note: auth_token is stored as raw string, use getString
+      this.storageService.getString('auth_token');
       this.storageService.get('current_user');
     } catch (e) {
       console.error('[App] Storage validation failed, clearing...', e);
