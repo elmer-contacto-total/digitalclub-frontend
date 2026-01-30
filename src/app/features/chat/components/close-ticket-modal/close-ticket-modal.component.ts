@@ -19,7 +19,7 @@ import { ConversationCloseType } from '../../../../core/models/conversation.mode
         <div class="modal-header">
           <h3>Cerrar Ticket</h3>
           <button class="close-btn" (click)="close.emit()">
-            <i class="bi bi-x-lg"></i>
+            <i class="ph ph-x"></i>
           </button>
         </div>
 
@@ -72,7 +72,7 @@ import { ConversationCloseType } from '../../../../core/models/conversation.mode
             [disabled]="!canConfirm()"
             (click)="confirmClose()"
           >
-            <i class="bi bi-check-circle"></i>
+            <i class="ph-fill ph-check-circle"></i>
             Cerrar Ticket
           </button>
         </div>

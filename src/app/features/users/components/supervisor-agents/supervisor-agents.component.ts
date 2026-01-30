@@ -1,157 +1,501 @@
 /**
  * Supervisor Agents Component
- * Agentes bajo supervisión
+ * Vista master-detail: Agentes y sus clientes
  * PARIDAD: Rails admin/users/supervisor_agents.html.erb
  */
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { Subject, takeUntil } from 'rxjs';
 import { UserService, PaginationParams } from '../../../../core/services/user.service';
 import { UserListItem, UserRole, UserStatus, RoleUtils, getFullName } from '../../../../core/models/user.model';
-import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
-import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
-import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
+
+interface AgentClient {
+  id: number;
+  name: string;
+  phone: string;
+  lastMessageAt?: string;
+}
 
 @Component({
   selector: 'app-supervisor-agents',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, LoadingSpinnerComponent, EmptyStateComponent, PaginationComponent],
+  imports: [CommonModule, RouterLink],
   template: `
     <div class="supervisor-agents-container">
+      <!-- Page Header -->
       <div class="page-header">
-        <h1>Mis Agentes</h1>
-        <p class="subtitle">Agentes bajo mi supervisión</p>
-      </div>
-
-      <div class="filters-bar">
-        <div class="search-box">
-          <i class="ph ph-magnifying-glass"></i>
-          <input type="text" placeholder="Buscar agente..." [(ngModel)]="searchTerm" (input)="onSearch()" />
+        <div class="page-header-content">
+          <h1 class="page-title">Mis Agentes</h1>
+          <p class="page-subtitle">Selecciona un agente para ver sus clientes asignados</p>
         </div>
       </div>
 
-      @if (isLoading()) {
-        <app-loading-spinner [overlay]="false" message="Cargando agentes..." />
-      } @else if (agents().length === 0) {
-        <app-empty-state icon="ph-users-three" title="No hay agentes" description="No tienes agentes asignados" />
-      } @else {
-        <div class="agents-grid">
-          @for (agent of agents(); track agent.id) {
-            <div class="agent-card">
-              <div class="agent-header">
-                <div class="agent-avatar">{{ getInitials(agent) }}</div>
-                <div class="agent-info">
-                  <h3>{{ getFullName(agent) }}</h3>
-                  <span class="agent-email">{{ agent.email }}</span>
-                </div>
-                <span class="status-badge" [class]="'status-' + agent.status">
-                  {{ getStatusDisplayName(agent.status) }}
+      <!-- Main Content -->
+      <div class="master-detail-layout">
+        <!-- Left Panel: Agents List -->
+        <div class="panel agents-panel">
+          <div class="panel-header">
+            <h3 class="panel-title">
+              <i class="ph ph-users-three"></i>
+              Agentes
+            </h3>
+            <span class="panel-count">{{ agents().length }}</span>
+          </div>
+
+          <!-- Search Box -->
+          <div class="panel-search">
+            <i class="ph ph-magnifying-glass search-icon"></i>
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Buscar agente..."
+              [value]="agentSearchTerm()"
+              (input)="onAgentSearchInput($event)"
+            />
+            @if (agentSearchTerm()) {
+              <button class="clear-search" (click)="clearAgentSearch()">
+                <i class="ph ph-x"></i>
+              </button>
+            }
+          </div>
+
+          <div class="panel-body">
+            @if (isLoadingAgents()) {
+              <div class="loading-state">
+                <div class="spinner"></div>
+                <span>Cargando agentes...</span>
+              </div>
+            } @else if (filteredAgents().length === 0) {
+              <div class="empty-state">
+                <i class="ph ph-users-three"></i>
+                @if (agentSearchTerm()) {
+                  <p>No se encontraron agentes</p>
+                  <button class="btn-link" (click)="clearAgentSearch()">Limpiar búsqueda</button>
+                } @else {
+                  <p>No tienes agentes asignados</p>
+                }
+              </div>
+            } @else {
+              <div class="agent-list">
+                @for (agent of filteredAgents(); track agent.id) {
+                  <div
+                    class="agent-item"
+                    [class.selected]="selectedAgent()?.id === agent.id"
+                    (click)="selectAgent(agent)"
+                  >
+                    <div class="agent-avatar">
+                      {{ getInitials(agent) }}
+                    </div>
+                    <div class="agent-info">
+                      <span class="agent-name">{{ getAgentFullName(agent) }}</span>
+                      <span class="agent-role">{{ getRoleDisplayName(agent.role) }}</span>
+                    </div>
+                    <div class="agent-status">
+                      <span class="status-dot" [class.active]="agent.status === 0"></span>
+                    </div>
+                    <button
+                      class="agent-details-btn"
+                      (click)="openAgentDetails($event, agent)"
+                      title="Ver detalles"
+                    >
+                      <i class="ph ph-caret-down"></i>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Right Panel: Agent's Clients -->
+        <div class="panel clients-panel">
+          <div class="panel-header">
+            <h3 class="panel-title">
+              <i class="ph ph-address-book"></i>
+              @if (selectedAgent()) {
+                Clientes de {{ getAgentFullName(selectedAgent()!) }}
+              } @else {
+                Clientes
+              }
+            </h3>
+            @if (selectedAgent()) {
+              <span class="panel-count">{{ totalClients() }}</span>
+            }
+          </div>
+
+          @if (selectedAgent()) {
+            <!-- Search Box for Clients -->
+            <div class="panel-search">
+              <i class="ph ph-magnifying-glass search-icon"></i>
+              <input
+                type="text"
+                class="search-input"
+                placeholder="Buscar cliente..."
+                [value]="clientSearchTerm()"
+                (input)="onClientSearchInput($event)"
+              />
+              @if (clientSearchTerm()) {
+                <button class="clear-search" (click)="clearClientSearch()">
+                  <i class="ph ph-x"></i>
+                </button>
+              }
+            </div>
+          }
+
+          <div class="panel-body">
+            @if (!selectedAgent()) {
+              <div class="empty-state hint">
+                <i class="ph ph-cursor-click"></i>
+                <p>Selecciona un agente para ver sus clientes</p>
+              </div>
+            } @else if (isLoadingClients()) {
+              <div class="loading-state">
+                <div class="spinner"></div>
+                <span>Cargando clientes...</span>
+              </div>
+            } @else if (clients().length === 0) {
+              <div class="empty-state">
+                <i class="ph ph-address-book"></i>
+                @if (clientSearchTerm()) {
+                  <p>No se encontraron clientes</p>
+                  <button class="btn-link" (click)="clearClientSearch()">Limpiar búsqueda</button>
+                } @else {
+                  <p>Este agente no tiene clientes asignados</p>
+                }
+              </div>
+            } @else {
+              <!-- Clients Table -->
+              <div class="clients-table-wrapper">
+                <table class="clients-table">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Teléfono</th>
+                      <th>Último mensaje</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (client of clients(); track client.id) {
+                      <tr>
+                        <td class="client-name">{{ client.name }}</td>
+                        <td class="client-phone">{{ client.phone || '-' }}</td>
+                        <td class="client-date">{{ formatDate(client.lastMessageAt) }}</td>
+                        <td class="client-actions">
+                          <a
+                            [routerLink]="['/app/messages']"
+                            [queryParams]="{client_id: client.id, chat_view_type: 'clients'}"
+                            class="action-btn"
+                            title="Ver chat"
+                          >
+                            <i class="ph ph-chat-text"></i>
+                          </a>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+
+          <!-- Pagination -->
+          @if (selectedAgent() && totalClientPages() > 1) {
+            <div class="panel-footer">
+              <div class="pagination">
+                <button
+                  class="pagination-btn"
+                  [disabled]="currentClientPage() === 1"
+                  (click)="goToClientPage(currentClientPage() - 1)"
+                >
+                  <i class="ph ph-caret-left"></i>
+                </button>
+                <span class="pagination-info">
+                  Página {{ currentClientPage() }} de {{ totalClientPages() }}
                 </span>
-              </div>
-              <div class="agent-meta">
-                <div class="meta-item">
-                  <i class="ph ph-phone"></i>
-                  <span>{{ agent.phone || 'Sin teléfono' }}</span>
-                </div>
-                <div class="meta-item">
-                  <i class="ph ph-identification-badge"></i>
-                  <span>{{ getRoleDisplayName(agent.role) }}</span>
-                </div>
-              </div>
-              <div class="agent-actions">
-                <a [routerLink]="['/app/users', agent.id]" class="btn btn-sm">Ver perfil</a>
-                <a [routerLink]="['/app/chat']" [queryParams]="{agentId: agent.id}" class="btn btn-sm btn-outline">Ver clientes</a>
+                <button
+                  class="pagination-btn"
+                  [disabled]="currentClientPage() === totalClientPages()"
+                  (click)="goToClientPage(currentClientPage() + 1)"
+                >
+                  <i class="ph ph-caret-right"></i>
+                </button>
               </div>
             </div>
           }
         </div>
+      </div>
 
-        <div class="table-footer">
-          <span class="records-info">{{ startRecord() }} - {{ endRecord() }} de {{ totalRecords() }}</span>
-          <app-pagination [currentPage]="currentPage()" [totalItems]="totalRecords()" [pageSize]="pageSize()" (pageChange)="onPageChange($event)" (pageSizeChange)="onPageSizeChange($event)" />
+      <!-- Agent Details Modal -->
+      @if (showAgentModal() && agentForModal()) {
+        <div class="modal-backdrop" (click)="closeAgentModal()"></div>
+        <div class="modal-container modal-container-wide">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Detalles del Agente</h3>
+              <button class="modal-close" (click)="closeAgentModal()">
+                <i class="ph ph-x"></i>
+              </button>
+            </div>
+            <div class="modal-body">
+              <div class="modal-grid">
+                <!-- Left Panel: Agent Data -->
+                <div class="detail-panel">
+                  <h4 class="detail-panel-title">Datos de Agente</h4>
+                  <div class="agent-detail-card">
+                    <div class="detail-avatar">
+                      {{ getInitials(agentForModal()!) }}
+                    </div>
+                    <h4>{{ getAgentFullName(agentForModal()!) }}</h4>
+                  </div>
+                  <div class="detail-list">
+                    <div class="detail-item">
+                      <i class="ph ph-envelope"></i>
+                      <span>{{ agentForModal()!.email || 'Sin email' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <i class="ph ph-phone"></i>
+                      <span>{{ agentForModal()!.phone || 'Sin teléfono' }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Right Panel: Manager and Role -->
+                <div class="detail-panel">
+                  <h4 class="detail-panel-title">Manager y Rol</h4>
+                  <div class="detail-list">
+                    <div class="detail-item">
+                      <i class="ph ph-user-circle"></i>
+                      <div class="detail-item-content">
+                        <span class="detail-label">Rol</span>
+                        <span>{{ getRoleDisplayName(agentForModal()!.role) }}</span>
+                      </div>
+                    </div>
+                    <div class="detail-item">
+                      <i class="ph ph-user"></i>
+                      <div class="detail-item-content">
+                        <span class="detail-label">Manager</span>
+                        <span>{{ agentForModal()!.managerName || 'Sin asignar' }}</span>
+                      </div>
+                    </div>
+                    @if (agentForModal()!.managerRole !== undefined) {
+                      <div class="detail-item">
+                        <i class="ph ph-identification-badge"></i>
+                        <div class="detail-item-content">
+                          <span class="detail-label">Rol de Manager</span>
+                          <span>{{ getRoleDisplayName(agentForModal()!.managerRole!) }}</span>
+                        </div>
+                      </div>
+                    }
+                    <div class="detail-item">
+                      <i class="ph ph-circle-half"></i>
+                      <div class="detail-item-content">
+                        <span class="detail-label">Estado</span>
+                        <span class="status-text" [class.active]="agentForModal()!.status === 0">
+                          {{ getStatusDisplayName(agentForModal()!.status) }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-secondary" (click)="closeAgentModal()">Cerrar</button>
+              <a [routerLink]="['/app/users', agentForModal()!.id]" class="btn-primary">
+                <i class="ph ph-user"></i>
+                Ver perfil completo
+              </a>
+            </div>
+          </div>
         </div>
       }
     </div>
   `,
-  styles: [`
-    .supervisor-agents-container { padding: 24px; }
-    .page-header { margin-bottom: 24px; }
-    .page-header h1 { margin: 0 0 4px 0; font-size: 24px; font-weight: 600; }
-    .subtitle { margin: 0; color: var(--text-secondary); font-size: 14px; }
-    .filters-bar { margin-bottom: 24px; }
-    .search-box { position: relative; max-width: 400px; }
-    .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); }
-    .search-box input { width: 100%; padding: 10px 12px 10px 40px; border: 1px solid var(--border-color); border-radius: 8px; }
-
-    .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
-
-    .agent-card {
-      background: white;
-      border-radius: 12px;
-      border: 1px solid var(--border-color);
-      padding: 20px;
-    }
-
-    .agent-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
-    .agent-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--primary-color); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px; flex-shrink: 0; }
-    .agent-info { flex: 1; min-width: 0; }
-    .agent-info h3 { margin: 0 0 4px 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .agent-email { font-size: 13px; color: var(--text-secondary); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-    .status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; flex-shrink: 0; }
-    .status-badge.status-0 { background: #d1fae5; color: #065f46; }
-    .status-badge.status-1 { background: #fee2e2; color: #991b1b; }
-
-    .agent-meta { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); }
-    .meta-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
-    .meta-item i { font-size: 16px; }
-
-    .agent-actions { display: flex; gap: 8px; }
-    .btn { display: inline-flex; align-items: center; justify-content: center; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; text-decoration: none; cursor: pointer; border: none; }
-    .btn-sm { padding: 6px 12px; font-size: 12px; }
-    .btn:not(.btn-outline) { background: var(--primary-color); color: white; }
-    .btn-outline { background: white; border: 1px solid var(--border-color); color: var(--text-primary); }
-    .btn:hover { opacity: 0.9; }
-
-    .table-footer { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; margin-top: 24px; }
-    .records-info { font-size: 14px; color: var(--text-secondary); }
-  `]
+  styleUrls: ['./supervisor-agents.component.scss']
 })
-export class SupervisorAgentsComponent implements OnInit {
+export class SupervisorAgentsComponent implements OnInit, OnDestroy {
   private userService = inject(UserService);
+  private destroy$ = new Subject<void>();
 
+  // Agents data
   agents = signal<UserListItem[]>([]);
-  totalRecords = signal(0);
-  isLoading = signal(false);
-  searchTerm = signal('');
-  currentPage = signal(1);
-  pageSize = signal(12);
-  totalPages = computed(() => Math.ceil(this.totalRecords() / this.pageSize()));
-  startRecord = computed(() => (this.currentPage() - 1) * this.pageSize() + 1);
-  endRecord = computed(() => Math.min(this.currentPage() * this.pageSize(), this.totalRecords()));
+  isLoadingAgents = signal(false);
+  agentSearchTerm = signal('');
+  selectedAgent = signal<UserListItem | null>(null);
 
-  ngOnInit(): void { this.loadAgents(); }
+  // Clients data
+  clients = signal<AgentClient[]>([]);
+  isLoadingClients = signal(false);
+  clientSearchTerm = signal('');
+  currentClientPage = signal(1);
+  clientPageSize = 25;
+  totalClients = signal(0);
 
-  loadAgents(): void {
-    this.isLoading.set(true);
-    const params: PaginationParams = {
-      page: this.currentPage(),
-      pageSize: this.pageSize(),
-      search: this.searchTerm() || undefined
-    };
-    this.userService.getSupervisorAgents(params).subscribe({
-      next: (r) => { this.agents.set(r.data); this.totalRecords.set(r.meta.totalItems); this.isLoading.set(false); },
-      error: () => this.isLoading.set(false)
+  // Modal
+  showAgentModal = signal(false);
+  agentForModal = signal<UserListItem | null>(null);
+
+  // Computed
+  filteredAgents = computed(() => {
+    const term = this.agentSearchTerm().toLowerCase().trim();
+    if (!term) return this.agents();
+
+    return this.agents().filter(a =>
+      this.getAgentFullName(a).toLowerCase().includes(term) ||
+      a.email?.toLowerCase().includes(term) ||
+      a.phone?.includes(term)
+    );
+  });
+
+  totalClientPages = computed(() => Math.ceil(this.totalClients() / this.clientPageSize));
+
+  ngOnInit(): void {
+    this.loadAgents();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private loadAgents(): void {
+    this.isLoadingAgents.set(true);
+
+    this.userService.getSupervisorAgents({ page: 1, pageSize: 100 }).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (response) => {
+        this.agents.set(response.data || []);
+        this.isLoadingAgents.set(false);
+      },
+      error: (err) => {
+        console.error('Error loading agents:', err);
+        this.isLoadingAgents.set(false);
+      }
     });
   }
 
-  onSearch(): void { this.currentPage.set(1); this.loadAgents(); }
-  onPageChange(page: number): void { this.currentPage.set(page); this.loadAgents(); }
-  onPageSizeChange(size: number): void { this.pageSize.set(size); this.currentPage.set(1); this.loadAgents(); }
+  selectAgent(agent: UserListItem): void {
+    if (this.selectedAgent()?.id === agent.id) {
+      return; // Already selected
+    }
 
-  getFullName(u: UserListItem): string { return getFullName(u); }
-  getInitials(u: UserListItem): string { return (u.firstName?.charAt(0) || '') + (u.lastName?.charAt(0) || ''); }
-  getRoleDisplayName(r: UserRole): string { return RoleUtils.getDisplayName(r); }
-  getStatusDisplayName(s: UserStatus): string { return { [UserStatus.ACTIVE]: 'Activo', [UserStatus.INACTIVE]: 'Inactivo', [UserStatus.PENDING]: 'Pendiente' }[s] || ''; }
+    this.selectedAgent.set(agent);
+    this.clientSearchTerm.set('');
+    this.currentClientPage.set(1);
+    this.loadClients();
+  }
+
+  private loadClients(): void {
+    const agent = this.selectedAgent();
+    if (!agent) return;
+
+    this.isLoadingClients.set(true);
+
+    this.userService.getSupervisorGetAgentClients(agent.id, {
+      page: this.currentClientPage(),
+      pageSize: this.clientPageSize,
+      search: this.clientSearchTerm() || undefined
+    }).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (response) => {
+        this.clients.set(this.mapClientsResponse(response.data || []));
+        this.totalClients.set(response.meta?.totalItems || 0);
+        this.isLoadingClients.set(false);
+      },
+      error: (err) => {
+        console.error('Error loading clients:', err);
+        this.isLoadingClients.set(false);
+      }
+    });
+  }
+
+  private mapClientsResponse(data: any[]): AgentClient[] {
+    return data.map(item => ({
+      id: item.id,
+      name: item.name || item.fullName || `${item.firstName || ''} ${item.lastName || ''}`.trim() || 'Sin nombre',
+      phone: item.phone || '',
+      lastMessageAt: item.lastMessageAt || item.last_message_at
+    }));
+  }
+
+  onAgentSearchInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.agentSearchTerm.set(value);
+  }
+
+  clearAgentSearch(): void {
+    this.agentSearchTerm.set('');
+  }
+
+  onClientSearchInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.clientSearchTerm.set(value);
+    this.currentClientPage.set(1);
+    this.loadClients();
+  }
+
+  clearClientSearch(): void {
+    this.clientSearchTerm.set('');
+    this.currentClientPage.set(1);
+    this.loadClients();
+  }
+
+  goToClientPage(page: number): void {
+    if (page < 1 || page > this.totalClientPages()) return;
+    this.currentClientPage.set(page);
+    this.loadClients();
+  }
+
+  openAgentDetails(event: Event, agent: UserListItem): void {
+    event.stopPropagation();
+    this.agentForModal.set(agent);
+    this.showAgentModal.set(true);
+  }
+
+  closeAgentModal(): void {
+    this.showAgentModal.set(false);
+    this.agentForModal.set(null);
+  }
+
+  getAgentFullName(agent: UserListItem): string {
+    return getFullName(agent);
+  }
+
+  getInitials(agent: UserListItem): string {
+    const first = agent.firstName?.charAt(0) || '';
+    const last = agent.lastName?.charAt(0) || '';
+    return (first + last).toUpperCase() || '?';
+  }
+
+  getRoleDisplayName(role: UserRole): string {
+    return RoleUtils.getDisplayName(role);
+  }
+
+  getStatusDisplayName(status: UserStatus): string {
+    const statusMap: Record<UserStatus, string> = {
+      [UserStatus.ACTIVE]: 'Activo',
+      [UserStatus.INACTIVE]: 'Inactivo',
+      [UserStatus.PENDING]: 'Pendiente'
+    };
+    return statusMap[status] || '';
+  }
+
+  formatDate(dateStr?: string): string {
+    if (!dateStr) return '-';
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('es', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '-';
+    }
+  }
 }

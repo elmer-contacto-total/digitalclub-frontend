@@ -50,6 +50,12 @@ export const routes: Routes = [
         loadChildren: () => import('./features/agent-clients/agent-clients.routes').then(m => m.AGENT_CLIENTS_ROUTES),
         title: 'Clientes - MWS'
       },
+      // Electron Clients (CRM Panel for Electron app alongside WhatsApp Web)
+      {
+        path: 'electron_clients',
+        loadChildren: () => import('./features/electron-clients/electron-clients.routes').then(m => m.ELECTRON_CLIENTS_ROUTES),
+        title: 'Clientes - MWS'
+      },
       // Agent Prospects view (PARIDAD: Rails /app/agent_prospects)
       // Two-column layout with prospects list + chat panel (like agent_clients)
       {
@@ -91,7 +97,7 @@ export const routes: Routes = [
       },
       {
         path: 'supervisor_clients',
-        loadComponent: () => import('./features/users/components/supervisor-clients/supervisor-clients.component').then(m => m.SupervisorClientsComponent),
+        loadChildren: () => import('./features/users/components/supervisor-clients/supervisor-clients.routes').then(m => m.SUPERVISOR_CLIENTS_ROUTES),
         title: 'Clientes - MWS'
       },
       {
@@ -101,8 +107,8 @@ export const routes: Routes = [
       },
       {
         path: 'managers',
-        loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
-        title: 'Managers - MWS'
+        loadComponent: () => import('./features/managers/manager-assignments.component').then(m => m.ManagerAssignmentsComponent),
+        title: 'Asignar Managers - MWS'
       },
       // Imports (implemented)
       {

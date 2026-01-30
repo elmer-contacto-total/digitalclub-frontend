@@ -262,6 +262,8 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       id: 'tables',
       title: 'TABLAS',
       items: [
+        // Electron Clients (CRM Panel for use with WhatsApp Web in Electron)
+        { id: 'electron-clients', label: 'Clientes (new)', icon: 'ph-whatsapp-logo', route: '/app/electron_clients', badge: 'new', badgeClass: 'badge-success' },
         // PARIDAD: Rails admin_agent_clients_path
         { id: 'clients', label: 'Clientes', icon: 'ph-user', route: '/app/agent_clients', badgeKey: 'subordinatesCount' },
         // PARIDAD: Rails admin_agent_clients_path(active_only: true)

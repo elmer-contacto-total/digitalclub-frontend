@@ -19,3 +19,4 @@ export * from './audit.service';
 export * from './crm-info-setting.service';
 export * from './whatsapp-onboarding.service';
 export * from './login-as.service';
+export * from './electron.service';

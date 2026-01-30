@@ -24,3 +24,6 @@ export * from './message.model';
 
 // Conversation models
 export * from './conversation.model';
+
+// CRM Contact models (for Electron clients)
+export * from './crm-contact.model';

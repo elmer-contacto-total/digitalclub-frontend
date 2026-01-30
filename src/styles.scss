@@ -7,8 +7,7 @@
 @tailwind components;
 @tailwind utilities;
 
-// Google Fonts - Inter
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+// Google Fonts - Inter (loaded via index.html with preconnect for performance)
 
 // Phosphor Icons
 @import "@phosphor-icons/web/regular";

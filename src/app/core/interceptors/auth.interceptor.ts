@@ -1,28 +1,24 @@
 import { HttpInterceptorFn } from '@angular/common/http';
-import { inject } from '@angular/core';
-import { StorageService } from '../services/storage.service';
 
-const AUTH_TOKEN_KEY = 'auth_token';
-const STORAGE_PREFIX = 'holape_';
+const AUTH_TOKEN_KEY = 'holape_auth_token';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  // Direct localStorage access - more reliable than inject in interceptors
   let token: string | null = null;
 
   try {
-    const storageService = inject(StorageService);
-    token = storageService.getString(AUTH_TOKEN_KEY);
-  } catch {
-    // Fallback: direct localStorage access if inject fails
-    token = localStorage.getItem(STORAGE_PREFIX + AUTH_TOKEN_KEY);
-  }
+    token = localStorage.getItem(AUTH_TOKEN_KEY);
 
-  // Debug log (remove in production)
-  if (!req.url.includes('/assets/')) {
-    console.log('[Auth Interceptor]', {
-      url: req.url,
-      hasToken: !!token,
-      tokenPreview: token ? `${token.substring(0, 20)}...` : 'none'
-    });
+    // Validate token format (should be a JWT-like string)
+    if (token && (token.startsWith('"') || token.length < 10)) {
+      // Corrupted token - clear it
+      console.warn('[Auth] Corrupted token detected, clearing...');
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      token = null;
+    }
+  } catch (e) {
+    console.error('[Auth] Error reading token:', e);
+    token = null;
   }
 
   if (token) {

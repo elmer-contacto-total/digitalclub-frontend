@@ -1,6 +1,6 @@
 /**
  * Message Input Component
- * Text input with attachments, canned messages, templates
+ * Text input with canned messages and templates
  * PARIDAD RAILS: app/views/admin/messages/_message_input.html.erb
  */
 import { Component, inject, signal, input, output, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
@@ -31,23 +31,6 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
     <div class="message-input-container">
       <!-- Toolbar -->
       <div class="input-toolbar">
-        <!-- Attachment Button -->
-        <button
-          class="toolbar-btn"
-          title="Adjuntar archivo"
-          (click)="fileInput.click()"
-          [disabled]="!canSendFreeform()"
-        >
-          <i class="bi bi-paperclip"></i>
-        </button>
-        <input
-          #fileInput
-          type="file"
-          class="hidden-input"
-          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
-          (change)="onFileSelected($event)"
-        />
-
         <!-- Canned Messages Button -->
         <button
           class="toolbar-btn"
@@ -55,7 +38,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
           [class.active]="showCannedMessages()"
           (click)="toggleCannedMessages()"
         >
-          <i class="bi bi-lightning"></i>
+          <i class="ph-fill ph-lightning"></i>
         </button>
 
         <!-- Template Button (only when freeform is not available) -->
@@ -65,7 +48,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
             title="Enviar plantilla"
             (click)="showTemplateSelector.set(true)"
           >
-            <i class="bi bi-file-text"></i>
+            <i class="ph ph-file-text"></i>
             Plantillas
           </button>
         }
@@ -97,7 +80,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
           @if (isSending()) {
             <div class="spinner-small"></div>
           } @else {
-            <i class="bi bi-send-fill"></i>
+            <i class="ph-fill ph-paper-plane-tilt"></i>
           }
         </button>
       </div>
@@ -113,7 +96,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
                 (click)="onQuickCloseTicket(closeType.kpiName)"
                 [disabled]="isClosing()"
               >
-                <i class="bi bi-check-circle"></i>
+                <i class="ph-fill ph-check-circle"></i>
                 Finalizar {{ closeType.name }}
               </button>
             }
@@ -124,7 +107,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
               (click)="showCloseTicketModal.set(true)"
               [disabled]="isClosing()"
             >
-              <i class="bi bi-check-circle"></i>
+              <i class="ph-fill ph-check-circle"></i>
               Finalizar
             </button>
           }
@@ -134,25 +117,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
             title="Más opciones"
             (click)="showCloseTicketModal.set(true)"
           >
-            <i class="bi bi-three-dots"></i>
-          </button>
-        </div>
-      }
-
-      <!-- File Preview -->
-      @if (selectedFile()) {
-        <div class="file-preview">
-          <div class="file-info">
-            @if (isImageFile()) {
-              <img [src]="filePreviewUrl()" alt="Preview" class="preview-image" />
-            } @else {
-              <i class="bi bi-file-earmark"></i>
-            }
-            <span class="file-name">{{ selectedFile()!.name }}</span>
-            <span class="file-size">{{ formatFileSize(selectedFile()!.size) }}</span>
-          </div>
-          <button class="remove-file-btn" (click)="clearFile()">
-            <i class="bi bi-x"></i>
+            <i class="ph ph-dots-three"></i>
           </button>
         </div>
       }
@@ -164,7 +129,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
           <div class="canned-messages-header">
             <span>Respuestas rápidas</span>
             <button class="close-canned-btn" (click)="showCannedMessages.set(false)">
-              <i class="bi bi-x"></i>
+              <i class="ph ph-x"></i>
             </button>
           </div>
           <div class="canned-messages-grid">
@@ -233,8 +198,6 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   showTemplateSelector = signal(false);
   showCloseTicketModal = signal(false);
   cannedMessages = signal<CannedMessage[]>([]);
-  selectedFile = signal<File | null>(null);
-  filePreviewUrl = signal<string | null>(null);
 
   ngOnInit(): void {
     // Load canned messages
@@ -255,17 +218,13 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    this.clearFile();
   }
 
   canSend(): boolean {
     if (this.isSending()) return false;
     if (!this.canSendFreeform()) return false;
 
-    const hasContent = this.messageContent.trim().length > 0;
-    const hasFile = this.selectedFile() !== null;
-
-    return hasContent || hasFile;
+    return this.messageContent.trim().length > 0;
   }
 
   getPlaceholder(): string {
@@ -333,61 +292,9 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     this.sendTemplateMessage(template.templateId, template.params);
   }
 
-  onFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      const file = input.files[0];
-
-      // Validate file size (max 16MB)
-      if (file.size > 16 * 1024 * 1024) {
-        this.toastService.error('El archivo es demasiado grande (máx. 16MB)');
-        return;
-      }
-
-      this.selectedFile.set(file);
-
-      // Create preview for images
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          this.filePreviewUrl.set(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      }
-    }
-    input.value = ''; // Reset input
-  }
-
-  isImageFile(): boolean {
-    const file = this.selectedFile();
-    return file ? file.type.startsWith('image/') : false;
-  }
-
-  clearFile(): void {
-    const url = this.filePreviewUrl();
-    if (url) {
-      URL.revokeObjectURL(url);
-    }
-    this.selectedFile.set(null);
-    this.filePreviewUrl.set(null);
-  }
-
-  formatFileSize(bytes: number): string {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
   sendMessage(): void {
     if (!this.canSend()) return;
-
-    const file = this.selectedFile();
-
-    if (file) {
-      this.sendMediaMessage(file);
-    } else {
-      this.sendTextMessage();
-    }
+    this.sendTextMessage();
   }
 
   onConfirmCloseTicket(data: { closeType?: string; notes?: string }): void {
@@ -434,25 +341,6 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       error: (err) => {
         console.error('Error sending message:', err);
         this.toastService.error('Error al enviar el mensaje');
-        this.isSending.set(false);
-      }
-    });
-  }
-
-  private sendMediaMessage(file: File): void {
-    this.isSending.set(true);
-    const caption = this.messageContent.trim() || undefined;
-
-    this.chatService.sendMediaMessage(this.clientId(), file, caption).subscribe({
-      next: (message) => {
-        this.messageContent = '';
-        this.clearFile();
-        this.isSending.set(false);
-        this.messageSent.emit(message);
-      },
-      error: (err) => {
-        console.error('Error sending media:', err);
-        this.toastService.error('Error al enviar el archivo');
         this.isSending.set(false);
       }
     });

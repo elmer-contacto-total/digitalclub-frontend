@@ -50,7 +50,7 @@ import { ConversationListItem, ConversationDetail, ChatViewType } from '../../co
           <!-- PARIDAD RAILS: chat-placeholder in _clients_chat_view.html.erb -->
           <div class="chat-placeholder">
             <div class="placeholder-content">
-              <i class="bi bi-chat-text"></i>
+              <i class="ph ph-chat-text"></i>
               <p>Seleccione un cliente para ver mensajes</p>
             </div>
           </div>

@@ -150,7 +150,7 @@ type MessageFilter = 'all' | 'to_respond' | 'responded';
                         }
                         @if (conversation.hasOpenTicket) {
                           <span class="ticket-badge" title="Ticket abierto">
-                            <i class="bi bi-ticket-perforated"></i>
+                            <i class="ph ph-ticket"></i>
                           </span>
                         }
                       </div>
@@ -163,7 +163,7 @@ type MessageFilter = 'all' | 'to_respond' | 'responded';
                         (click)="openClientDetail($event, conversation)"
                         title="Ver detalles"
                       >
-                        <i class="bi bi-chevron-right"></i>
+                        <i class="ph ph-caret-right"></i>
                       </button>
                     </td>
                   </tr>
@@ -220,7 +220,7 @@ type MessageFilter = 'all' | 'to_respond' | 'responded';
             <div class="modal-header">
               <h5>Detalles del Cliente</h5>
               <button class="close-btn" (click)="closeClientDetailModal()">
-                <i class="bi bi-x"></i>
+                <i class="ph ph-x"></i>
               </button>
             </div>
             <div class="modal-body">

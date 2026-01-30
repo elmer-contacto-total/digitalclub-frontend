@@ -20,12 +20,15 @@ interface MessageListItem {
   direction: 'incoming' | 'outgoing';
 }
 
-// DataTables response format
-interface DataTablesResponse {
-  draw: number;
-  recordsTotal: number;
-  recordsFiltered: number;
+// Backend response format
+interface MessagesApiResponse {
   data: any[];
+  meta: {
+    totalItems: number;
+    totalPages: number;
+    currentPage: number;
+    pageSize: number;
+  };
 }
 
 type MessageDirection = 'incoming' | 'outgoing';
@@ -36,129 +39,162 @@ type MessageDirection = 'incoming' | 'outgoing';
   imports: [CommonModule, FormsModule],
   template: `
     <div class="messages-list-container">
-      <!-- Page Header -->
+      <!-- Page Header (PARIDAD RAILS: "Lista de Mensajes") -->
       <div class="page-header">
-        <h1>Lista de Mensajes</h1>
+        <div class="page-header-content">
+          <h1 class="page-title">Lista de Mensajes</h1>
+          <p class="page-subtitle">Historial de mensajes recibidos y enviados</p>
+        </div>
       </div>
 
-      <!-- Tab Navigation (PARIDAD: Rails nav-tabs) -->
-      <ul class="nav-tabs">
-        <li class="nav-item">
+      <!-- Toolbar Card -->
+      <div class="toolbar-card">
+        <!-- Tab Navigation (PARIDAD RAILS: "Recibidos" / "Enviados") -->
+        <div class="tabs-container">
           <button
-            class="nav-link"
+            class="tab-btn"
             [class.active]="activeTab() === 'incoming'"
             (click)="switchTab('incoming')"
           >
-            Mensajes Entrantes
+            <i class="ph-fill ph-tray-arrow-down"></i>
+            <span>Recibidos</span>
+            @if (activeTab() === 'incoming' && totalRecords > 0) {
+              <span class="tab-badge">{{ totalRecords }}</span>
+            }
           </button>
-        </li>
-        <li class="nav-item">
           <button
-            class="nav-link"
+            class="tab-btn"
             [class.active]="activeTab() === 'outgoing'"
             (click)="switchTab('outgoing')"
           >
-            Mensajes Salientes
+            <i class="ph-fill ph-paper-plane-tilt"></i>
+            <span>Enviados</span>
+            @if (activeTab() === 'outgoing' && totalRecords > 0) {
+              <span class="tab-badge">{{ totalRecords }}</span>
+            }
           </button>
-        </li>
-      </ul>
-
-      <!-- Tab Content -->
-      <div class="tab-content">
-        <!-- Search -->
-        <div class="datatable-header">
-          <div class="search-wrapper">
-            <label>Buscar:</label>
-            <input
-              type="text"
-              class="form-control search-input"
-              [(ngModel)]="searchTerm"
-              (ngModelChange)="onSearchChange($event)"
-              placeholder=""
-            />
-          </div>
         </div>
 
-        <!-- DataTable -->
-        <div class="table-responsive">
-          <table class="table table-striped table-bordered table-hover">
-            <thead>
-              <tr>
-                <th class="col-person">
-                  {{ activeTab() === 'incoming' ? 'Enviado por' : 'Recibido por' }}
-                </th>
-                <th class="col-message">Mensaje</th>
-                <th class="col-date">Fecha</th>
-              </tr>
-            </thead>
-            <tbody>
-              @if (isLoading() && messages().length === 0) {
+        <!-- Search Box -->
+        <div class="search-box">
+          <i class="ph ph-magnifying-glass"></i>
+          <input
+            type="text"
+            class="search-input"
+            [(ngModel)]="searchTerm"
+            (ngModelChange)="onSearchChange($event)"
+            placeholder="Buscar mensajes..."
+          />
+          @if (searchTerm) {
+            <button class="clear-search" (click)="clearSearch()">
+              <i class="ph ph-x"></i>
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Table Card -->
+      <div class="table-card">
+        <!-- Loading State -->
+        @if (isLoading() && messages().length === 0) {
+          <div class="loading-container">
+            <div class="spinner"></div>
+            <p>Cargando mensajes...</p>
+          </div>
+        } @else if (messages().length === 0) {
+          <!-- Empty State -->
+          <div class="empty-container">
+            <i class="ph ph-chats-circle empty-icon"></i>
+            <h3>No hay mensajes</h3>
+            <p>No se encontraron mensajes {{ activeTab() === 'incoming' ? 'recibidos' : 'enviados' }}{{ searchTerm ? ' con ese criterio de búsqueda' : '' }}</p>
+          </div>
+        } @else {
+          <!-- Table (PARIDAD RAILS: columns "Enviado por"/"Recibido por", "Mensaje", "Fecha") -->
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
                 <tr>
-                  <td colspan="3" class="text-center loading-cell">
-                    <div class="spinner"></div>
-                    Cargando...
-                  </td>
+                  <th class="col-person">
+                    {{ activeTab() === 'incoming' ? 'Enviado por' : 'Enviado por' }}
+                  </th>
+                  <th class="col-message">Mensaje</th>
+                  <th class="col-date">Fecha</th>
                 </tr>
-              } @else if (messages().length === 0) {
-                <tr>
-                  <td colspan="3" class="text-center empty-cell">
-                    No hay datos disponibles
-                  </td>
-                </tr>
-              } @else {
+              </thead>
+              <tbody>
                 @for (message of messages(); track message.id) {
-                  <tr class="message-row">
+                  <tr class="message-row" [class.loading]="isLoading()">
                     <td class="col-person">
-                      {{ activeTab() === 'incoming' ? message.senderName : message.recipientName }}
+                      <div class="person-cell">
+                        <div class="avatar-sm" [class.incoming]="activeTab() === 'incoming'" [class.outgoing]="activeTab() === 'outgoing'">
+                          {{ getInitials(message.senderName) }}
+                        </div>
+                        <span class="person-name">
+                          {{ message.senderName }}
+                        </span>
+                      </div>
                     </td>
                     <td class="col-message">
-                      <div class="message-content">{{ truncateMessage(message.content) }}</div>
+                      <div class="message-cell">
+                        <span class="message-preview">{{ truncateMessage(message.content) }}</span>
+                      </div>
                     </td>
-                    <td class="col-date">{{ formatDate(message.sentAt) }}</td>
+                    <td class="col-date">
+                      <div class="date-cell">
+                        <span class="date-primary">{{ formatDate(message.sentAt) }}</span>
+                        <span class="date-secondary">{{ formatTime(message.sentAt) }}</span>
+                      </div>
+                    </td>
                   </tr>
                 }
-              }
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
 
-        <!-- Pagination Footer -->
-        <div class="datatable-footer">
-          <div class="info">
-            Mostrando {{ getShowingStart() }} a {{ getShowingEnd() }} de {{ totalRecords }} registros
+          <!-- Pagination Footer -->
+          <div class="table-footer">
+            <div class="pagination-info">
+              Mostrando <strong>{{ getShowingStart() }}</strong> - <strong>{{ getShowingEnd() }}</strong> de <strong>{{ totalRecords }}</strong> registros
+            </div>
+            <div class="pagination-controls">
+              <button
+                class="pagination-btn"
+                [disabled]="currentPage === 0 || isLoading()"
+                (click)="goToPage(0)"
+                title="Primera página"
+              >
+                <i class="ph ph-caret-double-left"></i>
+              </button>
+              <button
+                class="pagination-btn"
+                [disabled]="currentPage === 0 || isLoading()"
+                (click)="goToPage(currentPage - 1)"
+                title="Página anterior"
+              >
+                <i class="ph ph-caret-left"></i>
+              </button>
+              <span class="page-indicator">
+                {{ currentPage + 1 }} / {{ getTotalPages() }}
+              </span>
+              <button
+                class="pagination-btn"
+                [disabled]="!hasMore() || isLoading()"
+                (click)="goToPage(currentPage + 1)"
+                title="Página siguiente"
+              >
+                <i class="ph ph-caret-right"></i>
+              </button>
+              <button
+                class="pagination-btn"
+                [disabled]="!hasMore() || isLoading()"
+                (click)="goToPage(getTotalPages() - 1)"
+                title="Última página"
+              >
+                <i class="ph ph-caret-double-right"></i>
+              </button>
+            </div>
           </div>
-          <div class="pagination-controls">
-            <button
-              class="btn btn-sm"
-              [disabled]="currentPage === 0 || isLoading()"
-              (click)="goToPage(0)"
-            >
-              Primera
-            </button>
-            <button
-              class="btn btn-sm"
-              [disabled]="currentPage === 0 || isLoading()"
-              (click)="goToPage(currentPage - 1)"
-            >
-              Anterior
-            </button>
-            <span class="page-info">Pagina {{ currentPage + 1 }} de {{ getTotalPages() }}</span>
-            <button
-              class="btn btn-sm"
-              [disabled]="!hasMore() || isLoading()"
-              (click)="goToPage(currentPage + 1)"
-            >
-              Siguiente
-            </button>
-            <button
-              class="btn btn-sm"
-              [disabled]="!hasMore() || isLoading()"
-              (click)="goToPage(getTotalPages() - 1)"
-            >
-              Ultima
-            </button>
-          </div>
-        </div>
+        }
       </div>
     </div>
   `,
@@ -211,6 +247,11 @@ export class MessagesListComponent implements OnInit, OnDestroy {
     this.searchSubject.next(term);
   }
 
+  clearSearch(): void {
+    this.searchTerm = '';
+    this.resetAndLoad();
+  }
+
   // Pagination methods
   goToPage(page: number): void {
     if (page < 0 || page >= this.getTotalPages()) return;
@@ -233,8 +274,8 @@ export class MessagesListComponent implements OnInit, OnDestroy {
   }
 
   truncateMessage(content: string): string {
-    if (!content) return '-';
-    return content.length > 100 ? content.substring(0, 100) + '...' : content;
+    if (!content) return '(Sin contenido)';
+    return content.length > 80 ? content.substring(0, 80) + '...' : content;
   }
 
   formatDate(dateStr: string): string {
@@ -242,8 +283,15 @@ export class MessagesListComponent implements OnInit, OnDestroy {
     const date = new Date(dateStr);
     return date.toLocaleDateString('es-PE', {
       day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  }
+
+  formatTime(dateStr: string): string {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString('es-PE', {
       hour: '2-digit',
       minute: '2-digit'
     });
@@ -269,15 +317,16 @@ export class MessagesListComponent implements OnInit, OnDestroy {
       params = params.set('search[value]', this.searchTerm);
     }
 
-    this.http.get<DataTablesResponse>(`${environment.apiUrl}/app/messages`, { params })
+    this.http.get<MessagesApiResponse>(`${environment.apiUrl}/app/messages`, { params })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
-          this.totalRecords = response.recordsTotal;
-          this.messages.set(this.mapMessages(response.data));
+          // Handle backend response format: { data: [...], meta: { totalItems, totalPages, ... } }
+          this.totalRecords = response.meta?.totalItems || 0;
+          this.messages.set(this.mapMessages(response.data || []));
 
-          const loaded = (this.currentPage + 1) * this.pageSize;
-          this.hasMore.set(loaded < response.recordsFiltered);
+          const totalPages = response.meta?.totalPages || 1;
+          this.hasMore.set(this.currentPage < totalPages - 1);
 
           this.isLoading.set(false);
         },
@@ -301,14 +350,36 @@ export class MessagesListComponent implements OnInit, OnDestroy {
           direction: this.activeTab()
         };
       }
+
+      // Backend sends senderName for incoming, receiverName for outgoing
+      const senderName = item.sender_name || item.senderName ||
+        `${item.sender?.first_name || ''} ${item.sender?.last_name || ''}`.trim() || '-';
+
+      // Note: Backend uses "receiverName" not "recipientName" for outgoing messages
+      const recipientName = item.receiver_name || item.receiverName ||
+        item.recipient_name || item.recipientName ||
+        `${item.recipient?.first_name || ''} ${item.recipient?.last_name || ''}`.trim() || '-';
+
       return {
         id: item.id,
-        senderName: item.sender_name || item.senderName || `${item.sender?.first_name || ''} ${item.sender?.last_name || ''}`.trim() || '-',
-        recipientName: item.recipient_name || item.recipientName || `${item.recipient?.first_name || ''} ${item.recipient?.last_name || ''}`.trim() || '-',
+        senderName,
+        recipientName,
         content: item.content || '',
-        sentAt: item.sent_at || item.sentAt || '',
+        sentAt: item.sent_at || item.sentAt || item.createdAt || '',
         direction: this.activeTab()
       };
     });
+  }
+
+  /**
+   * Get initials from a name (first letter of first name + first letter of last name)
+   */
+  getInitials(name: string): string {
+    if (!name || name === '-') return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
   }
 }

@@ -4,19 +4,29 @@
  * PARIDAD RAILS: _message.html.erb layout
  */
 
+:host {
+  display: flex;
+  width: 100%;
+}
+
 .message-item {
   display: flex;
   gap: var(--space-2);
   max-width: 75%;
   margin-bottom: var(--space-1);
-  flex-direction: row;
 
+  // Mensajes entrantes (cliente) - alineados a la IZQUIERDA
   &.incoming {
-    align-self: flex-start;
+    flex-direction: row;
+    margin-right: auto;
+    margin-left: 0;
   }
 
+  // Mensajes salientes (agente) - alineados a la DERECHA
   &.outgoing {
-    align-self: flex-end;
+    flex-direction: row-reverse;
+    margin-left: auto;
+    margin-right: 0;
   }
 
   &.failed {
@@ -25,6 +35,15 @@
     }
   }
 }
+
+// Debug: Para ver qué clase se aplica (remover después)
+// .message-item::after {
+//   content: attr(class);
+//   position: absolute;
+//   top: -20px;
+//   font-size: 10px;
+//   color: red;
+// }
 
 .avatar {
   width: 32px;
@@ -56,13 +75,13 @@
   .incoming & {
     background: var(--message-incoming-bg);
     color: var(--message-incoming-text);
-    border-bottom-right-radius: var(--radius-sm);
+    border-bottom-left-radius: var(--radius-sm);
   }
 
   .outgoing & {
     background: var(--message-outgoing-bg);
     color: var(--message-outgoing-text);
-    border-bottom-left-radius: var(--radius-sm);
+    border-bottom-right-radius: var(--radius-sm);
   }
 
   .template & {

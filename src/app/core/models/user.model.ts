@@ -156,6 +156,7 @@ export interface UserListItem {
   clientId: number;
   managerId?: number;
   managerName?: string;  // Nombre del manager para mostrar en lista
+  managerRole?: UserRole; // Rol del manager
   createdAt: string;
   // Additional fields for agent clients view
   fullName?: string;     // Computed: firstName + lastName

@@ -344,7 +344,28 @@ export class AuthService {
    * Load user from storage on init
    */
   private loadUserFromStorage(): CurrentUser | null {
-    return this.storage.get<CurrentUser>(USER_KEY);
+    try {
+      const user = this.storage.get<CurrentUser>(USER_KEY);
+
+      // Validate user object has required fields
+      if (user && user.id && user.email && user.role !== undefined) {
+        return user;
+      }
+
+      // Invalid user data - clear it
+      if (user) {
+        console.warn('[Auth] Invalid user data in storage, clearing...');
+        this.storage.remove(USER_KEY);
+        this.storage.remove(TOKEN_KEY);
+      }
+
+      return null;
+    } catch (e) {
+      console.error('[Auth] Error loading user from storage:', e);
+      this.storage.remove(USER_KEY);
+      this.storage.remove(TOKEN_KEY);
+      return null;
+    }
   }
 
   /**

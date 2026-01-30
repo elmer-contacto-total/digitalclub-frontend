@@ -16,7 +16,7 @@ import { CannedMessage, getTruncatedContent, sortCannedMessagesByName } from '..
       <div class="selector-header">
         <span>Respuestas Rápidas</span>
         <button class="close-btn" (click)="close.emit()">
-          <i class="bi bi-x"></i>
+          <i class="ph ph-x"></i>
         </button>
       </div>
 

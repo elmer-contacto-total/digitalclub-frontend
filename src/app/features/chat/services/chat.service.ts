@@ -232,9 +232,13 @@ export class ChatService {
   /**
    * Get canned messages for current user
    * PARIDAD: GET /app/canned_messages
+   * Backend returns: { canned_messages: [...] }
+   * Backend fields: id, message, client_global, status, user_id, client_id
    */
   getCannedMessages(): Observable<CannedMessage[]> {
-    return this.api.get<CannedMessage[]>('/app/canned_messages');
+    return this.api.get<{ canned_messages: any[] }>('/app/canned_messages').pipe(
+      map(response => (response.canned_messages || []).map(msg => this.mapCannedMessage(msg)))
+    );
   }
 
   /**
@@ -425,6 +429,34 @@ export class ChatService {
       // Handle dates - backend sends sent_at/created_at, frontend expects sentAt/createdAt
       sentAt: msg.sent_at || msg.sentAt || msg.created_at || msg.createdAt,
       createdAt: msg.created_at || msg.createdAt || msg.sent_at || msg.sentAt,
+      updatedAt: msg.updated_at || msg.updatedAt
+    };
+  }
+
+  /**
+   * Map backend canned message to frontend CannedMessage model
+   * Backend fields: id, message, client_global, status, user_id, client_id
+   * Frontend fields: id, name, content, clientGlobal, status, userId, clientId
+   */
+  private mapCannedMessage(msg: any): CannedMessage {
+    // Convert status string to enum
+    let status = 0; // ACTIVE by default
+    if (msg.status === 'inactive' || msg.status === 1) {
+      status = 1; // INACTIVE
+    }
+
+    return {
+      id: msg.id,
+      userId: msg.user_id || msg.userId,
+      clientId: msg.client_id || msg.clientId,
+      // Backend uses 'message' field for content
+      // Use message as both name and content (Rails pattern)
+      name: msg.name || msg.message || '',
+      content: msg.message || msg.content || '',
+      shortcut: msg.shortcut,
+      clientGlobal: msg.client_global ?? msg.clientGlobal ?? false,
+      status,
+      createdAt: msg.created_at || msg.createdAt,
       updatedAt: msg.updated_at || msg.updatedAt
     };
   }

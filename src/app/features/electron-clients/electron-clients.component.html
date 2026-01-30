@@ -1,0 +1,187 @@
+<!-- Electron Clients Component -->
+<!-- CRM Panel for use alongside WhatsApp Web in Electron -->
+
+<div class="electron-clients-container">
+  <!-- Not in Electron Warning -->
+  @if (!isElectron()) {
+    <div class="not-electron-warning">
+      <div class="warning-content">
+        <i class="ph ph-desktop"></i>
+        <h2>Aplicacion de Escritorio Requerida</h2>
+        <p>Esta seccion esta disenada para funcionar con la aplicacion de escritorio Electron.</p>
+        <p class="hint">Descarga la aplicacion de escritorio para usar esta funcionalidad junto con WhatsApp Web.</p>
+      </div>
+    </div>
+  } @else {
+    <!-- Main Content -->
+    <div class="crm-panel">
+      <!-- Header -->
+      <div class="panel-header">
+        <h1>
+          <i class="ph ph-address-book"></i>
+          Panel CRM
+        </h1>
+      </div>
+
+      <!-- Empty State -->
+      @if (viewState() === 'empty') {
+        <div class="empty-state">
+          <div class="empty-content">
+            <i class="ph ph-chat-circle-dots"></i>
+            <h3>Sin contacto seleccionado</h3>
+            <p>Selecciona un chat en WhatsApp para ver la informacion del contacto</p>
+          </div>
+        </div>
+      }
+
+      <!-- Loading State -->
+      @if (viewState() === 'loading') {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <span>Buscando contacto...</span>
+        </div>
+      }
+
+      <!-- Contact Info -->
+      @if (viewState() === 'contact') {
+        <div class="contact-info">
+          <!-- Contact Header -->
+          <div class="contact-header">
+            <div class="avatar">
+              @if (getAvatarUrl()) {
+                <img [src]="getAvatarUrl()" alt="Avatar" class="avatar-img" />
+              } @else {
+                <div class="avatar-placeholder" [class.registered]="isRegistered()">
+                  {{ initials() }}
+                </div>
+              }
+            </div>
+            <div class="contact-details">
+              <h2 class="contact-name">{{ displayName() }}</h2>
+              <p class="contact-phone">
+                <i class="ph ph-phone"></i>
+                {{ displayPhone() }}
+              </p>
+              @if (isRegistered()) {
+                <span class="badge badge-success">
+                  <i class="ph ph-check-circle"></i>
+                  Registrado
+                </span>
+              } @else {
+                <span class="badge badge-secondary">
+                  <i class="ph ph-user"></i>
+                  Contacto Personal
+                </span>
+              }
+            </div>
+          </div>
+
+          <!-- Registered Contact Info -->
+          @if (isRegistered()) {
+            <div class="info-section">
+              <h4 class="section-title">
+                <i class="ph ph-info"></i>
+                Informacion del Cliente
+              </h4>
+              <div class="info-grid">
+                @if (getCodigo()) {
+                  <div class="info-item">
+                    <span class="info-label">Codigo:</span>
+                    <span class="info-value">{{ getCodigo() }}</span>
+                  </div>
+                }
+                @if (getEmail()) {
+                  <div class="info-item">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">{{ getEmail() }}</span>
+                  </div>
+                }
+                @if (getManagerName()) {
+                  <div class="info-item">
+                    <span class="info-label">Agente asignado:</span>
+                    <span class="info-value">{{ getManagerName() }}</span>
+                  </div>
+                }
+                @if (contact()?.registered?.createdAt) {
+                  <div class="info-item">
+                    <span class="info-label">Cliente desde:</span>
+                    <span class="info-value">{{ formatDate(contact()?.registered?.createdAt) }}</span>
+                  </div>
+                }
+              </div>
+
+              @if (hasOpenTicket()) {
+                <div class="ticket-alert">
+                  <i class="ph ph-ticket"></i>
+                  <span>Tiene un caso abierto</span>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Personal Label (for local/non-registered contacts) -->
+          @if (!isRegistered()) {
+            <div class="info-section">
+              <h4 class="section-title">
+                <i class="ph ph-tag"></i>
+                Etiqueta Personal
+              </h4>
+              <div class="label-selector">
+                @for (option of labelOptions; track option.value) {
+                  <button
+                    class="label-chip"
+                    [class.selected]="selectedLabel() === option.value"
+                    (click)="onLabelChange(option.value)"
+                  >
+                    <i [class]="option.icon"></i>
+                    {{ option.label }}
+                  </button>
+                }
+              </div>
+              @if (selectedLabel()) {
+                <button class="btn-clear-label" (click)="onLabelChange('')">
+                  <i class="ph ph-x"></i>
+                  Quitar etiqueta
+                </button>
+              }
+            </div>
+          }
+
+          <!-- Notes Section -->
+          <div class="info-section">
+            <h4 class="section-title">
+              <i class="ph ph-note-pencil"></i>
+              @if (isRegistered()) {
+                Notas del Cliente
+              } @else {
+                Notas Personales
+              }
+            </h4>
+            <div class="notes-form">
+              <textarea
+                class="notes-textarea"
+                [ngModel]="notesField()"
+                (ngModelChange)="notesField.set($event)"
+                placeholder="Escribe notas sobre este contacto..."
+                rows="4"
+              ></textarea>
+              <button
+                class="btn btn-primary btn-save-notes"
+                [disabled]="isSavingNotes()"
+                (click)="saveNotes()"
+              >
+                @if (isSavingNotes()) {
+                  <span class="spinner-sm"></span>
+                  Guardando...
+                } @else {
+                  <i class="ph ph-floppy-disk"></i>
+                  Guardar Notas
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

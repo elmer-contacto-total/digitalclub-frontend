@@ -33,7 +33,7 @@ import {
       <!-- PARIDAD RAILS: Outgoing avatar a la IZQUIERDA (primero en el DOM) -->
       @if (isOutgoingMessage()) {
         <div class="avatar outgoing-avatar">
-          <i class="bi bi-person"></i>
+          <i class="ph-fill ph-user"></i>
         </div>
       }
 
@@ -42,7 +42,7 @@ import {
         <!-- Template Badge -->
         @if (isTemplateMessage()) {
           <div class="template-badge">
-            <i class="bi bi-file-text"></i>
+            <i class="ph ph-file-text"></i>
             Plantilla
           </div>
         }
@@ -80,14 +80,14 @@ import {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <i class="bi bi-file-earmark"></i>
+                  <i class="ph ph-file"></i>
                   <span>{{ getDocumentName() }}</span>
-                  <i class="bi bi-download"></i>
+                  <i class="ph ph-download-simple"></i>
                 </a>
               }
               @default {
                 <div class="media-unknown">
-                  <i class="bi bi-file-earmark-x"></i>
+                  <i class="ph ph-file-x"></i>
                   <span>Archivo no soportado</span>
                 </div>
               }
@@ -112,22 +112,22 @@ import {
             <span class="message-status" [class]="getStatusClass()">
               @switch (message().status) {
                 @case (MessageStatus.PENDING) {
-                  <i class="bi bi-clock"></i>
+                  <i class="ph ph-clock"></i>
                 }
                 @case (MessageStatus.SENT) {
-                  <i class="bi bi-check"></i>
+                  <i class="ph ph-check"></i>
                 }
                 @case (MessageStatus.READ) {
-                  <i class="bi bi-check-all"></i>
+                  <i class="ph ph-checks"></i>
                 }
                 @case (MessageStatus.ERROR) {
-                  <i class="bi bi-exclamation-circle"></i>
+                  <i class="ph-fill ph-warning-circle"></i>
                 }
                 @case (MessageStatus.FAILED) {
-                  <i class="bi bi-x-circle"></i>
+                  <i class="ph-fill ph-x-circle"></i>
                 }
                 @default {
-                  <i class="bi bi-check"></i>
+                  <i class="ph ph-check"></i>
                 }
               }
             </span>
@@ -137,7 +137,7 @@ import {
         <!-- Error message -->
         @if (hasFailedStatus() && message().errorMessage) {
           <div class="error-message">
-            <i class="bi bi-exclamation-triangle"></i>
+            <i class="ph-fill ph-warning"></i>
             {{ message().errorMessage }}
           </div>
         }
@@ -145,7 +145,7 @@ import {
         <!-- Retry button for failed messages -->
         @if (hasFailedStatus()) {
           <button class="retry-btn" (click)="onRetry()">
-            <i class="bi bi-arrow-clockwise"></i>
+            <i class="ph ph-arrow-clockwise"></i>
             Reintentar
           </button>
         }
@@ -154,7 +154,7 @@ import {
       <!-- PARIDAD RAILS: Incoming avatar a la DERECHA (último en el DOM) -->
       @if (isIncomingMessage()) {
         <div class="avatar incoming-avatar">
-          <i class="bi bi-person"></i>
+          <i class="ph-fill ph-user"></i>
         </div>
       }
     </div>

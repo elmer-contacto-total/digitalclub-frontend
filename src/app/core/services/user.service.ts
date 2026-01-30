@@ -53,6 +53,14 @@ export interface AgentClientsParams {
   messageStatus?: 'all' | 'to_respond' | 'responded';
 }
 
+/**
+ * Additional params for supervisor clients endpoint
+ * PARIDAD: Rails UsersController#supervisor_clients filters
+ */
+export interface SupervisorClientsParams extends AgentClientsParams {
+  managerId?: number;  // Filter by specific agent
+}
+
 export interface UpdateTempPasswordRequest {
   password: string;
   passwordConfirmation: string;
@@ -171,9 +179,25 @@ export class UserService {
 
   /**
    * Get clients of agents under supervisor
+   * PARIDAD: Rails UsersController#supervisor_clients with filters
    */
-  getSupervisorClients(params: PaginationParams = {}): Observable<PagedResponse<UserListItem>> {
-    const httpParams = this.buildPaginationParams(params);
+  getSupervisorClients(params: PaginationParams & SupervisorClientsParams = {}): Observable<PagedResponse<UserListItem>> {
+    let httpParams = this.buildPaginationParams(params);
+
+    // Additional filters for supervisor clients
+    if (params.managerId) {
+      httpParams = httpParams.set('managerId', params.managerId.toString());
+    }
+    if (params.activeOnly) {
+      httpParams = httpParams.set('activeOnly', 'true');
+    }
+    if (params.ticketStatus && params.ticketStatus !== 'all') {
+      httpParams = httpParams.set('ticketStatus', params.ticketStatus);
+    }
+    if (params.messageStatus && params.messageStatus !== 'all') {
+      httpParams = httpParams.set('messageStatus', params.messageStatus);
+    }
+
     return this.http.get<PagedResponse<UserListItem>>(`${this.baseUrl}/supervisor_clients`, { params: httpParams });
   }
 
@@ -232,9 +256,10 @@ export class UserService {
 
   /**
    * Reassign users from one agent to another
+   * PARIDAD RAILS: managers#update (assign_managers)
    */
-  reassignBulk(request: ReassignBulkRequest): Observable<{ count: number }> {
-    return this.http.post<{ count: number }>(`${this.baseUrl}/reassign_bulk`, request);
+  reassignBulk(request: ReassignBulkRequest): Observable<{ result: string; message: string; reassigned_count: number }> {
+    return this.http.post<{ result: string; message: string; reassigned_count: number }>(`${this.baseUrl}/reassign_bulk`, request);
   }
 
   /**
@@ -254,6 +279,23 @@ export class UserService {
     let httpParams = this.buildPaginationParams(params);
     httpParams = httpParams.set('managerId', managerId.toString());
     return this.http.get<PagedResponse<UserListItem>>(`${this.baseUrl}/supervisor_get_agent_clients`, { params: httpParams });
+  }
+
+  /**
+   * Get subordinates (agents) for current user
+   * PARIDAD RAILS: current_user.subordinates
+   */
+  getSubordinates(): Observable<UserOption[]> {
+    return this.http.get<UserOption[]>(`${this.baseUrl}/subordinates`);
+  }
+
+  /**
+   * Get clients of subordinates (subordinates of subordinates)
+   * PARIDAD RAILS: managers#index JSON response
+   */
+  getSubordinatesClients(params: PaginationParams = {}): Observable<PagedResponse<UserListItem>> {
+    const httpParams = this.buildPaginationParams(params);
+    return this.http.get<PagedResponse<UserListItem>>(`${this.baseUrl}/subordinates_clients`, { params: httpParams });
   }
 
   /**

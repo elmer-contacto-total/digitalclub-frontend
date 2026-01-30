@@ -8,296 +8,188 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
-import { CannedMessageService, CannedMessage } from '../../../../core/services/canned-message.service';
+import { CannedMessageService } from '../../../../core/services/canned-message.service';
 import { ToastService } from '../../../../core/services/toast.service';
-import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-canned-message-form',
   standalone: true,
-  imports: [
-    CommonModule,
-    RouterLink,
-    FormsModule,
-    LoadingSpinnerComponent
-  ],
+  imports: [CommonModule, RouterLink, FormsModule],
   template: `
     <div class="canned-message-form-container">
-      <!-- Header -->
-      <div class="page-header">
-        <a routerLink="/app/canned_messages" class="btn btn-secondary">
-          <i class="ph ph-list"></i>
-          Volver
+      <!-- Breadcrumb -->
+      <nav class="breadcrumb">
+        <a routerLink="/app/canned_messages" class="breadcrumb-link">
+          <i class="ph ph-chat-centered-text"></i>
+          Respuestas Rápidas
         </a>
-        <div class="title-container">
-          <h1>{{ isEditMode() ? 'Editar' : 'Crear' }} mensaje enlatado</h1>
+        <i class="ph ph-caret-right breadcrumb-separator"></i>
+        <span class="breadcrumb-current">{{ isEditMode() ? 'Editar' : 'Nueva' }}</span>
+      </nav>
+
+      <!-- Page Header -->
+      <div class="page-header">
+        <div class="page-header-content">
+          <h1 class="page-title">{{ isEditMode() ? 'Editar Respuesta' : 'Nueva Respuesta Rápida' }}</h1>
+          <p class="page-subtitle">
+            {{ isEditMode() ? 'Modifica el contenido de tu respuesta rápida' : 'Crea un mensaje predefinido para usar en tus conversaciones' }}
+          </p>
         </div>
       </div>
 
       @if (isLoading()) {
-        <app-loading-spinner [overlay]="false" message="Cargando..." />
+        <div class="loading-container">
+          <div class="spinner"></div>
+          <p>Cargando...</p>
+        </div>
       } @else {
-        <!-- Form - PARIDAD: Rails admin/canned_messages/_form.html.erb -->
-        <form (ngSubmit)="onSubmit()" #formRef="ngForm">
+        <!-- Form Card -->
+        <div class="form-card">
+          <!-- Error Alert -->
           @if (errors().length > 0) {
-            <div class="panel panel-danger">
-              <div class="panel-heading">
-                <h2 class="panel-title">{{ errors().length }} error(es) al intentar guardar</h2>
+            <div class="alert alert-error">
+              <div class="alert-icon">
+                <i class="ph-fill ph-warning-circle"></i>
               </div>
-              <div class="panel-body">
+              <div class="alert-content">
+                <h4>Error al guardar</h4>
                 <ul>
                   @for (error of errors(); track error) {
                     <li>{{ error }}</li>
                   }
                 </ul>
               </div>
+              <button class="alert-close" (click)="errors.set([])">
+                <i class="ph ph-x"></i>
+              </button>
             </div>
           }
 
-          <div class="card">
-            <div class="card-body">
-              <h5 class="card-title">Detalles</h5>
-
-              <div class="row">
-                <div class="col-lg-12">
-                  <!-- Mensaje - PARIDAD: Rails f.input :message -->
-                  <div class="form-group">
-                    <label for="message" class="form-label">Mensaje <span class="required">*</span></label>
-                    <textarea
-                      id="message"
-                      name="message"
-                      class="form-control"
-                      [(ngModel)]="formData.message"
-                      required
-                      rows="4"
-                      placeholder="Escriba el mensaje enlatado..."
-                    ></textarea>
+          <form (ngSubmit)="onSubmit()" #formRef="ngForm">
+            <!-- Message Field -->
+            <div class="form-section">
+              <div class="form-group">
+                <label for="message" class="form-label">
+                  <i class="ph ph-text-aa"></i>
+                  Contenido del mensaje
+                  <span class="required">*</span>
+                </label>
+                <div class="textarea-wrapper">
+                  <textarea
+                    id="message"
+                    name="message"
+                    class="form-textarea"
+                    [(ngModel)]="formData.message"
+                    required
+                    rows="6"
+                    placeholder="Escribe el contenido de tu respuesta rápida..."
+                    #messageInput="ngModel"
+                  ></textarea>
+                  <div class="textarea-footer">
+                    <span class="char-count" [class.warning]="formData.message.length > 900">
+                      {{ formData.message.length }} / 1000
+                    </span>
                   </div>
+                </div>
+                @if (messageInput.invalid && messageInput.touched) {
+                  <span class="form-error">El mensaje es requerido</span>
+                }
+                <p class="form-hint">
+                  Este mensaje aparecerá como opción rápida al escribir en el chat.
+                </p>
+              </div>
+            </div>
 
-                  <!-- Disponible para Todos - PARIDAD: Rails f.input :client_global -->
-                  <div class="form-group">
-                    <div class="form-check">
-                      <input
-                        type="checkbox"
-                        id="clientGlobal"
-                        name="clientGlobal"
-                        class="form-check-input"
-                        [(ngModel)]="formData.clientGlobal"
-                      />
-                      <label for="clientGlobal" class="form-check-label">
-                        Disponible para Todos
-                      </label>
-                    </div>
-                    <small class="form-text text-muted">
-                      Si está marcado, este mensaje estará disponible para todos los usuarios del cliente.
-                    </small>
+            <!-- Visibility Section -->
+            <div class="form-section">
+              <h3 class="section-title">
+                <i class="ph ph-eye"></i>
+                Visibilidad
+              </h3>
+
+              <div class="visibility-options">
+                <label class="visibility-card" [class.selected]="!formData.clientGlobal">
+                  <input
+                    type="radio"
+                    name="visibility"
+                    [value]="false"
+                    [(ngModel)]="formData.clientGlobal"
+                  />
+                  <div class="visibility-icon">
+                    <i class="ph-fill ph-user"></i>
+                  </div>
+                  <div class="visibility-content">
+                    <strong>Solo para mí</strong>
+                    <span>Esta respuesta solo estará disponible para ti</span>
+                  </div>
+                  <div class="visibility-check">
+                    <i class="ph-fill ph-check-circle"></i>
+                  </div>
+                </label>
+
+                <label class="visibility-card" [class.selected]="formData.clientGlobal">
+                  <input
+                    type="radio"
+                    name="visibility"
+                    [value]="true"
+                    [(ngModel)]="formData.clientGlobal"
+                  />
+                  <div class="visibility-icon global">
+                    <i class="ph-fill ph-globe"></i>
+                  </div>
+                  <div class="visibility-content">
+                    <strong>Disponible para todos</strong>
+                    <span>Todos los usuarios podrán usar esta respuesta</span>
+                  </div>
+                  <div class="visibility-check">
+                    <i class="ph-fill ph-check-circle"></i>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Preview Section -->
+            @if (formData.message.trim()) {
+              <div class="form-section">
+                <h3 class="section-title">
+                  <i class="ph ph-eye"></i>
+                  Vista previa
+                </h3>
+                <div class="preview-card">
+                  <div class="preview-bubble">
+                    <p>{{ formData.message }}</p>
+                    <span class="preview-time">Ahora</span>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+            }
 
-          <div class="form-actions">
-            <button
-              type="submit"
-              class="btn btn-primary"
-              [disabled]="isSaving() || !formData.message"
-            >
-              @if (isSaving()) {
-                <span class="spinner-border spinner-border-sm"></span>
-                Guardando...
-              } @else {
-                <i class="ph ph-floppy-disk"></i>
-                Guardar
-              }
-            </button>
-          </div>
-        </form>
+            <!-- Form Actions -->
+            <div class="form-actions">
+              <a routerLink="/app/canned_messages" class="btn-secondary">
+                <i class="ph ph-x"></i>
+                Cancelar
+              </a>
+              <button
+                type="submit"
+                class="btn-primary"
+                [disabled]="isSaving() || !formData.message.trim()"
+              >
+                @if (isSaving()) {
+                  <div class="spinner-sm"></div>
+                  Guardando...
+                } @else {
+                  <i class="ph-fill ph-floppy-disk"></i>
+                  {{ isEditMode() ? 'Guardar cambios' : 'Crear respuesta' }}
+                }
+              </button>
+            </div>
+          </form>
+        </div>
       }
     </div>
   `,
-  styles: [`
-    .canned-message-form-container {
-      padding: 24px;
-    }
-
-    .page-header {
-      margin-bottom: 24px;
-    }
-
-    .title-container {
-      margin-top: 16px;
-
-      h1 {
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 500;
-        color: var(--text-primary, #212529);
-      }
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      border: 1px solid transparent;
-      border-radius: 4px;
-      font-size: 14px;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.15s;
-
-      &:disabled {
-        opacity: 0.65;
-        cursor: not-allowed;
-      }
-    }
-
-    .btn-primary {
-      background-color: var(--primary-color, #0d6efd);
-      border-color: var(--primary-color, #0d6efd);
-      color: white;
-
-      &:hover:not(:disabled) {
-        background-color: var(--primary-dark, #0b5ed7);
-      }
-    }
-
-    .btn-secondary {
-      background-color: var(--secondary-color, #6c757d);
-      border-color: var(--secondary-color, #6c757d);
-      color: white;
-
-      &:hover {
-        background-color: #5c636a;
-      }
-    }
-
-    .spinner-border-sm {
-      width: 16px;
-      height: 16px;
-      border-width: 2px;
-    }
-
-    /* Error Panel - PARIDAD: Rails panel-danger */
-    .panel-danger {
-      background: #fee2e2;
-      border: 1px solid #fca5a5;
-      border-radius: 4px;
-      margin-bottom: 20px;
-    }
-
-    .panel-heading {
-      padding: 12px 16px;
-      border-bottom: 1px solid #fca5a5;
-
-      .panel-title {
-        margin: 0;
-        font-size: 14px;
-        font-weight: 600;
-        color: #991b1b;
-      }
-    }
-
-    .panel-body {
-      padding: 12px 16px;
-
-      ul {
-        margin: 0;
-        padding-left: 20px;
-        color: #991b1b;
-      }
-    }
-
-    /* Card - PARIDAD: Rails card */
-    .card {
-      background: white;
-      border: 1px solid var(--border-color, #dee2e6);
-      border-radius: 4px;
-      margin-bottom: 20px;
-    }
-
-    .card-body {
-      padding: 20px;
-    }
-
-    .card-title {
-      margin: 0 0 16px 0;
-      font-size: 1.1rem;
-      font-weight: 500;
-    }
-
-    /* Form */
-    .form-group {
-      margin-bottom: 16px;
-    }
-
-    .form-label {
-      display: block;
-      margin-bottom: 6px;
-      font-weight: 500;
-      font-size: 14px;
-
-      .required {
-        color: #dc3545;
-      }
-    }
-
-    .form-control {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1px solid var(--border-color, #ced4da);
-      border-radius: 4px;
-      font-size: 14px;
-
-      &:focus {
-        outline: none;
-        border-color: var(--primary-color, #86b7fe);
-        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
-      }
-    }
-
-    textarea.form-control {
-      resize: vertical;
-      min-height: 100px;
-    }
-
-    .form-check {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .form-check-input {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-    }
-
-    .form-check-label {
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    .form-text {
-      display: block;
-      margin-top: 6px;
-      font-size: 12px;
-    }
-
-    .text-muted {
-      color: var(--text-secondary, #6c757d);
-    }
-
-    .form-actions {
-      margin-top: 20px;
-    }
-
-    @media (max-width: 768px) {
-      .canned-message-form-container { padding: 16px; }
-    }
-  `]
+  styleUrls: ['./canned-message-form.component.scss']
 })
 export class CannedMessageFormComponent implements OnInit, OnDestroy {
   private cannedMessageService = inject(CannedMessageService);
@@ -352,7 +244,7 @@ export class CannedMessageFormComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         console.error('Error loading canned message:', err);
-        this.toast.error('Error al cargar mensaje');
+        this.toast.error('Error al cargar respuesta');
         this.isLoading.set(false);
         this.router.navigate(['/app/canned_messages']);
       }
@@ -365,6 +257,11 @@ export class CannedMessageFormComponent implements OnInit, OnDestroy {
     // Validate
     if (!this.formData.message.trim()) {
       this.errors.set(['El mensaje es requerido']);
+      return;
+    }
+
+    if (this.formData.message.length > 1000) {
+      this.errors.set(['El mensaje no puede exceder 1000 caracteres']);
       return;
     }
 
@@ -386,13 +283,13 @@ export class CannedMessageFormComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: () => {
         this.isSaving.set(false);
-        this.toast.success('Mensaje enlatado creado');
+        this.toast.success('Respuesta rápida creada');
         this.router.navigate(['/app/canned_messages']);
       },
       error: (err) => {
         console.error('Error creating canned message:', err);
         this.isSaving.set(false);
-        this.errors.set([err.error?.message || 'Error al crear mensaje']);
+        this.errors.set([err.error?.message || 'Error al crear respuesta']);
       }
     });
   }
@@ -408,13 +305,13 @@ export class CannedMessageFormComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: () => {
         this.isSaving.set(false);
-        this.toast.success('Mensaje enlatado actualizado');
+        this.toast.success('Respuesta rápida actualizada');
         this.router.navigate(['/app/canned_messages']);
       },
       error: (err) => {
         console.error('Error updating canned message:', err);
         this.isSaving.set(false);
-        this.errors.set([err.error?.message || 'Error al actualizar mensaje']);
+        this.errors.set([err.error?.message || 'Error al actualizar respuesta']);
       }
     });
   }

@@ -26,9 +26,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           case 401:
             errorMessage = 'Session expired. Please login again.';
             // Clear auth data and redirect to login
-            storageService.remove('auth_token');
-            storageService.remove('current_user');
-            router.navigate(['/login']);
+            storageService.clear(); // Clear all holape_ prefixed data
+            router.navigate(['/auth/login']);
             break;
           case 403:
             errorMessage = 'Access denied. You do not have permission to perform this action.';

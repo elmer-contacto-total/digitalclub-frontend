@@ -33,7 +33,7 @@ interface MessageGroup {
     <div class="message-list" #scrollContainer (scroll)="onScroll($event)">
       @if (messageGroups().length === 0) {
         <div class="empty-state">
-          <i class="bi bi-chat-square-text"></i>
+          <i class="ph ph-chat-text"></i>
           <p>No hay mensajes en esta conversación</p>
         </div>
       } @else {

@@ -44,12 +44,12 @@ export type WhatsAppMessageType = 'p2p' | 'centralized';
           </div>
           <div class="client-contact">
             <span class="phone">
-              <i class="bi bi-telephone"></i>
+              <i class="ph ph-phone"></i>
               {{ client().phone }}
             </span>
             @if (client().email) {
               <span class="email">
-                <i class="bi bi-envelope"></i>
+                <i class="ph ph-envelope"></i>
                 {{ client().email }}
               </span>
             }
@@ -60,19 +60,19 @@ export type WhatsAppMessageType = 'p2p' | 'centralized';
         <div class="status-indicators">
           @if (ticket() && isTicketOpen()) {
             <span class="badge ticket-badge">
-              <i class="bi bi-ticket-perforated"></i>
+              <i class="ph ph-ticket"></i>
               Ticket #{{ ticket()!.id }}
             </span>
           }
           @if (!canSendFreeform()) {
             <span class="badge warning-badge" title="Fuera de ventana de 24 horas">
-              <i class="bi bi-clock"></i>
+              <i class="ph ph-clock"></i>
               Solo plantillas
             </span>
           }
           @if (client().requireResponse) {
             <span class="badge alert-badge" title="Requiere respuesta">
-              <i class="bi bi-exclamation-triangle"></i>
+              <i class="ph-fill ph-warning"></i>
               Pendiente
             </span>
           }
@@ -102,10 +102,10 @@ export type WhatsAppMessageType = 'p2p' | 'centralized';
             title="Ver información"
             (click)="toggleDetails()"
           >
-            <i class="bi" [class.bi-chevron-down]="!showDetails()" [class.bi-chevron-up]="showDetails()"></i>
+            <i class="ph" [class.ph-caret-down]="!showDetails()" [class.ph-caret-up]="showDetails()"></i>
           </button>
           <button class="action-btn" title="Más opciones">
-            <i class="bi bi-three-dots-vertical"></i>
+            <i class="ph ph-dots-three-vertical"></i>
           </button>
         </div>
       </div>
@@ -121,7 +121,7 @@ export type WhatsAppMessageType = 'p2p' | 'centralized';
                 (click)="onCloseTicketWithType(closeType.kpiName)"
                 [disabled]="isClosing()"
               >
-                <i class="bi bi-check-circle"></i>
+                <i class="ph-fill ph-check-circle"></i>
                 Finalizar {{ closeType.name }}
               </button>
             }
@@ -131,7 +131,7 @@ export type WhatsAppMessageType = 'p2p' | 'centralized';
               (click)="onCloseTicket()"
               [disabled]="isClosing()"
             >
-              <i class="bi bi-check-circle"></i>
+              <i class="ph-fill ph-check-circle"></i>
               Finalizar
             </button>
           }
@@ -194,7 +194,7 @@ export type WhatsAppMessageType = 'p2p' | 'centralized';
             <div class="detail-section">
               <h4>Agente asignado</h4>
               <div class="agent-info">
-                <i class="bi bi-person"></i>
+                <i class="ph-fill ph-user"></i>
                 {{ agent()!.firstName }} {{ agent()!.lastName }}
               </div>
             </div>

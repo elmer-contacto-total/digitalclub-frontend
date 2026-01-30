@@ -24,13 +24,13 @@ import {
         <div class="modal-header">
           <h3>Seleccionar Plantilla</h3>
           <button class="close-btn" (click)="close.emit()">
-            <i class="bi bi-x-lg"></i>
+            <i class="ph ph-x"></i>
           </button>
         </div>
 
         <!-- Search -->
         <div class="modal-search">
-          <i class="bi bi-search"></i>
+          <i class="ph ph-magnifying-glass"></i>
           <input
             type="text"
             placeholder="Buscar plantilla..."
@@ -51,7 +51,7 @@ import {
                 </div>
               } @else if (filteredTemplates().length === 0) {
                 <div class="empty-state">
-                  <i class="bi bi-file-text"></i>
+                  <i class="ph ph-file-text"></i>
                   <p>No hay plantillas disponibles</p>
                 </div>
               } @else {
@@ -64,7 +64,7 @@ import {
                     <div class="template-preview">{{ getPreview(template.bodyContent) }}</div>
                     @if (template.paramsRequired > 0) {
                       <div class="template-params">
-                        <i class="bi bi-input-cursor-text"></i>
+                        <i class="ph ph-cursor-text"></i>
                         {{ template.paramsRequired }} parámetro{{ template.paramsRequired > 1 ? 's' : '' }}
                       </div>
                     }
@@ -76,7 +76,7 @@ import {
             <!-- Template Preview with Params -->
             <div class="template-preview-panel">
               <button class="back-btn" (click)="selectedTemplate.set(null)">
-                <i class="bi bi-arrow-left"></i>
+                <i class="ph ph-arrow-left"></i>
                 Volver
               </button>
 
@@ -138,7 +138,7 @@ import {
               [disabled]="!canSend()"
               (click)="sendTemplate()"
             >
-              <i class="bi bi-send"></i>
+              <i class="ph-fill ph-paper-plane-tilt"></i>
               Enviar Plantilla
             </button>
           }

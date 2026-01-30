@@ -65,7 +65,7 @@ import { MessageInputComponent } from '../message-input/message-input.component'
         />
       } @else {
         <div class="error-state">
-          <i class="bi bi-exclamation-circle"></i>
+          <i class="ph-fill ph-warning-circle"></i>
           <p>No se pudo cargar la conversación</p>
         </div>
       }
