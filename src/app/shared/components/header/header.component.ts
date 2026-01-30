@@ -1,4 +1,4 @@
-import { Component, inject, signal, output, computed } from '@angular/core';
+import { Component, inject, signal, output, computed, HostListener, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -17,6 +17,16 @@ export class HeaderComponent {
   private authService = inject(AuthService);
   private themeService = inject(ThemeService);
   private electronService = inject(ElectronService);
+  private elementRef = inject(ElementRef);
+
+  // Close dropdowns when clicking outside
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (!this.elementRef.nativeElement.contains(target)) {
+      this.closeAllMenus();
+    }
+  }
 
   // Outputs
   toggleSidebar = output<void>();
