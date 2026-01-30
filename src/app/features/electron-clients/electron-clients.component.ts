@@ -87,18 +87,23 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           return of(null);
         }
 
-        // Si no hay teléfono pero hay nombre, mostrar estado vacío con el nombre
+        this.viewState.set('loading');
+        this.currentName.set(event.name);
+
+        // Si no hay teléfono pero hay nombre, buscar por nombre en el backend
         if (!event.phone) {
-          console.log('[ElectronClients] No phone in event, only name:', event.name);
-          this.currentName.set(event.name);
+          console.log('[ElectronClients] No phone in event, searching by name:', event.name);
           this.currentPhone.set(null);
+
+          if (event.name && event.name.trim().length >= 2) {
+            return this.contactsService.searchByName(event.name);
+          }
+
           this.viewState.set('empty');
           return of(null);
         }
 
-        this.viewState.set('loading');
         this.currentPhone.set(event.phone);
-        this.currentName.set(event.name);
 
         console.log('[ElectronClients] Searching for phone:', event.phone);
         return this.contactsService.searchByPhone(event.phone);
@@ -108,6 +113,11 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       if (result) {
         this.contact.set(result);
         this.viewState.set('contact');
+
+        // Update currentPhone if we found contact by name and it has a phone
+        if (!this.currentPhone() && result.phone) {
+          this.currentPhone.set(result.phone);
+        }
 
         // Initialize form fields
         if (result.type === 'local' && result.local) {
@@ -123,6 +133,9 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         this.viewState.set('contact');
         this.selectedLabel.set(undefined);
         this.notesField.set('');
+      } else {
+        // No contact found and no phone - show empty state
+        this.viewState.set('empty');
       }
     });
   }

@@ -128,11 +128,58 @@ export class ElectronContactsService {
   }
 
   /**
-   * Search for registered contact in backend
+   * Search for registered contact in backend by phone
    */
   private searchRegisteredContact(phone: string): Observable<ContactSearchResponse> {
     const params = new HttpParams().set('phone', phone);
     return this.http.get<ContactSearchResponse>(`${this.baseUrl}/search_by_phone`, { params });
+  }
+
+  /**
+   * Search for registered contact in backend by name
+   */
+  searchByName(name: string): Observable<CrmContact | null> {
+    if (!name || name.trim().length < 2) {
+      return of(null);
+    }
+
+    const params = new HttpParams().set('name', name.trim());
+    console.log('[ElectronContactsService] Searching by name:', name);
+
+    return this.http.get<ContactSearchResponse>(`${this.baseUrl}/search_by_name`, { params }).pipe(
+      map(response => {
+        console.log('[ElectronContactsService] Name search response:', response);
+        if (response.found && response.contact) {
+          const registered: RegisteredContact = {
+            id: response.contact.id,
+            phone: response.contact.phone,
+            firstName: response.contact.firstName,
+            lastName: response.contact.lastName,
+            fullName: response.contact.fullName,
+            email: response.contact.email,
+            codigo: response.contact.codigo,
+            avatarUrl: response.contact.avatarUrl,
+            managerId: response.contact.managerId,
+            managerName: response.contact.managerName,
+            issueNotes: response.contact.issueNotes,
+            hasOpenTicket: response.contact.hasOpenTicket,
+            createdAt: response.contact.createdAt || ''
+          };
+
+          return {
+            type: 'registered' as const,
+            phone: registered.phone,
+            name: registered.fullName,
+            registered
+          };
+        }
+        return null;
+      }),
+      catchError(error => {
+        console.error('[ElectronContactsService] Error searching by name:', error);
+        return of(null);
+      })
+    );
   }
 
   /**
