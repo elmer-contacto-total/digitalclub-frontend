@@ -33,7 +33,7 @@ const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 56;
 
 // URL del backend para medios y auditoría
-const MEDIA_API_URL = process.env.MEDIA_API_URL || 'http://localhost:8080/api/media';
+const MEDIA_API_URL = process.env.MEDIA_API_URL || 'http://digitalclub.contactototal.com.pe/api/v1/media';
 
 // Estado dinámico del layout
 let sidebarCollapsed = false;
@@ -156,7 +156,7 @@ function createWindow(): void {
   });
 
   // Cargar la UI de Angular desde URL (producción por defecto)
-  const ANGULAR_URL = process.env.ANGULAR_URL || 'https://digitalclub.contactototal.com.pe:9080/';
+  const ANGULAR_URL = process.env.ANGULAR_URL || 'http://digitalclub.contactototal.com.pe/';
 
   // Manejar errores de carga
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
@@ -1092,7 +1092,7 @@ app.on('will-quit', () => {
 // Seguridad: Prevenir navegación a URLs externas en la ventana principal
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
-    const ANGULAR_URL = process.env.ANGULAR_URL || 'https://digitalclub.contactototal.com.pe:9080/';
+    const ANGULAR_URL = process.env.ANGULAR_URL || 'http://digitalclub.contactototal.com.pe/';
     // Permitir WhatsApp Web, Angular URL y file://
     const isAllowed = url.includes('web.whatsapp.com') ||
                       url.startsWith(ANGULAR_URL) ||
