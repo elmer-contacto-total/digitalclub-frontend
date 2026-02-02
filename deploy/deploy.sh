@@ -76,7 +76,14 @@ sudo cp "$ANGULAR_PROJECT/deploy/nginx.conf" /etc/nginx/sites-available/digitalc
 sudo ln -sf /etc/nginx/sites-available/digitalclub /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
-sudo systemctl reload nginx
+
+# Iniciar o recargar nginx según su estado
+if systemctl is-active --quiet nginx; then
+    sudo systemctl reload nginx
+else
+    sudo systemctl start nginx
+fi
+sudo systemctl enable nginx
 
 # ============================================
 # BACKEND
