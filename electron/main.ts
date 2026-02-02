@@ -208,22 +208,154 @@ function createWindow(): void {
 
   mainWindow.loadURL(ANGULAR_URL);
 
-  // Abrir DevTools para depuración (remover en producción)
-  mainWindow.webContents.openDevTools();
+  // DevTools solo en desarrollo (ANGULAR_URL apunta a localhost)
+  if (ANGULAR_URL.includes('localhost')) {
+    mainWindow.webContents.openDevTools();
+  }
 
-  // Log cuando termine de cargar
+  // Log cuando termine de cargar y verificar si la página está en blanco
   mainWindow.webContents.on('did-finish-load', () => {
     const loadedURL = mainWindow?.webContents.getURL();
     console.log('[HolaPe] Página cargada:', loadedURL);
     console.log('[HolaPe] URL esperada:', ANGULAR_URL);
 
-    // Verificar el contenido del body
-    mainWindow?.webContents.executeJavaScript(`
-      console.log('[HolaPe Debug] document.body.innerHTML length:', document.body.innerHTML.length);
-      console.log('[HolaPe Debug] document.head.innerHTML length:', document.head.innerHTML.length);
-      console.log('[HolaPe Debug] Scripts count:', document.scripts.length);
-    `);
+    // Verificar el contenido después de un delay para dar tiempo a Angular
+    setTimeout(async () => {
+      if (!mainWindow) return;
+
+      try {
+        const pageInfo = await mainWindow.webContents.executeJavaScript(`
+          (function() {
+            const bodyLen = document.body.innerHTML.length;
+            const hasAppRoot = !!document.querySelector('app-root');
+            const hasContent = bodyLen > 500; // Angular genera más de 500 caracteres
+            return { bodyLen, hasAppRoot, hasContent };
+          })()
+        `);
+
+        console.log('[HolaPe Debug] Page info:', pageInfo);
+
+        // Si la página está vacía o no tiene contenido, mostrar overlay de recuperación
+        if (!pageInfo.hasContent && !pageInfo.hasAppRoot) {
+          console.log('[HolaPe] Página vacía detectada, mostrando overlay de recuperación');
+          showRecoveryOverlay();
+        }
+      } catch (err) {
+        console.error('[HolaPe] Error verificando página:', err);
+      }
+    }, 3000); // Esperar 3 segundos para que Angular cargue
   });
+
+  /**
+   * Muestra un overlay de recuperación cuando la página está en blanco
+   */
+  function showRecoveryOverlay(): void {
+    if (!mainWindow) return;
+
+    const recoveryHTML = `
+      (function() {
+        // Evitar duplicados
+        if (document.getElementById('holape-recovery-overlay')) return;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'holape-recovery-overlay';
+        overlay.innerHTML = \`
+          <style>
+            #holape-recovery-overlay {
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              background: #09090b;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              z-index: 999999;
+              font-family: system-ui, -apple-system, sans-serif;
+            }
+            #holape-recovery-overlay .logo {
+              font-size: 48px;
+              margin-bottom: 24px;
+            }
+            #holape-recovery-overlay h1 {
+              color: #fafafa;
+              font-size: 24px;
+              margin-bottom: 8px;
+            }
+            #holape-recovery-overlay p {
+              color: #a1a1aa;
+              margin-bottom: 32px;
+              text-align: center;
+            }
+            #holape-recovery-overlay .buttons {
+              display: flex;
+              gap: 16px;
+            }
+            #holape-recovery-overlay button {
+              padding: 14px 28px;
+              border-radius: 8px;
+              font-size: 16px;
+              font-weight: 500;
+              cursor: pointer;
+              border: none;
+              transition: all 0.2s;
+            }
+            #holape-recovery-overlay .btn-primary {
+              background: #22c55e;
+              color: white;
+            }
+            #holape-recovery-overlay .btn-primary:hover {
+              background: #16a34a;
+            }
+            #holape-recovery-overlay .btn-secondary {
+              background: #27272a;
+              color: #fafafa;
+              border: 1px solid #3f3f46;
+            }
+            #holape-recovery-overlay .btn-secondary:hover {
+              background: #3f3f46;
+            }
+            #holape-recovery-overlay .hint {
+              margin-top: 24px;
+              font-size: 12px;
+              color: #71717a;
+            }
+          </style>
+          <div class="logo">🔄</div>
+          <h1>La aplicación no cargó correctamente</h1>
+          <p>Esto puede ocurrir por problemas de conexión o sesión expirada</p>
+          <div class="buttons">
+            <button class="btn-primary" onclick="window.holapeRecoveryReload()">
+              Recargar
+            </button>
+            <button class="btn-secondary" onclick="window.holapeRecoveryClearAndReload()">
+              Limpiar sesión y recargar
+            </button>
+          </div>
+          <p class="hint">Si el problema persiste, intenta "Limpiar sesión y recargar"</p>
+        \`;
+        document.body.appendChild(overlay);
+
+        // Funciones globales para los botones
+        window.holapeRecoveryReload = function() {
+          location.reload();
+        };
+
+        window.holapeRecoveryClearAndReload = function() {
+          // Limpiar todo localStorage
+          localStorage.clear();
+          // Limpiar sessionStorage
+          sessionStorage.clear();
+          // Recargar
+          location.reload();
+        };
+      })()
+    `;
+
+    mainWindow.webContents.executeJavaScript(recoveryHTML);
+  }
 
   // Log de errores de consola
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
@@ -914,6 +1046,25 @@ function registerShortcuts(): void {
   globalShortcut.register('CommandOrControl+Shift+T', () => {
     if (mainWindow) {
       mainWindow.webContents.send('toggle-crm-panel');
+    }
+  });
+
+  // Ctrl+Shift+R - Forzar recarga limpiando sesión
+  globalShortcut.register('CommandOrControl+Shift+R', () => {
+    if (mainWindow) {
+      console.log('[HolaPe] Forzando recarga con limpieza de sesión');
+      mainWindow.webContents.executeJavaScript(`
+        localStorage.clear();
+        sessionStorage.clear();
+        location.reload();
+      `);
+    }
+  });
+
+  // F5 - Recargar página
+  globalShortcut.register('F5', () => {
+    if (mainWindow) {
+      mainWindow.webContents.reload();
     }
   });
 }
