@@ -18,7 +18,7 @@ sudo apt install maven nginx git certbot -y
 
 | Servicio | Puerto |
 |----------|--------|
-| Frontend (Nginx + SSL) | 9080 |
+| Frontend (Nginx) | 80 |
 | Backend (Spring Boot) | 8443 |
 
 ## Estructura en VM
@@ -88,9 +88,9 @@ nohup java -jar target/holape-1.0.0.jar --spring.profiles.active=prod > logs/app
 
 ## URLs
 
-- **App**: https://digitalclub.contactototal.com.pe:9080
-- **API**: https://digitalclub.contactototal.com.pe:9080/api/
-- **WebSocket**: wss://digitalclub.contactototal.com.pe:9080/ws/
+- **App**: http://digitalclub.contactototal.com.pe
+- **API**: http://digitalclub.contactototal.com.pe/api/
+- **WebSocket**: ws://digitalclub.contactototal.com.pe/ws/
 
 ## Comandos Útiles
 
@@ -123,6 +123,6 @@ node -v            # Debe ser 20.x
 nginx -v
 
 # Verificar servicios
-curl -k https://localhost:9080/          # Frontend
-curl -k https://localhost:9080/api/health  # Backend API
+curl http://localhost/          # Frontend
+curl http://localhost/api/health  # Backend API
 ```

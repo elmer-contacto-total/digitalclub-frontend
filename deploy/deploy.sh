@@ -19,35 +19,9 @@ echo "Angular: $ANGULAR_PROJECT"
 echo "Backend: $BACKEND_PROJECT"
 
 # ============================================
-# SSL CERTIFICATE
+# NOTA: SSL deshabilitado - usando puerto 80 (HTTP)
+# Para habilitar HTTPS, configurar certificado SSL manualmente
 # ============================================
-echo ""
-echo "=== [SSL] Verificando certificado ==="
-if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
-    echo "Certificado SSL no encontrado. Generando con certbot..."
-
-    # Usar webroot con Apache (no requiere detener el servidor)
-    # Crear directorio para challenge si no existe
-    sudo mkdir -p /var/www/html/.well-known/acme-challenge
-    sudo chown -R www-data:www-data /var/www/html/.well-known
-
-    # Generar certificado usando webroot
-    sudo certbot certonly --webroot -w /var/www/html -d $DOMAIN --non-interactive --agree-tos -m admin@$DOMAIN || {
-        echo "ERROR: No se pudo generar el certificado SSL con webroot"
-        echo "Intentando con plugin de Apache..."
-
-        sudo certbot certonly --apache -d $DOMAIN --non-interactive --agree-tos -m admin@$DOMAIN || {
-            echo "ERROR: No se pudo generar el certificado SSL"
-            echo "Genera el certificado manualmente:"
-            echo "  sudo certbot certonly --apache -d $DOMAIN"
-            exit 1
-        }
-    }
-
-    echo "Certificado SSL generado correctamente"
-else
-    echo "Certificado SSL ya existe"
-fi
 
 # ============================================
 # FRONTEND
@@ -129,8 +103,8 @@ echo "=========================================="
 echo "       DESPLIEGUE COMPLETADO"
 echo "=========================================="
 echo ""
-echo "Frontend: https://$DOMAIN:9080"
-echo "API:      https://$DOMAIN:9080/api/"
+echo "Frontend: http://$DOMAIN"
+echo "API:      http://$DOMAIN/api/"
 echo ""
 echo "Logs backend: tail -f $BACKEND_PROJECT/logs/app.log"
 echo "=========================================="
