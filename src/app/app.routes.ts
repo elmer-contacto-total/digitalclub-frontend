@@ -182,7 +182,7 @@ export const routes: Routes = [
       },
       {
         path: 'login_as',
-        loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
+        loadChildren: () => import('./features/login-as/login-as.routes').then(m => m.LOGIN_AS_ROUTES),
         title: 'Iniciar Sesión Como - MWS'
       },
       {
