@@ -1,7 +1,36 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { ipcRenderer } from 'electron';
 
-// Exponer API segura al renderer
-contextBridge.exposeInMainWorld('electronAPI', {
+// Interfaz para mensajes escaneados
+interface ScannedMessage {
+  whatsappId: string;
+  content: string;
+  type: string;
+  direction: string;
+  timestamp: string;
+  senderName?: string;
+  hasMedia: boolean;
+  mediaType?: string;
+}
+
+// Interfaces para eventos de seguridad de medios
+interface DownloadBlockedEvent {
+  filename: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  timestamp: string;
+}
+
+interface MediaCapturedEvent {
+  mediaType: 'IMAGE' | 'AUDIO';
+  mimeType: string;
+  size: number;
+  chatPhone: string;
+  timestamp: string;
+}
+
+// API expuesta al renderer (sin contextBridge para contextIsolation: false)
+const electronAPI = {
   // === Controles de ventana ===
   windowMinimize: () => ipcRenderer.send('window-minimize'),
   windowMaximize: () => ipcRenderer.send('window-maximize'),
@@ -115,36 +144,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel);
   }
-});
+};
 
-// Interfaz para mensajes escaneados
-interface ScannedMessage {
-  whatsappId: string;
-  content: string;
-  type: string;
-  direction: string;
-  timestamp: string;
-  senderName?: string;
-  hasMedia: boolean;
-  mediaType?: string;
-}
-
-// Interfaces para eventos de seguridad de medios
-interface DownloadBlockedEvent {
-  filename: string;
-  mimeType: string;
-  size: number;
-  url: string;
-  timestamp: string;
-}
-
-interface MediaCapturedEvent {
-  mediaType: 'IMAGE' | 'AUDIO';
-  mimeType: string;
-  size: number;
-  chatPhone: string;
-  timestamp: string;
-}
+// Exponer directamente en window (sin contextBridge porque contextIsolation está deshabilitado)
+(window as any).electronAPI = electronAPI;
 
 // Tipos para TypeScript
 declare global {

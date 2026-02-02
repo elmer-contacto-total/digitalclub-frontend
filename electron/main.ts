@@ -147,14 +147,16 @@ function createWindow(): void {
     trafficLightPosition: { x: 15, y: 15 },
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true,
+      contextIsolation: false,  // Deshabilitado para permitir módulos ES6 de Angular
+      webSecurity: true,
+      allowRunningInsecureContent: false,
       preload: path.join(__dirname, 'preload.js')
     },
     backgroundColor: '#09090b'
   });
 
-  // Cargar la UI de Angular desde URL (localhost en dev, deploy en prod)
-  const ANGULAR_URL = process.env.ANGULAR_URL || 'http://localhost:4200';
+  // Cargar la UI de Angular desde URL (producción por defecto)
+  const ANGULAR_URL = process.env.ANGULAR_URL || 'https://digitalclub.contactototal.com.pe:9080/';
 
   // Manejar errores de carga
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
@@ -205,6 +207,28 @@ function createWindow(): void {
   });
 
   mainWindow.loadURL(ANGULAR_URL);
+
+  // Abrir DevTools para depuración (remover en producción)
+  mainWindow.webContents.openDevTools();
+
+  // Log cuando termine de cargar
+  mainWindow.webContents.on('did-finish-load', () => {
+    const loadedURL = mainWindow?.webContents.getURL();
+    console.log('[HolaPe] Página cargada:', loadedURL);
+    console.log('[HolaPe] URL esperada:', ANGULAR_URL);
+
+    // Verificar el contenido del body
+    mainWindow?.webContents.executeJavaScript(`
+      console.log('[HolaPe Debug] document.body.innerHTML length:', document.body.innerHTML.length);
+      console.log('[HolaPe Debug] document.head.innerHTML length:', document.head.innerHTML.length);
+      console.log('[HolaPe Debug] Scripts count:', document.scripts.length);
+    `);
+  });
+
+  // Log de errores de consola
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[HolaPe Console] ${message}`);
+  });
 
   // NO crear WhatsApp view automáticamente - se crea bajo demanda
   // createWhatsAppView();
@@ -1017,41 +1041,30 @@ app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-gpu-compositing');
 app.commandLine.appendSwitch('disable-software-rasterizer');
 
+// Ignorar errores de certificado SSL
+app.commandLine.appendSwitch('ignore-certificate-errors');
+app.commandLine.appendSwitch('allow-insecure-localhost');
+
 // Configurar path de datos persistente
 app.setPath('userData', path.join(app.getPath('appData'), 'HablaPe'));
+
+// Ignorar errores de certificado SSL (para servidores con certificados auto-firmados)
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  // Permitir conexiones a nuestro servidor de producción
+  if (url.includes('digitalclub.contactototal.com.pe')) {
+    event.preventDefault();
+    callback(true);
+  } else {
+    callback(false);
+  }
+});
 
 // App lifecycle
 app.whenReady().then(async () => {
   // Generar o cargar fingerprint único para esta instalación
   userFingerprint = getOrCreateFingerprint();
 
-  // Limpiar caché de sesión al iniciar (evita problemas de sesiones corruptas)
-  console.log('[HablaPe] Limpiando caché de sesión...');
-  try {
-    await session.defaultSession.clearCache();
-    await session.defaultSession.clearStorageData({
-      storages: ['serviceworkers', 'cachestorage']
-    });
-    console.log('[HablaPe] Caché limpiado correctamente');
-  } catch (err) {
-    console.error('[HablaPe] Error limpiando caché:', err);
-  }
-
-  // Permitir CORS para requests a localhost (desarrollo)
-  session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-    callback({ requestHeaders: { ...details.requestHeaders, Origin: 'http://localhost:3000' } });
-  });
-
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Access-Control-Allow-Origin': ['*'],
-        'Access-Control-Allow-Methods': ['GET, POST, PUT, DELETE, PATCH, OPTIONS'],
-        'Access-Control-Allow-Headers': ['*']
-      }
-    });
-  });
+  // NO limpiar caché - puede causar problemas con la carga inicial
 
   createWindow();
   registerShortcuts();
@@ -1079,7 +1092,7 @@ app.on('will-quit', () => {
 // Seguridad: Prevenir navegación a URLs externas en la ventana principal
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
-    const ANGULAR_URL = process.env.ANGULAR_URL || 'http://localhost:4200';
+    const ANGULAR_URL = process.env.ANGULAR_URL || 'https://digitalclub.contactototal.com.pe:9080/';
     // Permitir WhatsApp Web, Angular URL y file://
     const isAllowed = url.includes('web.whatsapp.com') ||
                       url.startsWith(ANGULAR_URL) ||
