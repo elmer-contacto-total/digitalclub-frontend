@@ -1,6 +1,6 @@
 #!/bin/bash
 # Deploy script for Holape - digitalclub.contactototal.com.pe
-# Frontend: Puerto 3001 (Nginx + Angular)
+# Frontend: Puerto 9080 (Nginx + Angular)
 # Backend: Puerto 8443 (Spring Boot)
 #
 # Ejecutar: cd ~/digitalclub/digitalclub-frontend/deploy && chmod +x deploy.sh && ./deploy.sh
@@ -129,8 +129,8 @@ echo "=========================================="
 echo "       DESPLIEGUE COMPLETADO"
 echo "=========================================="
 echo ""
-echo "Frontend: https://$DOMAIN:3001"
-echo "API:      https://$DOMAIN:3001/api/"
+echo "Frontend: https://$DOMAIN:9080"
+echo "API:      https://$DOMAIN:9080/api/"
 echo ""
 echo "Logs backend: tail -f $BACKEND_PROJECT/logs/app.log"
 echo "=========================================="

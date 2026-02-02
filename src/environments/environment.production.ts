@@ -1,7 +1,7 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://digitalclub.contactototal.com.pe:3001/api',
-  wsUrl: 'wss://digitalclub.contactototal.com.pe:3001/ws',
+  apiUrl: 'https://digitalclub.contactototal.com.pe:9080/api',
+  wsUrl: 'wss://digitalclub.contactototal.com.pe:9080/ws',
   appName: 'Holape',
   version: '1.0.0'
 };
