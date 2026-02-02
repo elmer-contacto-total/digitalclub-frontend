@@ -1,7 +1,7 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://digitalclub.contactototal.com.pe:9080',
-  wsUrl: 'wss://digitalclub.contactototal.com.pe:9080/ws',
+  apiUrl: '',  // Usar rutas relativas - nginx hace proxy de /api/ al backend
+  wsUrl: 'ws://digitalclub.contactototal.com.pe/ws',
   appName: 'Holape',
   version: '1.0.0'
 };
