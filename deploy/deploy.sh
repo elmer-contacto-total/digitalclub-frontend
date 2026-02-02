@@ -19,6 +19,31 @@ echo "Angular: $ANGULAR_PROJECT"
 echo "Backend: $BACKEND_PROJECT"
 
 # ============================================
+# SSL CERTIFICATE
+# ============================================
+echo ""
+echo "=== [SSL] Verificando certificado ==="
+if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    echo "Certificado SSL no encontrado. Generando con certbot..."
+
+    # Detener nginx si está corriendo (para liberar puerto 80)
+    sudo systemctl stop nginx 2>/dev/null || true
+
+    # Generar certificado
+    sudo certbot certonly --standalone -d $DOMAIN --non-interactive --agree-tos -m admin@$DOMAIN || {
+        echo "ERROR: No se pudo generar el certificado SSL"
+        echo "Asegúrate de que:"
+        echo "  1. El dominio $DOMAIN apunta a esta IP"
+        echo "  2. El puerto 80 está abierto en el firewall"
+        exit 1
+    }
+
+    echo "Certificado SSL generado correctamente"
+else
+    echo "Certificado SSL ya existe"
+fi
+
+# ============================================
 # FRONTEND
 # ============================================
 echo ""
