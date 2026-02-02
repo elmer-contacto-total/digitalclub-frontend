@@ -26,16 +26,22 @@ echo "=== [SSL] Verificando certificado ==="
 if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
     echo "Certificado SSL no encontrado. Generando con certbot..."
 
-    # Detener nginx si está corriendo (para liberar puerto 80)
-    sudo systemctl stop nginx 2>/dev/null || true
+    # Usar webroot con Apache (no requiere detener el servidor)
+    # Crear directorio para challenge si no existe
+    sudo mkdir -p /var/www/html/.well-known/acme-challenge
+    sudo chown -R www-data:www-data /var/www/html/.well-known
 
-    # Generar certificado
-    sudo certbot certonly --standalone -d $DOMAIN --non-interactive --agree-tos -m admin@$DOMAIN || {
-        echo "ERROR: No se pudo generar el certificado SSL"
-        echo "Asegúrate de que:"
-        echo "  1. El dominio $DOMAIN apunta a esta IP"
-        echo "  2. El puerto 80 está abierto en el firewall"
-        exit 1
+    # Generar certificado usando webroot
+    sudo certbot certonly --webroot -w /var/www/html -d $DOMAIN --non-interactive --agree-tos -m admin@$DOMAIN || {
+        echo "ERROR: No se pudo generar el certificado SSL con webroot"
+        echo "Intentando con plugin de Apache..."
+
+        sudo certbot certonly --apache -d $DOMAIN --non-interactive --agree-tos -m admin@$DOMAIN || {
+            echo "ERROR: No se pudo generar el certificado SSL"
+            echo "Genera el certificado manualmente:"
+            echo "  sudo certbot certonly --apache -d $DOMAIN"
+            exit 1
+        }
     }
 
     echo "Certificado SSL generado correctamente"
