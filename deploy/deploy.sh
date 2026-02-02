@@ -73,6 +73,25 @@ echo "=== [BACKEND] Compilando Spring Boot ==="
 mvn clean package -DskipTests
 
 echo ""
+echo "=== [BACKEND] Cargando variables de entorno ==="
+ENV_FILE="$BACKEND_PROJECT/.env"
+if [ -f "$ENV_FILE" ]; then
+    echo "Cargando variables desde $ENV_FILE"
+    set -a
+    source "$ENV_FILE"
+    set +a
+else
+    echo "ERROR: Archivo .env no encontrado en $BACKEND_PROJECT"
+    echo "Crea el archivo con las siguientes variables:"
+    echo "  DB_HOST=tu-host-rds.amazonaws.com"
+    echo "  DB_PORT=5432"
+    echo "  DB_NAME=nombre_base_datos"
+    echo "  DB_USERNAME=postgres"
+    echo "  DB_PASSWORD=tu_password"
+    exit 1
+fi
+
+echo ""
 echo "=== [BACKEND] Deteniendo proceso anterior ==="
 JAVA_PID=$(pgrep -f "holape-1.0.0.jar" || true)
 if [ -n "$JAVA_PID" ]; then
