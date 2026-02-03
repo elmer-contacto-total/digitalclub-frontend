@@ -133,7 +133,9 @@ export class LoginAsService {
    */
   canUseLoginAs(user: { role: UserRole } | null): boolean {
     if (!user) return false;
-    return user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMIN;
+    // Convert role to number for reliable comparison (API may return string)
+    const roleNum = Number(user.role);
+    return roleNum === UserRole.SUPER_ADMIN || roleNum === UserRole.ADMIN;
   }
 
   /**

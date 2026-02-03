@@ -731,6 +731,9 @@ export class LoginAsComponent implements OnInit, OnDestroy {
   loadUsers(): void {
     this.isLoading.set(true);
     const currentUser = this.authService.currentUser();
+    const currentUserRole = Number(currentUser?.role);
+
+    console.log('[LoginAs] Loading users, current user:', currentUser?.id, 'role:', currentUserRole);
 
     // Get all users with larger page size
     this.userService.getUsers({ pageSize: 500 })
@@ -738,20 +741,28 @@ export class LoginAsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (response) => {
           const users = (response.data || []) as any[];
+          console.log('[LoginAs] Received users:', users.length);
 
           // Filter users based on current user role
-          // PARIDAD: Rails filtering logic
+          // PARIDAD: Rails get_login_as filtering logic
           const filtered = users
             .filter(u => {
+              const userRole = Number(u.role);
+
               // Exclude current user
               if (u.id === currentUser?.id) return false;
 
-              // Exclude standard and whatsapp_business users
-              if (u.role === UserRole.STANDARD || u.role === UserRole.WHATSAPP_BUSINESS) return false;
+              // Always exclude standard and whatsapp_business users
+              if (userRole === UserRole.STANDARD || userRole === UserRole.WHATSAPP_BUSINESS) return false;
 
-              // If admin (not super_admin), exclude super_admin and other admins
-              if (currentUser?.role === UserRole.ADMIN) {
-                if (u.role === UserRole.SUPER_ADMIN || u.role === UserRole.ADMIN) return false;
+              // PARIDAD RAILS: super_admin excludes super_admin, standard, whatsapp_business
+              if (currentUserRole === UserRole.SUPER_ADMIN) {
+                if (userRole === UserRole.SUPER_ADMIN) return false;
+              }
+
+              // PARIDAD RAILS: admin excludes super_admin, admin, standard, whatsapp_business
+              if (currentUserRole === UserRole.ADMIN) {
+                if (userRole === UserRole.SUPER_ADMIN || userRole === UserRole.ADMIN) return false;
               }
 
               return true;
@@ -760,10 +771,11 @@ export class LoginAsComponent implements OnInit, OnDestroy {
               id: u.id,
               displayName: this.buildDisplayName(u),
               role: String(u.role),
-              roleName: u.friendlyRole || RoleUtils.getDisplayName(u.role)
+              roleName: u.friendlyRole || RoleUtils.getDisplayName(Number(u.role))
             }))
             .sort((a, b) => this.getRolePriority(a.role) - this.getRolePriority(b.role));
 
+          console.log('[LoginAs] Filtered users:', filtered.length);
           this.allUsers.set(filtered);
           this.filteredUsers.set(filtered);
           this.isLoading.set(false);
