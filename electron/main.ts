@@ -741,7 +741,8 @@ function animateWhatsAppViewBounds(): void {
 }
 
 // Sistema de escaneo de chat activo (lee el header del chat sin inyectar)
-let lastDetectedChat = '';
+let lastDetectedPhone = '';
+let lastDetectedName = '';
 let chatScannerInterval: NodeJS.Timeout | null = null;
 let chatScannerRunning = false;
 let lastDetailsPanelAttempt = ''; // Rastrear para qué chat ya intentamos abrir detalles
@@ -1075,14 +1076,26 @@ async function scanChat(): Promise<void> {
         })()
       `, true);
 
+      // Detectar si el nombre del chat cambió (indica nuevo chat seleccionado)
+      const currentName = result.chatName || result.name || '';
+      const nameChanged = currentName && currentName !== lastDetectedName;
+
+      // Si el nombre cambió, resetear el estado para permitir nueva detección
+      if (nameChanged) {
+        console.log('[HolaPe] Chat cambió de', lastDetectedName, 'a', currentName);
+        lastDetectedName = currentName;
+        lastDetailsPanelAttempt = ''; // Permitir nuevo intento de panel de detalles
+      }
+
       // Si encontramos teléfono, enviarlo
       if (!result.debug && result.phone) {
-        const identifier = result.phone;
+        const phoneChanged = result.phone !== lastDetectedPhone;
 
-        if (identifier !== lastDetectedChat) {
-          lastDetectedChat = identifier;
-          lastDetailsPanelAttempt = ''; // Reset para permitir futuros intentos
+        if (phoneChanged || nameChanged) {
+          lastDetectedPhone = result.phone;
+          lastDetectedName = currentName;
 
+          console.log('[HolaPe] Enviando chat-selected:', result.phone, result.name);
           mainWindow.webContents.send('chat-selected', {
             phone: result.phone,
             name: result.name || null,
@@ -1093,22 +1106,22 @@ async function scanChat(): Promise<void> {
       }
 
       // Si no hay teléfono, intentar extraer del panel de detalles (una vez por chat)
-      if (result.debug === 'no phone found' && result.chatName) {
-        const chatIdentifier = result.chatName;
-
+      if (result.debug === 'no phone found' && currentName) {
         // Solo intentar si no lo hemos hecho para este chat
-        if (chatIdentifier !== lastDetailsPanelAttempt) {
-          lastDetailsPanelAttempt = chatIdentifier;
-          console.log('[HolaPe] Intentando extraer teléfono del panel de detalles para:', chatIdentifier);
+        if (currentName !== lastDetailsPanelAttempt) {
+          lastDetailsPanelAttempt = currentName;
+          console.log('[HolaPe] Intentando extraer teléfono del panel de detalles para:', currentName);
 
-          const detailsResult = await tryExtractPhoneFromDetails(result.chatName);
+          const detailsResult = await tryExtractPhoneFromDetails(currentName);
 
           if (detailsResult && detailsResult.phone) {
-            lastDetectedChat = detailsResult.phone;
+            lastDetectedPhone = detailsResult.phone;
+            lastDetectedName = currentName;
 
+            console.log('[HolaPe] Teléfono extraído del panel:', detailsResult.phone);
             mainWindow.webContents.send('chat-selected', {
               phone: detailsResult.phone,
-              name: detailsResult.name || result.chatName,
+              name: detailsResult.name || currentName,
               isPhone: true
             });
             return;
