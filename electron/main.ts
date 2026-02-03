@@ -1261,6 +1261,15 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
 
+// Manejar cierre de la ventana principal - notificar al renderer
+app.on('before-quit', (event) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    // Notificar a Angular que la app se está cerrando
+    // Angular puede decidir si hacer logout o no
+    mainWindow.webContents.send('app-closing');
+  }
+});
+
 // Seguridad: Prevenir navegación a URLs externas en la ventana principal
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {

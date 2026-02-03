@@ -19,6 +19,7 @@ interface ElectronAPI {
   onPhoneDetected(callback: (data: PhoneDetectedEvent) => void): void;
   onWhatsAppBoundsChanged(callback: (data: WhatsAppBounds) => void): void;
   onWhatsAppVisibilityChanged(callback: (data: { visible: boolean }) => void): void;
+  onAppClosing?(callback: () => void): void;
   removeAllListeners(channel: string): void;
 
   // Methods that Angular can call
@@ -59,6 +60,7 @@ export class ElectronService {
   private isElectronSubject = new BehaviorSubject<boolean>(false);
   private whatsappVisibleSubject = new BehaviorSubject<boolean>(false);
   private whatsappBoundsSubject = new BehaviorSubject<WhatsAppBounds | null>(null);
+  private appClosingSubject = new BehaviorSubject<boolean>(false);
 
   // Public observables
   readonly chatSelected$: Observable<ChatSelectedEvent | null> = this.chatSelectedSubject.asObservable();
@@ -66,6 +68,7 @@ export class ElectronService {
   readonly isElectron$: Observable<boolean> = this.isElectronSubject.asObservable();
   readonly whatsappVisible$: Observable<boolean> = this.whatsappVisibleSubject.asObservable();
   readonly whatsappBounds$: Observable<WhatsAppBounds | null> = this.whatsappBoundsSubject.asObservable();
+  readonly appClosing$: Observable<boolean> = this.appClosingSubject.asObservable();
 
   constructor() {
     this.detectElectron();
@@ -136,6 +139,18 @@ export class ElectronService {
         this.whatsappBoundsSubject.next(data);
       });
     });
+
+    // Listen for app closing event
+    if (window.electronAPI.onAppClosing) {
+      window.electronAPI.onAppClosing(() => {
+        this.ngZone.run(() => {
+          console.log('[ElectronService] App is closing - saving state');
+          this.appClosingSubject.next(true);
+          // Note: We do NOT logout here - session is preserved
+          // The auth tokens remain in localStorage for next app launch
+        });
+      });
+    }
   }
 
   /**
@@ -247,6 +262,13 @@ export class ElectronService {
   }
 
   /**
+   * Check if app is currently closing
+   */
+  get isAppClosing(): boolean {
+    return this.appClosingSubject.value;
+  }
+
+  /**
    * Cleanup listeners on service destroy
    */
   destroy(): void {
@@ -255,6 +277,7 @@ export class ElectronService {
       window.electronAPI.removeAllListeners('phone-detected');
       window.electronAPI.removeAllListeners('whatsapp-visibility-changed');
       window.electronAPI.removeAllListeners('whatsapp-bounds-changed');
+      window.electronAPI.removeAllListeners('app-closing');
     }
   }
 }

@@ -140,6 +140,11 @@ const electronAPI = {
     ipcRenderer.on('whatsapp-visibility-changed', (_, data) => callback(data));
   },
 
+  // Evento cuando la app se está cerrando
+  onAppClosing: (callback: () => void) => {
+    ipcRenderer.on('app-closing', () => callback());
+  },
+
   // Limpiar listeners
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel);
@@ -182,6 +187,7 @@ declare global {
       getAngularBounds: () => Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
       onWhatsAppBoundsChanged: (callback: (data: { angularWidth: number; whatsappWidth: number }) => void) => void;
       onWhatsAppVisibilityChanged: (callback: (data: { visible: boolean }) => void) => void;
+      onAppClosing: (callback: () => void) => void;
       removeAllListeners: (channel: string) => void;
     };
   }
