@@ -740,398 +740,215 @@ function animateWhatsAppViewBounds(): void {
   }, stepInterval);
 }
 
-// Sistema de escaneo de chat activo (lee el header del chat sin inyectar)
+// ============================================================================
+// SISTEMA DE DETECCIÓN DE CHAT - VERSIÓN SIMPLIFICADA Y ROBUSTA
+// ============================================================================
+//
+// ESTRATEGIA PRINCIPAL: El sidebar de WhatsApp SIEMPRE tiene el chat seleccionado
+// con data-id="NUMERO@c.us". Esta es la fuente más confiable.
+//
+// Orden de prioridad:
+// 1. Sidebar: Buscar elemento con data-id que contenga @c.us (MÁS CONFIABLE)
+// 2. Header: Buscar número en el título del chat
+// 3. Nombre: Extraer del formato "Nombre - Teléfono"
+// ============================================================================
+
 let lastDetectedPhone = '';
 let lastDetectedName = '';
 let chatScannerInterval: NodeJS.Timeout | null = null;
 let chatScannerRunning = false;
-let lastDetailsPanelAttempt = ''; // Rastrear para qué chat ya intentamos abrir detalles
 
-// Generar intervalo aleatorio entre 2-4 segundos (parece más humano)
+// Intervalo de escaneo: 1.5-2.5 segundos
 function getRandomScanInterval(): number {
-  return 2000 + Math.random() * 2000; // 2000-4000ms
-}
-
-/**
- * Intenta extraer el teléfono abriendo el panel de detalles del contacto
- * Hace clic en el header, espera a que se abra, extrae el número y cierra
- */
-async function tryExtractPhoneFromDetails(chatName: string): Promise<{ phone: string; name: string } | null> {
-  if (!whatsappView || !mainWindow) return null;
-
-  try {
-    // Paso 1: Hacer clic en el header para abrir detalles
-    const clicked = await whatsappView.webContents.executeJavaScript(`
-      (function() {
-        const header = document.querySelector('[data-testid="conversation-header"]') ||
-                       document.querySelector('#main header');
-        if (!header) return false;
-
-        // Buscar el elemento clickeable (nombre del contacto)
-        const clickTarget = header.querySelector('span[title]') ||
-                           header.querySelector('[data-testid="conversation-info-header-chat-title"]') ||
-                           header.querySelector('div[role="button"]') ||
-                           header;
-
-        if (clickTarget) {
-          clickTarget.click();
-          return true;
-        }
-        return false;
-      })()
-    `, true);
-
-    if (!clicked) return null;
-
-    // Paso 2: Esperar a que se abra el panel de detalles (máx 2 segundos)
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // Paso 3: Extraer el número del panel de detalles
-    const result = await whatsappView.webContents.executeJavaScript(`
-      (function() {
-        // Buscar el panel de detalles (aparece a la derecha)
-        const detailsPanel = document.querySelector('[data-testid="contact-info-drawer"]') ||
-                            document.querySelector('[data-testid="group-info-drawer"]') ||
-                            document.querySelector('div[data-animate-drawer-entry="true"]') ||
-                            document.querySelector('span[data-testid="drawer-right"]')?.parentElement;
-
-        if (!detailsPanel) {
-          return { found: false, reason: 'panel_not_found' };
-        }
-
-        // Buscar el número de teléfono en el panel
-        // Generalmente está en un span con el formato +51 999 999 999
-        const allText = detailsPanel.innerText || '';
-
-        // Patrón para números peruanos y otros
-        const phonePatterns = [
-          /\\+51\\s?9\\d{2}\\s?\\d{3}\\s?\\d{3}/g,  // +51 999 999 999
-          /\\+\\d{1,3}\\s?\\d{3}\\s?\\d{3}\\s?\\d{3,4}/g,  // +XX XXX XXX XXXX
-          /\\b9\\d{8}\\b/g  // 9XXXXXXXX (sin código de país)
-        ];
-
-        for (const pattern of phonePatterns) {
-          const matches = allText.match(pattern);
-          if (matches && matches.length > 0) {
-            const phone = matches[0].replace(/[\\s\\+]/g, '');
-            if (phone.length >= 9) {
-              return { found: true, phone };
-            }
-          }
-        }
-
-        // Buscar en elementos específicos con data-testid
-        const phoneElements = detailsPanel.querySelectorAll('[data-testid="contact-phone"]') ||
-                             detailsPanel.querySelectorAll('span[dir="auto"]');
-        for (const el of phoneElements) {
-          const text = el.textContent || '';
-          const phoneMatch = text.match(/\\+?(\\d[\\d\\s]{8,}\\d)/);
-          if (phoneMatch) {
-            const phone = phoneMatch[1].replace(/\\s/g, '');
-            if (phone.length >= 9) {
-              return { found: true, phone };
-            }
-          }
-        }
-
-        return { found: false, reason: 'phone_not_found_in_panel' };
-      })()
-    `, true);
-
-    // Paso 4: Cerrar el panel de detalles
-    await whatsappView.webContents.executeJavaScript(`
-      (function() {
-        // Buscar botón de cerrar
-        const closeBtn = document.querySelector('[data-testid="btn-closer-drawer"]') ||
-                        document.querySelector('[aria-label="Cerrar"]') ||
-                        document.querySelector('[aria-label="Close"]');
-        if (closeBtn) {
-          closeBtn.click();
-          return true;
-        }
-
-        // Alternativa: presionar Escape
-        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-        return false;
-      })()
-    `, true);
-
-    if (result.found && result.phone) {
-      console.log('[HolaPe] Teléfono extraído del panel de detalles:', result.phone);
-      return { phone: result.phone, name: chatName };
-    }
-
-    return null;
-  } catch (err) {
-    console.error('[HolaPe] Error extrayendo de panel de detalles:', err);
-    return null;
-  }
+  return 1500 + Math.random() * 1000;
 }
 
 async function scanChat(): Promise<void> {
   if (!whatsappView || !mainWindow || !chatScannerRunning || !whatsappVisible) return;
 
   try {
-      // Leer el número de teléfono Y nombre del chat actual
-      const result = await whatsappView.webContents.executeJavaScript(`
-        (function() {
-          // Buscar el área de conversación con múltiples selectores
-          let mainArea = document.querySelector('#main');
+    const result = await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        // =========================================
+        // PASO 1: Obtener el nombre del chat actual
+        // =========================================
+        let chatName = null;
+        const header = document.querySelector('[data-testid="conversation-header"]') ||
+                      document.querySelector('#main header');
 
-          // Selectores alternativos si #main no existe
-          if (!mainArea) {
-            mainArea = document.querySelector('[data-testid="conversation-panel-wrapper"]');
+        if (header) {
+          // Buscar el span con el título (generalmente tiene atributo title)
+          const titleSpan = header.querySelector('span[title]');
+          if (titleSpan) {
+            chatName = titleSpan.getAttribute('title') || titleSpan.textContent?.trim();
           }
-          if (!mainArea) {
-            mainArea = document.querySelector('[data-testid="conversation-panel"]');
+
+          // Fallback: buscar el primer span con texto válido
+          if (!chatName) {
+            const spans = header.querySelectorAll('span');
+            for (const span of spans) {
+              const text = span.textContent?.trim();
+              if (!text || text.length === 0 || text.length > 50) continue;
+
+              const lower = text.toLowerCase();
+              // Ignorar textos de estado
+              if (lower.includes('escribiendo') || lower.includes('typing') ||
+                  lower.includes('en línea') || lower.includes('online') ||
+                  lower.includes('últ.') || lower.includes('última') ||
+                  lower.includes('last seen') || lower === 'hoy' || lower === 'ayer' ||
+                  /^\\d/.test(text) || /a\\.\\s?m\\.|p\\.\\s?m\\./i.test(text)) {
+                continue;
+              }
+              chatName = text;
+              break;
+            }
           }
-          if (!mainArea) {
-            // Buscar cualquier panel que tenga header con info del chat
-            const panels = document.querySelectorAll('div[tabindex="-1"]');
-            for (const panel of panels) {
-              if (panel.querySelector('header') && panel.querySelector('[data-testid="conversation-header"]')) {
-                mainArea = panel;
-                break;
+        }
+
+        if (!chatName) {
+          return { debug: 'no_chat_open' };
+        }
+
+        // =========================================
+        // PASO 2: ESTRATEGIA PRINCIPAL - SIDEBAR
+        // El sidebar SIEMPRE tiene el chat con data-id
+        // =========================================
+        const sidebar = document.querySelector('#pane-side');
+        if (sidebar) {
+          // Buscar TODOS los elementos con data-id que contengan @c.us
+          const chatItems = sidebar.querySelectorAll('[data-id*="@c.us"]');
+
+          for (const item of chatItems) {
+            // Verificar si este chat coincide con el nombre actual
+            const itemText = item.textContent || '';
+
+            // El chat seleccionado generalmente tiene el nombre visible
+            if (itemText.includes(chatName) ||
+                (chatName.length > 3 && itemText.toLowerCase().includes(chatName.toLowerCase().substring(0, chatName.length - 2)))) {
+              const dataId = item.getAttribute('data-id');
+              if (dataId && dataId.includes('@c.us')) {
+                let phone = dataId.split('@')[0];
+                phone = phone.replace(/^(true|false)_/, '');
+                if (/^\\d{9,15}$/.test(phone)) {
+                  return { phone, name: chatName, source: 'sidebar' };
+                }
               }
             }
           }
 
-          if (!mainArea) {
-            // Debug más detallado
-            const conversationHeader = document.querySelector('[data-testid="conversation-header"]');
-            return {
-              debug: 'no main area found',
-              hasConversationHeader: !!conversationHeader,
-              hasApp: !!document.querySelector('#app'),
-              hasPane: !!document.querySelector('#pane-side')
-            };
-          }
-
-          // Buscar header del chat
-          let header = mainArea.querySelector('header');
-          if (!header) {
-            header = document.querySelector('[data-testid="conversation-header"]');
-          }
-          if (!header) return { debug: 'no header found' };
-
-          // Primero extraer el nombre del header (siempre intentar)
-          let chatName = null;
-          const allSpans = header.querySelectorAll('span');
-          for (const span of allSpans) {
-            const text = span.textContent?.trim();
-            if (!text || text.length === 0) continue;
-            if (text.length > 50) continue;
-
-            const lower = text.toLowerCase();
-            if (lower.includes('clic') || lower.includes('click') ||
-                lower.includes('escribiendo') || lower.includes('typing') ||
-                lower.includes('últ.') || lower.includes('última') ||
-                lower.includes('last seen') || lower.includes('en línea') ||
-                lower.includes('online') || lower === 'hoy' || lower === 'ayer' ||
-                /^\\d/.test(text) || /a\\. ?m\\.|p\\. ?m\\./i.test(text)) {
-              continue;
+          // Fallback: buscar el chat activo por aria-selected o focus
+          const activeItem = sidebar.querySelector('[aria-selected="true"]') ||
+                            sidebar.querySelector('[data-testid="cell-frame-container"]:focus-within');
+          if (activeItem) {
+            // Buscar data-id en el elemento o sus ancestros
+            let el = activeItem;
+            for (let i = 0; i < 10 && el; i++) {
+              const dataId = el.getAttribute?.('data-id');
+              if (dataId && dataId.includes('@c.us')) {
+                let phone = dataId.split('@')[0];
+                phone = phone.replace(/^(true|false)_/, '');
+                if (/^\\d{9,15}$/.test(phone)) {
+                  return { phone, name: chatName, source: 'sidebar-active' };
+                }
+              }
+              el = el.parentElement;
             }
-            chatName = text;
-            break;
           }
+        }
 
-          // Estrategia 1: Buscar en el título/header del chat (más confiable)
-          // El título a veces muestra el número directamente
+        // =========================================
+        // PASO 3: ESTRATEGIA SECUNDARIA - HEADER
+        // Buscar número en atributos del header
+        // =========================================
+        if (header) {
+          // Buscar en span[title] que contenga número
           const titleSpans = header.querySelectorAll('span[title]');
           for (const span of titleSpans) {
             const title = span.getAttribute('title') || '';
-            // Buscar patrón de teléfono en el título
-            const phoneInTitle = title.match(/\\+?(\\d[\\d\\s\\-]{8,}\\d)/);
-            if (phoneInTitle) {
-              const phone = phoneInTitle[1].replace(/[\\s\\-]/g, '');
-              if (phone.length >= 9) {
-                return { phone, name: chatName, source: 'title-attr' };
+            const phoneMatch = title.match(/\\+?(\\d[\\d\\s\\-]{8,}\\d)/);
+            if (phoneMatch) {
+              const phone = phoneMatch[1].replace(/[\\s\\-]/g, '');
+              if (phone.length >= 9 && phone.length <= 15) {
+                return { phone, name: chatName, source: 'header-title' };
               }
             }
-          }
-
-          // Estrategia 2: Buscar data-id en mensajes del chat
-          const messageElements = document.querySelectorAll('[data-id*="@c.us"]');
-          for (const el of messageElements) {
-            const dataId = el.getAttribute('data-id');
-            if (dataId && dataId.includes('@c.us')) {
-              let phone = dataId.split('@')[0];
-              phone = phone.replace(/^(true|false)_/, '');
-              // Validar que sea un número
-              if (/^\\d{9,15}$/.test(phone)) {
-                return { phone, name: chatName, source: 'message-data-id' };
-              }
-            }
-          }
-
-          // Estrategia 3: Buscar el data-id en el panel de conversación
-          const conversationPanel = document.querySelector('[data-id]');
-          if (conversationPanel) {
-            const dataId = conversationPanel.getAttribute('data-id');
-            if (dataId && dataId.includes('@c.us')) {
-              let phone = dataId.split('@')[0];
-              phone = phone.replace(/^(true|false)_/, '');
-              if (/^\\d{9,15}$/.test(phone)) {
-                return { phone, name: chatName, source: 'data-id' };
-              }
-            }
-          }
-
-          // Estrategia 4: Buscar en la URL o hash
-          const hash = window.location.hash;
-          const phoneMatch = hash.match(/(\\d{10,15})@c\\.us/);
-          if (phoneMatch) {
-            return { phone: phoneMatch[1], name: chatName, source: 'url-hash' };
-          }
-
-          // Estrategia 5: Buscar aria-label con número de teléfono
-          const ariaElements = header.querySelectorAll('[aria-label]');
-          for (const el of ariaElements) {
-            const label = el.getAttribute('aria-label') || '';
-            const phoneInLabel = label.match(/\\+?(\\d[\\d\\s\\-]{8,}\\d)/);
-            if (phoneInLabel) {
-              const phone = phoneInLabel[1].replace(/[\\s\\-]/g, '');
-              if (phone.length >= 9) {
-                return { phone, name: chatName, source: 'aria-label' };
-              }
-            }
-          }
-
-          // Estrategia 6: Buscar en la lista de chats del sidebar (chat activo)
-          const sidePanel = document.querySelector('#pane-side');
-          if (sidePanel && chatName) {
-            // Buscar el chat activo (tiene aria-selected o está resaltado)
-            const activeChat = sidePanel.querySelector('[aria-selected="true"]') ||
-                              sidePanel.querySelector('[data-testid="cell-frame-container"][tabindex="-1"]') ||
-                              sidePanel.querySelector('div[style*="background"]');
-
-            if (activeChat) {
-              // Buscar data-id en el chat activo o sus padres
-              let parent = activeChat;
-              for (let i = 0; i < 5 && parent; i++) {
-                const dataId = parent.getAttribute && parent.getAttribute('data-id');
-                if (dataId && dataId.includes('@c.us')) {
-                  let phone = dataId.split('@')[0];
-                  phone = phone.replace(/^(true|false)_/, '');
-                  if (/^\\d{9,15}$/.test(phone)) {
-                    return { phone, name: chatName, source: 'sidebar-active' };
-                  }
-                }
-                parent = parent.parentElement;
-              }
-            }
-
-            // Buscar por el nombre del chat en el sidebar
-            const chatRows = sidePanel.querySelectorAll('[data-id*="@c.us"]');
-            for (const row of chatRows) {
-              const rowText = row.textContent || '';
-              if (rowText.includes(chatName)) {
-                const dataId = row.getAttribute('data-id');
-                if (dataId) {
-                  let phone = dataId.split('@')[0];
-                  phone = phone.replace(/^(true|false)_/, '');
-                  if (/^\\d{9,15}$/.test(phone)) {
-                    return { phone, name: chatName, source: 'sidebar-match' };
-                  }
-                }
-              }
-            }
-          }
-
-          // Estrategia 7: Buscar en cualquier elemento visible con el teléfono
-          const allText = mainArea.innerText || '';
-          const phonePatterns = allText.match(/\\+?51\\s?9\\d{2}\\s?\\d{3}\\s?\\d{3}/g) ||
-                               allText.match(/\\+?\\d{2,3}\\s?\\d{9,}/g);
-          if (phonePatterns && phonePatterns.length > 0) {
-            const phone = phonePatterns[0].replace(/[\\s\\+]/g, '');
-            if (phone.length >= 9) {
-              return { phone, name: chatName, source: 'text-pattern' };
-            }
-          }
-
-          // Estrategia 8 (última opción): Extraer teléfono del nombre del contacto
-          // Formato esperado: "Nombre - 996048720" o "Nombre - +51 996 048 720"
-          if (chatName) {
-            // Patrón para encontrar teléfono después de un separador (-, |, :)
-            const namePhoneMatch = chatName.match(/[-|:]\\s*\\+?(\\d[\\d\\s]{7,}\\d)/);
-            if (namePhoneMatch) {
-              const phone = namePhoneMatch[1].replace(/\\s/g, '');
-              if (phone.length >= 9) {
-                // Extraer el nombre limpio (antes del separador)
-                const cleanName = chatName.split(/\\s*[-|:]\\s*\\+?\\d/)[0].trim();
-                return { phone, name: cleanName || chatName, source: 'name-extracted' };
-              }
-            }
-
-            // Patrón alternativo: número al final sin separador explícito
-            const endPhoneMatch = chatName.match(/(\\d{9,})\\s*$/);
-            if (endPhoneMatch) {
-              const phone = endPhoneMatch[1];
-              const cleanName = chatName.replace(/(\\s*\\d{9,})\\s*$/, '').trim();
-              return { phone, name: cleanName || chatName, source: 'name-extracted-end' };
-            }
-          }
-
-          return { debug: 'no phone found', chatName };
-        })()
-      `, true);
-
-      // Detectar si el nombre del chat cambió (indica nuevo chat seleccionado)
-      const currentName = result.chatName || result.name || '';
-      const nameChanged = currentName && currentName !== lastDetectedName;
-
-      // Si el nombre cambió, resetear el estado para permitir nueva detección
-      if (nameChanged) {
-        console.log('[HolaPe] Chat cambió de', lastDetectedName, 'a', currentName);
-        lastDetectedName = currentName;
-        lastDetailsPanelAttempt = ''; // Permitir nuevo intento de panel de detalles
-      }
-
-      // Si encontramos teléfono, enviarlo
-      if (!result.debug && result.phone) {
-        const phoneChanged = result.phone !== lastDetectedPhone;
-
-        if (phoneChanged || nameChanged) {
-          lastDetectedPhone = result.phone;
-          lastDetectedName = currentName;
-
-          console.log('[HolaPe] Enviando chat-selected:', result.phone, result.name);
-          mainWindow.webContents.send('chat-selected', {
-            phone: result.phone,
-            name: result.name || null,
-            isPhone: true
-          });
-        }
-        return;
-      }
-
-      // Si no hay teléfono, intentar extraer del panel de detalles (una vez por chat)
-      if (result.debug === 'no phone found' && currentName) {
-        // Solo intentar si no lo hemos hecho para este chat
-        if (currentName !== lastDetailsPanelAttempt) {
-          lastDetailsPanelAttempt = currentName;
-          console.log('[HolaPe] Intentando extraer teléfono del panel de detalles para:', currentName);
-
-          const detailsResult = await tryExtractPhoneFromDetails(currentName);
-
-          if (detailsResult && detailsResult.phone) {
-            lastDetectedPhone = detailsResult.phone;
-            lastDetectedName = currentName;
-
-            console.log('[HolaPe] Teléfono extraído del panel:', detailsResult.phone);
-            mainWindow.webContents.send('chat-selected', {
-              phone: detailsResult.phone,
-              name: detailsResult.name || currentName,
-              isPhone: true
-            });
-            return;
           }
         }
-      }
 
-      // Si aún no hay teléfono, no enviamos nada (solo funciona con teléfono)
+        // =========================================
+        // PASO 4: ESTRATEGIA TERCIARIA - MENSAJES
+        // Buscar data-id en mensajes del chat
+        // =========================================
+        const messages = document.querySelectorAll('[data-id*="@c.us"]');
+        for (const msg of messages) {
+          const dataId = msg.getAttribute('data-id');
+          if (dataId && dataId.includes('@c.us')) {
+            let phone = dataId.split('@')[0];
+            phone = phone.replace(/^(true|false)_/, '');
+            if (/^\\d{9,15}$/.test(phone)) {
+              return { phone, name: chatName, source: 'message' };
+            }
+          }
+        }
+
+        // =========================================
+        // PASO 5: EXTRAER DEL NOMBRE
+        // Formato: "Nombre - Teléfono"
+        // =========================================
+        // Patrón con separador
+        const sepMatch = chatName.match(/^(.+?)[\\s]*[-|:]+[\\s]*\\+?(\\d[\\d\\s]{7,}\\d)$/);
+        if (sepMatch) {
+          const phone = sepMatch[2].replace(/\\s/g, '');
+          if (phone.length >= 9) {
+            return { phone, name: sepMatch[1].trim(), source: 'name-separator' };
+          }
+        }
+
+        // Patrón número al final
+        const endMatch = chatName.match(/^(.+?)\\s+(\\d{9,})$/);
+        if (endMatch) {
+          return { phone: endMatch[2], name: endMatch[1].trim(), source: 'name-end' };
+        }
+
+        return { debug: 'no_phone_found', chatName };
+      })()
+    `, true);
+
+    // Procesar resultado
+    if (result.debug) {
+      // No hay chat abierto o no se encontró teléfono
+      if (result.debug === 'no_chat_open') {
+        // Limpiar estado si no hay chat
+        if (lastDetectedPhone || lastDetectedName) {
+          lastDetectedPhone = '';
+          lastDetectedName = '';
+        }
+      }
+      return;
+    }
+
+    // Tenemos un resultado válido con teléfono
+    const { phone, name, source } = result;
+
+    // Verificar si cambió el chat (por teléfono o nombre)
+    const phoneChanged = phone !== lastDetectedPhone;
+    const nameChanged = name && name !== lastDetectedName;
+
+    if (phoneChanged || nameChanged) {
+      console.log(`[HolaPe] Chat detectado via ${source}:`, phone, name);
+
+      lastDetectedPhone = phone;
+      lastDetectedName = name || '';
+
+      mainWindow.webContents.send('chat-selected', {
+        phone,
+        name: name || null,
+        isPhone: true
+      });
+    }
+
   } catch (err) {
-    // Ignorar errores silenciosamente
+    console.error('[HolaPe] Error en scanChat:', err);
   }
 
   // Programar siguiente escaneo con intervalo aleatorio
