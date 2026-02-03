@@ -158,9 +158,26 @@ function createWindow(): void {
   // Cargar la UI de Angular desde URL (producción por defecto)
   const ANGULAR_URL = process.env.ANGULAR_URL || 'http://digitalclub.contactototal.com.pe/';
 
-  // Manejar errores de carga
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-    console.error(`[HablaPe] Error cargando Angular: ${errorCode} - ${errorDescription}`);
+  // Flag para evitar mostrar overlays duplicados
+  let appLoadedSuccessfully = false;
+  let errorOverlayShown = false;
+
+  // Manejar errores de carga - SOLO para la página principal, no recursos secundarios
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    // Solo mostrar error si es el frame principal y no es un error de sub-recurso
+    if (!isMainFrame) {
+      console.warn(`[HablaPe] Error cargando recurso secundario: ${errorCode} - ${errorDescription} - ${validatedURL}`);
+      return;
+    }
+
+    // Ignorar errores de cancelación (usuario navegó a otra página)
+    if (errorCode === -3) { // ERR_ABORTED
+      console.log('[HablaPe] Carga cancelada (navegación)');
+      return;
+    }
+
+    console.error(`[HablaPe] Error cargando página principal: ${errorCode} - ${errorDescription}`);
+    errorOverlayShown = true;
 
     // Mostrar página de error con opción de reintentar
     const errorHTML = `
@@ -181,7 +198,7 @@ function createWindow(): void {
             margin: 0;
           }
           h1 { color: #ef4444; margin-bottom: 1rem; }
-          p { color: #a1a1aa; margin-bottom: 2rem; }
+          p { color: #a1a1aa; margin-bottom: 2rem; text-align: center; }
           button {
             background: #22c55e;
             color: white;
@@ -197,8 +214,8 @@ function createWindow(): void {
       </head>
       <body>
         <h1>No se pudo conectar</h1>
-        <p>Asegúrate de que Angular esté corriendo en ${ANGULAR_URL}</p>
-        <button onclick="location.reload()">Reintentar</button>
+        <p>Verifica tu conexión a internet y que el servidor esté disponible.</p>
+        <button onclick="location.href='${ANGULAR_URL}'">Reintentar</button>
         <p class="error-code">Error: ${errorCode} - ${errorDescription}</p>
       </body>
       </html>
@@ -219,13 +236,20 @@ function createWindow(): void {
     console.log('[HolaPe] Página cargada:', loadedURL);
     console.log('[HolaPe] URL esperada:', ANGULAR_URL);
 
+    // No verificar si ya mostramos un error o si es una página de error
+    if (errorOverlayShown || loadedURL?.startsWith('data:')) {
+      console.log('[HolaPe] Saltando verificación (error overlay activo o página de error)');
+      return;
+    }
+
     // Verificar el contenido en múltiples intentos para detectar pantalla gris
     let checkCount = 0;
     const maxChecks = 3;
     const checkInterval = 2000; // 2 segundos entre checks
 
     const checkPageContent = async () => {
-      if (!mainWindow) return;
+      // Cancelar si ya cargó exitosamente o si se mostró un error
+      if (!mainWindow || appLoadedSuccessfully || errorOverlayShown) return;
       checkCount++;
 
       try {
@@ -237,6 +261,8 @@ function createWindow(): void {
             const hasVisibleContent = document.body.innerText.trim().length > 50;
             const hasLoginForm = !!document.querySelector('form[class*="login"], input[type="password"]');
             const hasDashboard = !!document.querySelector('[class*="dashboard"], [class*="sidebar"]');
+            const hasHeader = !!document.querySelector('[class*="header"], header');
+            const hasAngularComponent = !!document.querySelector('[_ngcontent], [ng-version]');
             return {
               bodyLen,
               hasAppRoot,
@@ -244,16 +270,19 @@ function createWindow(): void {
               hasVisibleContent,
               hasLoginForm,
               hasDashboard,
-              isLoaded: hasLoginForm || hasDashboard || (hasAppRoot && hasRouterOutlet && hasVisibleContent)
+              hasHeader,
+              hasAngularComponent,
+              isLoaded: hasLoginForm || hasDashboard || hasHeader || (hasAppRoot && hasAngularComponent && bodyLen > 1000)
             };
           })()
         `);
 
         console.log('[HolaPe Debug] Page check #' + checkCount + ':', pageInfo);
 
-        // Si Angular cargó correctamente, no hacer nada
+        // Si Angular cargó correctamente, marcar como exitoso
         if (pageInfo.isLoaded) {
           console.log('[HolaPe] Angular cargado correctamente');
+          appLoadedSuccessfully = true;
           return;
         }
 
@@ -264,15 +293,16 @@ function createWindow(): void {
         }
 
         // Después de todos los intentos, si no hay contenido visible, mostrar recovery
-        if (!pageInfo.hasVisibleContent || !pageInfo.hasAppRoot) {
+        // Pero solo si no se mostró ya un error
+        if (!errorOverlayShown && (!pageInfo.hasVisibleContent || !pageInfo.hasAppRoot)) {
           console.log('[HolaPe] Página sin contenido después de ' + (checkCount * checkInterval / 1000) + 's, mostrando recovery');
           showRecoveryOverlay();
         }
       } catch (err) {
         console.error('[HolaPe] Error verificando página:', err);
-        if (checkCount < maxChecks) {
+        if (checkCount < maxChecks && !errorOverlayShown) {
           setTimeout(checkPageContent, checkInterval);
-        } else {
+        } else if (!errorOverlayShown) {
           showRecoveryOverlay();
         }
       }
