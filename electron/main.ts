@@ -1330,6 +1330,51 @@ function setupIPC(): void {
     return true;
   });
 
+  // Enviar mensaje a WhatsApp Web (para canned messages / respuestas rápidas)
+  ipcMain.handle('whatsapp:send-message', async (_, text: string) => {
+    if (!whatsappView || !whatsappVisible) {
+      console.log('[HablaPe] No se puede enviar mensaje: WhatsApp no visible');
+      return false;
+    }
+
+    try {
+      // Inyectar el texto en el input de WhatsApp Web
+      const result = await whatsappView.webContents.executeJavaScript(`
+        (function() {
+          // Buscar el input de conversación
+          const input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                        document.querySelector('div[contenteditable="true"][data-tab="10"]') ||
+                        document.querySelector('footer div[contenteditable="true"]');
+
+          if (!input) {
+            console.log('[HablaPe] No se encontró el input de mensaje');
+            return { success: false, error: 'input_not_found' };
+          }
+
+          // Enfocar el input
+          input.focus();
+
+          // Insertar el texto
+          const text = ${JSON.stringify(text)};
+
+          // Método 1: execCommand (más compatible)
+          document.execCommand('insertText', false, text);
+
+          // Disparar eventos para que WhatsApp detecte el cambio
+          input.dispatchEvent(new InputEvent('input', { bubbles: true, data: text }));
+
+          return { success: true };
+        })()
+      `, true);
+
+      console.log('[HablaPe] Mensaje insertado:', result);
+      return result.success;
+    } catch (err) {
+      console.error('[HablaPe] Error enviando mensaje a WhatsApp:', err);
+      return false;
+    }
+  });
+
   // Restablecimiento completo - limpia TODOS los datos y reinicia
   ipcMain.handle('full-reset', async () => {
     console.log('[HolaPe] Ejecutando restablecimiento completo...');

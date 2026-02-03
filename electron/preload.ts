@@ -150,6 +150,11 @@ const electronAPI = {
     return ipcRenderer.invoke('full-reset');
   },
 
+  // Enviar mensaje a WhatsApp Web (para canned messages / respuestas rápidas)
+  sendWhatsAppMessage: (text: string): Promise<boolean> => {
+    return ipcRenderer.invoke('whatsapp:send-message', text);
+  },
+
   // Limpiar listeners
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel);
@@ -194,6 +199,7 @@ declare global {
       onWhatsAppVisibilityChanged: (callback: (data: { visible: boolean }) => void) => void;
       onAppClosing: (callback: () => void) => void;
       fullReset: () => Promise<boolean>;
+      sendWhatsAppMessage: (text: string) => Promise<boolean>;
       removeAllListeners: (channel: string) => void;
     };
   }
