@@ -593,7 +593,7 @@ function createWhatsAppView(): void {
 
   // Abrir DevTools para debug (quitar en producción)
   // whatsappView.webContents.openDevTools({ mode: 'detach' });
-  mainWindow.webContents.openDevTools({ mode: 'detach' });
+  // mainWindow.webContents.openDevTools({ mode: 'detach' });
 }
 
 /**
@@ -764,18 +764,9 @@ function getRandomScanInterval(): number {
 }
 
 async function scanChat(): Promise<void> {
-  if (!whatsappView || !mainWindow || !chatScannerRunning || !whatsappVisible) {
-    console.log('[HolaPe] scanChat skip - conditions not met:', {
-      hasView: !!whatsappView,
-      hasWindow: !!mainWindow,
-      running: chatScannerRunning,
-      visible: whatsappVisible
-    });
-    return;
-  }
+  if (!whatsappView || !mainWindow || !chatScannerRunning || !whatsappVisible) return;
 
   try {
-    console.log('[HolaPe] Ejecutando scan...');
     const result = await whatsappView.webContents.executeJavaScript(`
       (function() {
         // =========================================
@@ -923,12 +914,8 @@ async function scanChat(): Promise<void> {
       })()
     `, true);
 
-    console.log('[HolaPe] Resultado scan:', JSON.stringify(result));
-
     // Procesar resultado
     if (result.debug) {
-      // No hay chat abierto o no se encontró teléfono
-      console.log('[HolaPe] Debug:', result.debug, result.chatName || '');
       if (result.debug === 'no_chat_open') {
         // Limpiar estado si no hay chat
         if (lastDetectedPhone || lastDetectedName) {
