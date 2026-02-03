@@ -80,6 +80,27 @@
               ],
               "outputHashing": "all"
             },
+            "electron": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.electron.ts"
+                }
+              ],
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "12kB",
+                  "maximumError": "20kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
             "development": {
               "optimization": false,
               "extractLicenses": false,
@@ -93,6 +114,9 @@
           "configurations": {
             "production": {
               "buildTarget": "holape-angular:build:production"
+            },
+            "electron": {
+              "buildTarget": "holape-angular:build:electron"
             },
             "development": {
               "buildTarget": "holape-angular:build:development"

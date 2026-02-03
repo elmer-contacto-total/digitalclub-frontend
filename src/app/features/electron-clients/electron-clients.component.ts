@@ -90,6 +90,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     }
 
     // Listen for chat selection from Electron
+    // Solo busca por teléfono - el teléfono debe extraerse del DOM o del nombre del contacto
     this.electronService.chatSelected$.pipe(
       takeUntil(this.destroy$),
       switchMap((event: ChatSelectedEvent | null) => {
@@ -98,21 +99,16 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           return of(null);
         }
 
-        this.viewState.set('loading');
         this.currentName.set(event.name);
 
-        // Si no hay teléfono pero hay nombre, buscar por nombre en el backend
+        // Sin teléfono = estado vacío (el teléfono debe venir de Electron)
         if (!event.phone) {
           this.currentPhone.set(null);
-
-          if (event.name && event.name.trim().length >= 2) {
-            return this.contactsService.searchByName(event.name);
-          }
-
           this.viewState.set('empty');
           return of(null);
         }
 
+        this.viewState.set('loading');
         this.currentPhone.set(event.phone);
         return this.contactsService.searchByPhone(event.phone);
       })
@@ -120,11 +116,6 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       if (result) {
         this.contact.set(result);
         this.viewState.set('contact');
-
-        // Update currentPhone if we found contact by name and it has a phone
-        if (!this.currentPhone() && result.phone) {
-          this.currentPhone.set(result.phone);
-        }
 
         // Initialize form fields
         if (result.type === 'local' && result.local) {
@@ -135,13 +126,13 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           this.selectedLabel.set(undefined);
         }
       } else if (this.currentPhone()) {
-        // No contact found, but we have a phone - show empty local state
+        // No contact found in backend, but we have a phone - show local contact state
         this.contact.set(null);
         this.viewState.set('contact');
         this.selectedLabel.set(undefined);
         this.notesField.set('');
       } else {
-        // No contact found and no phone - show empty state
+        // No phone - show empty state
         this.viewState.set('empty');
       }
     });

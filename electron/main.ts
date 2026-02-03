@@ -225,10 +225,8 @@ function createWindow(): void {
 
   mainWindow.loadURL(ANGULAR_URL);
 
-  // DevTools en desarrollo o con variable de entorno
-  if (ANGULAR_URL.includes('localhost') || process.env.HOLAPE_DEBUG) {
-    mainWindow.webContents.openDevTools();
-  }
+  // DevTools - siempre abierto para debug
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
 
   // Log cuando termine de cargar y verificar si la página está en blanco
   mainWindow.webContents.on('did-finish-load', () => {
@@ -744,10 +742,127 @@ function animateWhatsAppViewBounds(): void {
 let lastDetectedChat = '';
 let chatScannerInterval: NodeJS.Timeout | null = null;
 let chatScannerRunning = false;
+let lastDetailsPanelAttempt = ''; // Rastrear para qué chat ya intentamos abrir detalles
 
 // Generar intervalo aleatorio entre 2-4 segundos (parece más humano)
 function getRandomScanInterval(): number {
   return 2000 + Math.random() * 2000; // 2000-4000ms
+}
+
+/**
+ * Intenta extraer el teléfono abriendo el panel de detalles del contacto
+ * Hace clic en el header, espera a que se abra, extrae el número y cierra
+ */
+async function tryExtractPhoneFromDetails(chatName: string): Promise<{ phone: string; name: string } | null> {
+  if (!whatsappView || !mainWindow) return null;
+
+  try {
+    // Paso 1: Hacer clic en el header para abrir detalles
+    const clicked = await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        const header = document.querySelector('[data-testid="conversation-header"]') ||
+                       document.querySelector('#main header');
+        if (!header) return false;
+
+        // Buscar el elemento clickeable (nombre del contacto)
+        const clickTarget = header.querySelector('span[title]') ||
+                           header.querySelector('[data-testid="conversation-info-header-chat-title"]') ||
+                           header.querySelector('div[role="button"]') ||
+                           header;
+
+        if (clickTarget) {
+          clickTarget.click();
+          return true;
+        }
+        return false;
+      })()
+    `, true);
+
+    if (!clicked) return null;
+
+    // Paso 2: Esperar a que se abra el panel de detalles (máx 2 segundos)
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    // Paso 3: Extraer el número del panel de detalles
+    const result = await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        // Buscar el panel de detalles (aparece a la derecha)
+        const detailsPanel = document.querySelector('[data-testid="contact-info-drawer"]') ||
+                            document.querySelector('[data-testid="group-info-drawer"]') ||
+                            document.querySelector('div[data-animate-drawer-entry="true"]') ||
+                            document.querySelector('span[data-testid="drawer-right"]')?.parentElement;
+
+        if (!detailsPanel) {
+          return { found: false, reason: 'panel_not_found' };
+        }
+
+        // Buscar el número de teléfono en el panel
+        // Generalmente está en un span con el formato +51 999 999 999
+        const allText = detailsPanel.innerText || '';
+
+        // Patrón para números peruanos y otros
+        const phonePatterns = [
+          /\\+51\\s?9\\d{2}\\s?\\d{3}\\s?\\d{3}/g,  // +51 999 999 999
+          /\\+\\d{1,3}\\s?\\d{3}\\s?\\d{3}\\s?\\d{3,4}/g,  // +XX XXX XXX XXXX
+          /\\b9\\d{8}\\b/g  // 9XXXXXXXX (sin código de país)
+        ];
+
+        for (const pattern of phonePatterns) {
+          const matches = allText.match(pattern);
+          if (matches && matches.length > 0) {
+            const phone = matches[0].replace(/[\\s\\+]/g, '');
+            if (phone.length >= 9) {
+              return { found: true, phone };
+            }
+          }
+        }
+
+        // Buscar en elementos específicos con data-testid
+        const phoneElements = detailsPanel.querySelectorAll('[data-testid="contact-phone"]') ||
+                             detailsPanel.querySelectorAll('span[dir="auto"]');
+        for (const el of phoneElements) {
+          const text = el.textContent || '';
+          const phoneMatch = text.match(/\\+?(\\d[\\d\\s]{8,}\\d)/);
+          if (phoneMatch) {
+            const phone = phoneMatch[1].replace(/\\s/g, '');
+            if (phone.length >= 9) {
+              return { found: true, phone };
+            }
+          }
+        }
+
+        return { found: false, reason: 'phone_not_found_in_panel' };
+      })()
+    `, true);
+
+    // Paso 4: Cerrar el panel de detalles
+    await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        // Buscar botón de cerrar
+        const closeBtn = document.querySelector('[data-testid="btn-closer-drawer"]') ||
+                        document.querySelector('[aria-label="Cerrar"]') ||
+                        document.querySelector('[aria-label="Close"]');
+        if (closeBtn) {
+          closeBtn.click();
+          return true;
+        }
+
+        // Alternativa: presionar Escape
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        return false;
+      })()
+    `, true);
+
+    if (result.found && result.phone) {
+      console.log('[HolaPe] Teléfono extraído del panel de detalles:', result.phone);
+      return { phone: result.phone, name: chatName };
+    }
+
+    return null;
+  } catch (err) {
+    console.error('[HolaPe] Error extrayendo de panel de detalles:', err);
+    return null;
+  }
 }
 
 async function scanChat(): Promise<void> {
@@ -931,33 +1046,75 @@ async function scanChat(): Promise<void> {
             }
           }
 
-          // Si no hay teléfono pero hay nombre, devolver solo el nombre
+          // Estrategia 8 (última opción): Extraer teléfono del nombre del contacto
+          // Formato esperado: "Nombre - 996048720" o "Nombre - +51 996 048 720"
           if (chatName) {
-            return { name: chatName, source: 'name-only' };
+            // Patrón para encontrar teléfono después de un separador (-, |, :)
+            const namePhoneMatch = chatName.match(/[-|:]\\s*\\+?(\\d[\\d\\s]{7,}\\d)/);
+            if (namePhoneMatch) {
+              const phone = namePhoneMatch[1].replace(/\\s/g, '');
+              if (phone.length >= 9) {
+                // Extraer el nombre limpio (antes del separador)
+                const cleanName = chatName.split(/\\s*[-|:]\\s*\\+?\\d/)[0].trim();
+                return { phone, name: cleanName || chatName, source: 'name-extracted' };
+              }
+            }
+
+            // Patrón alternativo: número al final sin separador explícito
+            const endPhoneMatch = chatName.match(/(\\d{9,})\\s*$/);
+            if (endPhoneMatch) {
+              const phone = endPhoneMatch[1];
+              const cleanName = chatName.replace(/(\\s*\\d{9,})\\s*$/, '').trim();
+              return { phone, name: cleanName || chatName, source: 'name-extracted-end' };
+            }
           }
 
-          return { debug: 'no phone or name found' };
+          return { debug: 'no phone found', chatName };
         })()
       `, true);
 
-      // Si no hay datos válidos, salir
-      if (result.debug) {
+      // Si encontramos teléfono, enviarlo
+      if (!result.debug && result.phone) {
+        const identifier = result.phone;
+
+        if (identifier !== lastDetectedChat) {
+          lastDetectedChat = identifier;
+          lastDetailsPanelAttempt = ''; // Reset para permitir futuros intentos
+
+          mainWindow.webContents.send('chat-selected', {
+            phone: result.phone,
+            name: result.name || null,
+            isPhone: true
+          });
+        }
         return;
       }
 
-      const identifier = result.phone || result.name;
-      const isPhone = !!result.phone;
+      // Si no hay teléfono, intentar extraer del panel de detalles (una vez por chat)
+      if (result.debug === 'no phone found' && result.chatName) {
+        const chatIdentifier = result.chatName;
 
-      if (identifier && identifier !== lastDetectedChat) {
-        lastDetectedChat = identifier;
+        // Solo intentar si no lo hemos hecho para este chat
+        if (chatIdentifier !== lastDetailsPanelAttempt) {
+          lastDetailsPanelAttempt = chatIdentifier;
+          console.log('[HolaPe] Intentando extraer teléfono del panel de detalles para:', chatIdentifier);
 
-        // Enviar al renderer con la info de si es teléfono o nombre
-        mainWindow.webContents.send('chat-selected', {
-          phone: result.phone || null,
-          name: result.name || null,
-          isPhone
-        });
+          const detailsResult = await tryExtractPhoneFromDetails(result.chatName);
+
+          if (detailsResult && detailsResult.phone) {
+            lastDetectedChat = detailsResult.phone;
+
+            mainWindow.webContents.send('chat-selected', {
+              phone: detailsResult.phone,
+              name: detailsResult.name || result.chatName,
+              isPhone: true
+            });
+            return;
+          }
+        }
       }
+
+      // Si aún no hay teléfono, no enviamos nada (solo funciona con teléfono)
   } catch (err) {
     // Ignorar errores silenciosamente
   }
