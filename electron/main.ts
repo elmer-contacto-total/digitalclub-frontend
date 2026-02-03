@@ -1215,7 +1215,13 @@ app.whenReady().then(async () => {
   // Generar o cargar fingerprint único para esta instalación
   userFingerprint = getOrCreateFingerprint();
 
-  // NO limpiar caché - puede causar problemas con la carga inicial
+  // LIMPIAR TODA LA SESIÓN AL INICIAR para evitar problemas de caché/auth
+  const ses = session.defaultSession;
+  await ses.clearStorageData({
+    storages: ['localstorage', 'cookies', 'cachestorage', 'indexdb', 'shadercache', 'websql', 'serviceworkers']
+  });
+  await ses.clearCache();
+  console.log('[HolaPe] Sesión limpiada al iniciar');
 
   createWindow();
   registerShortcuts();
