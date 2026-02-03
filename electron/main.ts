@@ -936,34 +936,34 @@ async function scanChat(): Promise<void> {
           lastDetectedName = '';
         }
       }
-      return;
-    }
+      // NO hacer return aquí - continuar para programar siguiente scan
+    } else {
+      // Tenemos un resultado válido con teléfono
+      const { phone, name, source } = result;
 
-    // Tenemos un resultado válido con teléfono
-    const { phone, name, source } = result;
+      // Verificar si cambió el chat (por teléfono o nombre)
+      const phoneChanged = phone !== lastDetectedPhone;
+      const nameChanged = name && name !== lastDetectedName;
 
-    // Verificar si cambió el chat (por teléfono o nombre)
-    const phoneChanged = phone !== lastDetectedPhone;
-    const nameChanged = name && name !== lastDetectedName;
+      if (phoneChanged || nameChanged) {
+        console.log(`[HolaPe] Chat detectado via ${source}:`, phone, name);
 
-    if (phoneChanged || nameChanged) {
-      console.log(`[HolaPe] Chat detectado via ${source}:`, phone, name);
+        lastDetectedPhone = phone;
+        lastDetectedName = name || '';
 
-      lastDetectedPhone = phone;
-      lastDetectedName = name || '';
-
-      mainWindow.webContents.send('chat-selected', {
-        phone,
-        name: name || null,
-        isPhone: true
-      });
+        mainWindow.webContents.send('chat-selected', {
+          phone,
+          name: name || null,
+          isPhone: true
+        });
+      }
     }
 
   } catch (err) {
     console.error('[HolaPe] Error en scanChat:', err);
   }
 
-  // Programar siguiente escaneo con intervalo aleatorio
+  // SIEMPRE programar siguiente escaneo (movido fuera del try-catch)
   if (chatScannerRunning && whatsappVisible) {
     chatScannerInterval = setTimeout(scanChat, getRandomScanInterval());
   }
