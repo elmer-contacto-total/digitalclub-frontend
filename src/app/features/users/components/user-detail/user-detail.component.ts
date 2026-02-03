@@ -560,7 +560,7 @@ export class UserDetailComponent implements OnInit {
       next: (response: UserDetailResponse) => {
         this.user.set(response.user);
         this.subordinates.set(response.subordinates || []);
-        this.managerName.set(response.manager?.fullName || null);
+        this.managerName.set(response.manager?.name || null);
         this.isLoading.set(false);
       },
       error: (err) => {

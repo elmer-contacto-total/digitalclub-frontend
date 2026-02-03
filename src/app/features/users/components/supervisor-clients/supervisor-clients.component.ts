@@ -82,7 +82,7 @@ type MessageFilter = 'all' | 'to_respond' | 'responded';
               >
                 <option value="all">Todos</option>
                 @for (agent of agents(); track agent.id) {
-                  <option [value]="agent.id">{{ agent.fullName }}</option>
+                  <option [value]="agent.id">{{ agent.name }}</option>
                 }
               </select>
             </div>
