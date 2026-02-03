@@ -29,7 +29,7 @@ export function roleGuard(allowedRoles: UserRole[]): CanActivateFn {
     }
 
     toast.error('No tiene permisos para acceder a esta sección');
-    return router.createUrlTree(['/admin/dashboard']);
+    return router.createUrlTree(['/app/dashboard']);
   };
 }
 
@@ -50,7 +50,7 @@ export const adminGuard: CanActivateFn = (): boolean | UrlTree => {
   }
 
   toast.error('No tiene permisos para acceder a esta sección');
-  return router.createUrlTree(['/admin/dashboard']);
+  return router.createUrlTree(['/app/dashboard']);
 };
 
 /**
@@ -70,7 +70,7 @@ export const superAdminGuard: CanActivateFn = (): boolean | UrlTree => {
   }
 
   toast.error('No tiene permisos para acceder a esta sección');
-  return router.createUrlTree(['/admin/dashboard']);
+  return router.createUrlTree(['/app/dashboard']);
 };
 
 /**
@@ -90,7 +90,7 @@ export const internalGuard: CanActivateFn = (): boolean | UrlTree => {
   }
 
   toast.error('No tiene permisos para acceder a esta sección');
-  return router.createUrlTree(['/admin/dashboard']);
+  return router.createUrlTree(['/app/dashboard']);
 };
 
 /**
@@ -110,7 +110,7 @@ export const canManageUsersGuard: CanActivateFn = (): boolean | UrlTree => {
   }
 
   toast.error('No tiene permisos para gestionar usuarios');
-  return router.createUrlTree(['/admin/dashboard']);
+  return router.createUrlTree(['/app/dashboard']);
 };
 
 /**
@@ -145,5 +145,5 @@ export const dataRoleGuard: CanActivateFn = (route: ActivatedRouteSnapshot): boo
   }
 
   toast.error('No tiene permisos para acceder a esta sección');
-  return router.createUrlTree(['/admin/dashboard']);
+  return router.createUrlTree(['/app/dashboard']);
 };

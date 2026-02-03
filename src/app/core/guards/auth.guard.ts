@@ -32,7 +32,7 @@ export const publicOnlyGuard: CanActivateFn = (): boolean | UrlTree => {
     return true;
   }
 
-  return router.createUrlTree(['/admin/dashboard']);
+  return router.createUrlTree(['/app/dashboard']);
 };
 
 /**

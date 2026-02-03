@@ -208,8 +208,8 @@ function createWindow(): void {
 
   mainWindow.loadURL(ANGULAR_URL);
 
-  // DevTools solo en desarrollo (ANGULAR_URL apunta a localhost)
-  if (ANGULAR_URL.includes('localhost')) {
+  // DevTools en desarrollo o con variable de entorno
+  if (ANGULAR_URL.includes('localhost') || process.env.HOLAPE_DEBUG) {
     mainWindow.webContents.openDevTools();
   }
 
@@ -1139,6 +1139,20 @@ function registerShortcuts(): void {
         sessionStorage.clear();
         location.reload();
       `);
+    }
+  });
+
+  // F12 - Abrir DevTools para depuración
+  globalShortcut.register('F12', () => {
+    if (mainWindow) {
+      mainWindow.webContents.toggleDevTools();
+    }
+  });
+
+  // Ctrl+Shift+D - Mostrar overlay de diagnóstico
+  globalShortcut.register('CommandOrControl+Shift+D', () => {
+    if (mainWindow) {
+      showRecoveryOverlay();
     }
   });
 
