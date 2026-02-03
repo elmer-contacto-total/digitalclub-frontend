@@ -145,6 +145,11 @@ const electronAPI = {
     ipcRenderer.on('app-closing', () => callback());
   },
 
+  // Restablecimiento completo - limpia todos los datos y reinicia
+  fullReset: (): Promise<boolean> => {
+    return ipcRenderer.invoke('full-reset');
+  },
+
   // Limpiar listeners
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel);
@@ -188,6 +193,7 @@ declare global {
       onWhatsAppBoundsChanged: (callback: (data: { angularWidth: number; whatsappWidth: number }) => void) => void;
       onWhatsAppVisibilityChanged: (callback: (data: { visible: boolean }) => void) => void;
       onAppClosing: (callback: () => void) => void;
+      fullReset: () => Promise<boolean>;
       removeAllListeners: (channel: string) => void;
     };
   }

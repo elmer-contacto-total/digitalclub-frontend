@@ -219,31 +219,67 @@ function createWindow(): void {
     console.log('[HolaPe] Página cargada:', loadedURL);
     console.log('[HolaPe] URL esperada:', ANGULAR_URL);
 
-    // Verificar el contenido después de un delay para dar tiempo a Angular
-    setTimeout(async () => {
+    // Verificar el contenido en múltiples intentos para detectar pantalla gris
+    let checkCount = 0;
+    const maxChecks = 3;
+    const checkInterval = 2000; // 2 segundos entre checks
+
+    const checkPageContent = async () => {
       if (!mainWindow) return;
+      checkCount++;
 
       try {
         const pageInfo = await mainWindow.webContents.executeJavaScript(`
           (function() {
             const bodyLen = document.body.innerHTML.length;
             const hasAppRoot = !!document.querySelector('app-root');
-            const hasContent = bodyLen > 500; // Angular genera más de 500 caracteres
-            return { bodyLen, hasAppRoot, hasContent };
+            const hasRouterOutlet = !!document.querySelector('router-outlet');
+            const hasVisibleContent = document.body.innerText.trim().length > 50;
+            const hasLoginForm = !!document.querySelector('form[class*="login"], input[type="password"]');
+            const hasDashboard = !!document.querySelector('[class*="dashboard"], [class*="sidebar"]');
+            return {
+              bodyLen,
+              hasAppRoot,
+              hasRouterOutlet,
+              hasVisibleContent,
+              hasLoginForm,
+              hasDashboard,
+              isLoaded: hasLoginForm || hasDashboard || (hasAppRoot && hasRouterOutlet && hasVisibleContent)
+            };
           })()
         `);
 
-        console.log('[HolaPe Debug] Page info:', pageInfo);
+        console.log('[HolaPe Debug] Page check #' + checkCount + ':', pageInfo);
 
-        // Si la página está vacía o no tiene contenido, mostrar overlay de recuperación
-        if (!pageInfo.hasContent && !pageInfo.hasAppRoot) {
-          console.log('[HolaPe] Página vacía detectada, mostrando overlay de recuperación');
+        // Si Angular cargó correctamente, no hacer nada
+        if (pageInfo.isLoaded) {
+          console.log('[HolaPe] Angular cargado correctamente');
+          return;
+        }
+
+        // Si aún no cargó y tenemos más intentos, seguir esperando
+        if (checkCount < maxChecks) {
+          setTimeout(checkPageContent, checkInterval);
+          return;
+        }
+
+        // Después de todos los intentos, si no hay contenido visible, mostrar recovery
+        if (!pageInfo.hasVisibleContent || !pageInfo.hasAppRoot) {
+          console.log('[HolaPe] Página sin contenido después de ' + (checkCount * checkInterval / 1000) + 's, mostrando recovery');
           showRecoveryOverlay();
         }
       } catch (err) {
         console.error('[HolaPe] Error verificando página:', err);
+        if (checkCount < maxChecks) {
+          setTimeout(checkPageContent, checkInterval);
+        } else {
+          showRecoveryOverlay();
+        }
       }
-    }, 3000); // Esperar 3 segundos para que Angular cargue
+    };
+
+    // Iniciar verificación después de 2 segundos
+    setTimeout(checkPageContent, checkInterval);
   });
 
   // Log de errores de consola
@@ -328,21 +364,26 @@ function showRecoveryOverlay(): void {
           }
           #holape-recovery-overlay p {
             color: #a1a1aa;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
             text-align: center;
+            max-width: 400px;
+            line-height: 1.5;
           }
           #holape-recovery-overlay .buttons {
             display: flex;
-            gap: 16px;
+            flex-direction: column;
+            gap: 12px;
+            width: 280px;
           }
           #holape-recovery-overlay button {
             padding: 14px 28px;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 500;
             cursor: pointer;
             border: none;
             transition: all 0.2s;
+            width: 100%;
           }
           #holape-recovery-overlay .btn-primary {
             background: #22c55e;
@@ -359,24 +400,45 @@ function showRecoveryOverlay(): void {
           #holape-recovery-overlay .btn-secondary:hover {
             background: #3f3f46;
           }
+          #holape-recovery-overlay .btn-danger {
+            background: transparent;
+            color: #f87171;
+            border: 1px solid #7f1d1d;
+            font-size: 13px;
+            padding: 10px 20px;
+          }
+          #holape-recovery-overlay .btn-danger:hover {
+            background: #7f1d1d;
+            color: white;
+          }
           #holape-recovery-overlay .hint {
-            margin-top: 24px;
+            margin-top: 20px;
             font-size: 12px;
             color: #71717a;
+            text-align: center;
+          }
+          #holape-recovery-overlay .divider {
+            margin: 16px 0;
+            border-top: 1px solid #27272a;
+            width: 100%;
           }
         </style>
-        <div class="logo">🔄</div>
-        <h1>La aplicación no cargó correctamente</h1>
-        <p>Esto puede ocurrir por problemas de conexión o sesión expirada</p>
+        <div class="logo">⚠️</div>
+        <h1>La aplicación no cargó</h1>
+        <p>Esto puede ocurrir por datos de sesión corruptos o problemas de conexión con el servidor.</p>
         <div class="buttons">
           <button class="btn-primary" onclick="window.holapeRecoveryReload()">
-            Recargar
+            Reintentar
           </button>
-          <button class="btn-secondary" onclick="window.holapeRecoveryClearAndReload()">
-            Limpiar sesión y recargar
+          <button class="btn-secondary" onclick="window.holapeRecoveryClearSession()">
+            Limpiar sesión y reintentar
+          </button>
+          <div class="divider"></div>
+          <button class="btn-danger" onclick="window.holapeRecoveryFullReset()">
+            Restablecer completamente
           </button>
         </div>
-        <p class="hint">Si el problema persiste, intenta "Limpiar sesión y recargar"</p>
+        <p class="hint">El restablecimiento completo borra todos los datos<br>incluyendo la sesión de WhatsApp</p>
       \`;
       document.body.appendChild(overlay);
 
@@ -385,10 +447,32 @@ function showRecoveryOverlay(): void {
         location.reload();
       };
 
-      window.holapeRecoveryClearAndReload = function() {
-        localStorage.clear();
+      window.holapeRecoveryClearSession = function() {
+        // Limpiar solo datos de sesión de Angular
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('holape_')) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
         sessionStorage.clear();
         location.reload();
+      };
+
+      window.holapeRecoveryFullReset = function() {
+        if (confirm('¿Estás seguro? Esto borrará TODOS los datos incluyendo la sesión de WhatsApp.')) {
+          // Limpiar todo el localStorage
+          localStorage.clear();
+          sessionStorage.clear();
+          // Notificar a Electron para limpiar datos de particiones
+          if (window.electronAPI && window.electronAPI.fullReset) {
+            window.electronAPI.fullReset();
+          } else {
+            location.reload();
+          }
+        }
       };
     })()
   `;
@@ -1200,6 +1284,53 @@ function setupIPC(): void {
     console.log('[HolaPe] Recargando app...');
     mainWindow?.webContents.reload();
     return true;
+  });
+
+  // Restablecimiento completo - limpia TODOS los datos y reinicia
+  ipcMain.handle('full-reset', async () => {
+    console.log('[HolaPe] Ejecutando restablecimiento completo...');
+
+    try {
+      // 1. Limpiar localStorage y sessionStorage del renderer
+      if (mainWindow) {
+        await mainWindow.webContents.executeJavaScript(`
+          localStorage.clear();
+          sessionStorage.clear();
+        `);
+      }
+
+      // 2. Limpiar la sesión de la partición de WhatsApp
+      const whatsappSession = session.fromPartition('persist:whatsapp');
+      await whatsappSession.clearStorageData();
+      await whatsappSession.clearCache();
+      console.log('[HolaPe] Sesión de WhatsApp limpiada');
+
+      // 3. Limpiar la sesión principal
+      const defaultSession = session.defaultSession;
+      await defaultSession.clearStorageData();
+      await defaultSession.clearCache();
+      console.log('[HolaPe] Sesión principal limpiada');
+
+      // 4. Destruir WhatsApp view si existe
+      if (whatsappView && mainWindow) {
+        mainWindow.removeBrowserView(whatsappView);
+        whatsappView = null;
+        whatsappVisible = false;
+        whatsappInitialized = false;
+      }
+
+      // 5. Recargar la aplicación
+      if (mainWindow) {
+        mainWindow.webContents.reload();
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[HolaPe] Error en restablecimiento completo:', error);
+      // Intentar recargar de todos modos
+      mainWindow?.webContents.reload();
+      return false;
+    }
   });
 }
 
