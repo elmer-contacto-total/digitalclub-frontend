@@ -219,12 +219,8 @@ function createWindow(): void {
     console.log('[HolaPe] Página cargada:', loadedURL);
     console.log('[HolaPe] URL esperada:', ANGULAR_URL);
 
-    // Verificar el contenido en múltiples intentos
-    let checkAttempts = 0;
-    const maxAttempts = 3;
-    const checkIntervals = [2000, 3000, 5000]; // 2s, 3s, 5s
-
-    const checkPageContent = async () => {
+    // Verificar el contenido después de un delay para dar tiempo a Angular
+    setTimeout(async () => {
       if (!mainWindow) return;
 
       try {
@@ -232,66 +228,22 @@ function createWindow(): void {
           (function() {
             const bodyLen = document.body.innerHTML.length;
             const hasAppRoot = !!document.querySelector('app-root');
-            const hasRouterOutlet = !!document.querySelector('router-outlet');
-            const hasAngularContent = hasAppRoot && (hasRouterOutlet || bodyLen > 1000);
-            const hasLoadingSpinner = !!document.getElementById('app-loading');
-            const isLoadingHidden = hasLoadingSpinner && document.getElementById('app-loading').classList.contains('hidden');
-            return {
-              bodyLen,
-              hasAppRoot,
-              hasRouterOutlet,
-              hasAngularContent,
-              hasLoadingSpinner,
-              isLoadingHidden
-            };
+            const hasContent = bodyLen > 500; // Angular genera más de 500 caracteres
+            return { bodyLen, hasAppRoot, hasContent };
           })()
         `);
 
-        console.log('[HolaPe Debug] Page info (attempt ' + (checkAttempts + 1) + '):', pageInfo);
+        console.log('[HolaPe Debug] Page info:', pageInfo);
 
-        // Angular está cargado y funcionando
-        if (pageInfo.hasAngularContent || pageInfo.isLoadingHidden) {
-          console.log('[HolaPe] Angular cargado correctamente');
-          return;
-        }
-
-        // Si el spinner de carga está visible, Angular aún está inicializando - esperar
-        if (pageInfo.hasLoadingSpinner && !pageInfo.isLoadingHidden) {
-          console.log('[HolaPe] Spinner de carga visible, Angular inicializando...');
-          checkAttempts++;
-          if (checkAttempts < maxAttempts) {
-            setTimeout(checkPageContent, checkIntervals[checkAttempts]);
-          } else {
-            // Después de todos los intentos, si aún hay spinner visible, hay un problema
-            console.log('[HolaPe] Timeout esperando a Angular, mostrando overlay de recuperación');
-            showRecoveryOverlay();
-          }
-          return;
-        }
-
-        // Página vacía sin spinner - problema serio
-        if (!pageInfo.hasAppRoot || pageInfo.bodyLen < 200) {
+        // Si la página está vacía o no tiene contenido, mostrar overlay de recuperación
+        if (!pageInfo.hasContent && !pageInfo.hasAppRoot) {
           console.log('[HolaPe] Página vacía detectada, mostrando overlay de recuperación');
           showRecoveryOverlay();
-          return;
-        }
-
-        // Continuar verificando
-        checkAttempts++;
-        if (checkAttempts < maxAttempts) {
-          setTimeout(checkPageContent, checkIntervals[checkAttempts]);
         }
       } catch (err) {
         console.error('[HolaPe] Error verificando página:', err);
-        checkAttempts++;
-        if (checkAttempts < maxAttempts) {
-          setTimeout(checkPageContent, checkIntervals[checkAttempts]);
-        }
       }
-    };
-
-    // Iniciar verificación después de 2 segundos
-    setTimeout(checkPageContent, checkIntervals[0]);
+    }, 3000); // Esperar 3 segundos para que Angular cargue
   });
 
   // Log de errores de consola
@@ -347,10 +299,6 @@ function showRecoveryOverlay(): void {
       // Evitar duplicados
       if (document.getElementById('holape-recovery-overlay')) return;
 
-      // Ocultar el spinner de carga de Angular si existe
-      const appLoading = document.getElementById('app-loading');
-      if (appLoading) appLoading.style.display = 'none';
-
       const overlay = document.createElement('div');
       overlay.id = 'holape-recovery-overlay';
       overlay.innerHTML = \`
@@ -382,14 +330,10 @@ function showRecoveryOverlay(): void {
             color: #a1a1aa;
             margin-bottom: 32px;
             text-align: center;
-            max-width: 400px;
-            line-height: 1.5;
           }
           #holape-recovery-overlay .buttons {
             display: flex;
             gap: 16px;
-            flex-wrap: wrap;
-            justify-content: center;
           }
           #holape-recovery-overlay button {
             padding: 14px 28px;
@@ -415,84 +359,34 @@ function showRecoveryOverlay(): void {
           #holape-recovery-overlay .btn-secondary:hover {
             background: #3f3f46;
           }
-          #holape-recovery-overlay .btn-danger {
-            background: #dc2626;
-            color: white;
-          }
-          #holape-recovery-overlay .btn-danger:hover {
-            background: #b91c1c;
-          }
           #holape-recovery-overlay .hint {
             margin-top: 24px;
             font-size: 12px;
             color: #71717a;
           }
-          #holape-recovery-overlay .debug-info {
-            margin-top: 32px;
-            padding: 12px 16px;
-            background: #18181b;
-            border-radius: 6px;
-            font-size: 11px;
-            color: #71717a;
-            font-family: monospace;
-            max-width: 500px;
-            text-align: left;
-          }
         </style>
-        <div class="logo">⚠️</div>
+        <div class="logo">🔄</div>
         <h1>La aplicación no cargó correctamente</h1>
-        <p>Esto puede ocurrir por problemas de conexión, sesión expirada, o un error al cargar la aplicación.</p>
+        <p>Esto puede ocurrir por problemas de conexión o sesión expirada</p>
         <div class="buttons">
           <button class="btn-primary" onclick="window.holapeRecoveryReload()">
-            Reintentar
+            Recargar
           </button>
           <button class="btn-secondary" onclick="window.holapeRecoveryClearAndReload()">
-            Reiniciar sesión
+            Limpiar sesión y recargar
           </button>
         </div>
-        <p class="hint">Si el problema persiste después de reintentar, usa "Reiniciar sesión"</p>
-        <div class="debug-info" id="holape-debug-info">
-          Cargando información de diagnóstico...
-        </div>
+        <p class="hint">Si el problema persiste, intenta "Limpiar sesión y recargar"</p>
       \`;
       document.body.appendChild(overlay);
 
-      // Mostrar info de diagnóstico
-      setTimeout(function() {
-        const debugEl = document.getElementById('holape-debug-info');
-        if (debugEl) {
-          const hasToken = !!localStorage.getItem('holape_auth_token');
-          const hasUser = !!localStorage.getItem('holape_current_user');
-          debugEl.innerHTML = [
-            'Diagnóstico:',
-            '• Token guardado: ' + (hasToken ? 'Sí' : 'No'),
-            '• Usuario guardado: ' + (hasUser ? 'Sí' : 'No'),
-            '• URL: ' + location.href,
-            '• Hora: ' + new Date().toLocaleTimeString()
-          ].join('<br>');
-        }
-      }, 100);
-
       // Funciones globales para los botones
       window.holapeRecoveryReload = function() {
-        // Remover overlay y recargar
-        const ov = document.getElementById('holape-recovery-overlay');
-        if (ov) ov.remove();
         location.reload();
       };
 
       window.holapeRecoveryClearAndReload = function() {
-        // Limpiar todo el storage con prefijo holape_
-        const keysToRemove = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('holape_')) {
-            keysToRemove.push(key);
-          }
-        }
-        keysToRemove.forEach(function(key) {
-          localStorage.removeItem(key);
-        });
+        localStorage.clear();
         sessionStorage.clear();
         location.reload();
       };
