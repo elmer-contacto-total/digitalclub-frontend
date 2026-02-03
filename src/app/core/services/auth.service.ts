@@ -1,6 +1,6 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, tap, catchError, throwError, of, map } from 'rxjs';
+import { Observable, tap, catchError, throwError, of, map, BehaviorSubject, filter, take, switchMap } from 'rxjs';
 import { ApiService } from './api.service';
 import { StorageService } from './storage.service';
 import { ToastService } from './toast.service';
@@ -33,6 +33,10 @@ export class AuthService {
   private _isLoading = signal<boolean>(false);
   private _otpSessionId = signal<string | null>(this.storage.getString(OTP_SESSION_KEY));
   private _awaitingOtp = signal<boolean>(!!this.storage.getString(OTP_SESSION_KEY));
+
+  // Token refresh state - prevents multiple simultaneous refresh attempts
+  private _isRefreshing = new BehaviorSubject<boolean>(false);
+  private _refreshTokenSubject = new BehaviorSubject<string | null>(null);
 
   // Public computed signals
   readonly currentUser = this._currentUser.asReadonly();
@@ -190,21 +194,65 @@ export class AuthService {
   }
 
   /**
-   * Logout user
+   * Logout user - calls backend then clears local state
+   * @param showMessage - Whether to show a toast message (default: true)
+   * @param sessionExpired - Whether logout is due to session expiration (default: false)
    */
-  logout(): void {
+  logout(showMessage: boolean = true, sessionExpired: boolean = false): void {
+    const refreshToken = this.storage.getString(REFRESH_TOKEN_KEY);
+
+    // Call backend logout endpoint if we have a refresh token
+    if (refreshToken) {
+      this.api.post('/api/v1/auth/logout', { refreshToken }).pipe(
+        catchError(error => {
+          // Log but don't block logout on backend error
+          console.warn('[Auth] Backend logout failed:', error);
+          return of(null);
+        })
+      ).subscribe(() => {
+        this.clearLocalAuthState(showMessage, sessionExpired);
+      });
+    } else {
+      // No refresh token, just clear local state
+      this.clearLocalAuthState(showMessage, sessionExpired);
+    }
+  }
+
+  /**
+   * Clear local authentication state and redirect to login
+   */
+  private clearLocalAuthState(showMessage: boolean = true, sessionExpired: boolean = false): void {
     // Clear stored data
     this.storage.remove(TOKEN_KEY);
     this.storage.remove(REFRESH_TOKEN_KEY);
     this.storage.remove(USER_KEY);
+    this.storage.remove(OTP_SESSION_KEY);
 
     // Reset signals
     this._currentUser.set(null);
     this._token.set(null);
+    this._otpSessionId.set(null);
+    this._awaitingOtp.set(false);
 
-    // Navigate to login
-    this.router.navigate(['/login']);
-    this.toast.info('Sesión cerrada');
+    // Navigate to login with optional session expired indicator
+    const queryParams = sessionExpired ? { sessionExpired: 'true' } : {};
+    this.router.navigate(['/login'], { queryParams });
+
+    // Show appropriate message
+    if (showMessage) {
+      if (sessionExpired) {
+        this.toast.warning('Su sesión ha expirado. Por favor inicie sesión nuevamente.');
+      } else {
+        this.toast.info('Sesión cerrada');
+      }
+    }
+  }
+
+  /**
+   * Force logout without calling backend (for use when tokens are invalid)
+   */
+  forceLogout(sessionExpired: boolean = false): void {
+    this.clearLocalAuthState(true, sessionExpired);
   }
 
   /**
@@ -230,27 +278,72 @@ export class AuthService {
   }
 
   /**
-   * Refresh the access token
+   * Check if a token refresh is currently in progress
    */
-  refreshToken(): Observable<LoginResponse> {
-    const refreshToken = this.storage.get<string>(REFRESH_TOKEN_KEY);
+  get isRefreshing(): boolean {
+    return this._isRefreshing.value;
+  }
 
-    if (!refreshToken) {
-      return throwError(() => new Error('No refresh token available'));
+  /**
+   * Get the refresh token subject for interceptor coordination
+   */
+  get refreshTokenSubject(): BehaviorSubject<string | null> {
+    return this._refreshTokenSubject;
+  }
+
+  /**
+   * Wait for an ongoing refresh to complete
+   */
+  waitForRefresh(): Observable<string | null> {
+    return this._refreshTokenSubject.pipe(
+      filter(token => token !== null),
+      take(1)
+    );
+  }
+
+  /**
+   * Refresh the access token
+   * @returns Observable<boolean> - true if refresh succeeded, false otherwise
+   */
+  refreshToken(): Observable<boolean> {
+    const storedRefreshToken = this.storage.getString(REFRESH_TOKEN_KEY);
+
+    if (!storedRefreshToken) {
+      console.warn('[Auth] No refresh token available');
+      return of(false);
     }
 
-    return this.api.post<LoginResponse>('/auth/refresh', { refreshToken }).pipe(
+    // If already refreshing, wait for that refresh to complete
+    if (this._isRefreshing.value) {
+      return this._refreshTokenSubject.pipe(
+        filter(token => token !== null),
+        take(1),
+        map(token => !!token)
+      );
+    }
+
+    // Start refresh
+    this._isRefreshing.next(true);
+    this._refreshTokenSubject.next(null);
+
+    return this.api.post<LoginResponse>('/api/v1/auth/refresh', { refreshToken: storedRefreshToken }).pipe(
       tap(response => {
         if (response.token) {
           this.storeToken(response.token);
+          this._refreshTokenSubject.next(response.token);
         }
         if (response.refreshToken) {
           this.storage.setString(REFRESH_TOKEN_KEY, response.refreshToken);
         }
+        this._isRefreshing.next(false);
       }),
+      map(response => !!response.token),
       catchError(error => {
-        this.logout();
-        return throwError(() => error);
+        console.error('[Auth] Token refresh failed:', error);
+        this._isRefreshing.next(false);
+        this._refreshTokenSubject.next('');
+        // Do NOT logout here - let the interceptor handle it
+        return of(false);
       })
     );
   }
@@ -269,28 +362,48 @@ export class AuthService {
 
   /**
    * Check authentication status on app init
+   * Validates the current token with backend and attempts refresh if invalid
    */
   checkAuth(): Observable<boolean> {
     const token = this._token();
     const user = this._currentUser();
 
+    // No token or user - not authenticated
     if (!token || !user) {
       return of(false);
     }
 
-    // Optionally validate token with backend
-    return this.api.get<{ valid: boolean }>('/auth/validate').pipe(
+    // Validate token with backend
+    return this.api.get<{ valid: boolean; user?: AuthUser }>('/api/v1/auth/validate').pipe(
       map(response => {
         if (!response.valid) {
-          this.logout();
+          // Token invalid, try to refresh
           return false;
+        }
+        // Update user data if returned
+        if (response.user) {
+          const currentUser = mapAuthUserToCurrentUser(response.user);
+          this._currentUser.set(currentUser);
+          this.storage.set(USER_KEY, currentUser);
         }
         return true;
       }),
-      catchError(() => {
-        // Token invalid or expired
-        this.logout();
-        return of(false);
+      catchError(error => {
+        // If 401, attempt token refresh
+        if (error.status === 401) {
+          return this.refreshToken().pipe(
+            map(refreshed => {
+              if (!refreshed) {
+                // Refresh failed - clear auth state silently (no duplicate logout)
+                this.clearLocalAuthState(false, false);
+              }
+              return refreshed;
+            })
+          );
+        }
+        // Other errors - log but assume authenticated to avoid unnecessary logouts
+        console.warn('[Auth] Token validation error:', error);
+        return of(true);
       })
     );
   }

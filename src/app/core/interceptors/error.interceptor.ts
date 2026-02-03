@@ -1,18 +1,20 @@
 import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 import { ToastService } from '../services/toast.service';
-import { StorageService } from '../services/storage.service';
 
+/**
+ * Error interceptor for handling HTTP errors.
+ * NOTE: 401 errors are handled by auth.interceptor.ts with automatic token refresh.
+ * This interceptor handles all other error codes.
+ */
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
-  const router = inject(Router);
   const toastService = inject(ToastService);
-  const storageService = inject(StorageService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
       let errorMessage = 'An error occurred';
+      let showToast = true;
 
       if (error.error instanceof ErrorEvent) {
         // Client-side error
@@ -21,19 +23,18 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // Server-side error
         switch (error.status) {
           case 0:
-            errorMessage = 'Unable to connect to server. Please check your connection.';
+            errorMessage = 'No se puede conectar al servidor. Verifique su conexión.';
             break;
           case 401:
-            errorMessage = 'Session expired. Please login again.';
-            // Clear auth data and redirect to login
-            storageService.clear(); // Clear all holape_ prefixed data
-            router.navigate(['/auth/login']);
+            // 401 is handled by auth.interceptor.ts - do NOT handle here
+            // Just pass through without showing toast
+            showToast = false;
             break;
           case 403:
-            errorMessage = 'Access denied. You do not have permission to perform this action.';
+            errorMessage = 'Acceso denegado. No tiene permiso para realizar esta acción.';
             break;
           case 404:
-            errorMessage = 'Resource not found.';
+            errorMessage = 'Recurso no encontrado.';
             break;
           case 422:
             // Validation error - extract message from response
@@ -42,19 +43,19 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
             } else if (error.error?.message) {
               errorMessage = error.error.message;
             } else {
-              errorMessage = 'Validation error. Please check your input.';
+              errorMessage = 'Error de validación. Verifique sus datos.';
             }
             break;
           case 500:
-            errorMessage = 'Server error. Please try again later.';
+            errorMessage = 'Error del servidor. Por favor intente más tarde.';
             break;
           default:
             errorMessage = error.error?.message || `Error: ${error.status}`;
         }
       }
 
-      // Show toast notification (except for 401 which redirects)
-      if (error.status !== 401) {
+      // Show toast notification (except for 401 which is handled by auth interceptor)
+      if (showToast) {
         toastService.error(errorMessage);
       }
 

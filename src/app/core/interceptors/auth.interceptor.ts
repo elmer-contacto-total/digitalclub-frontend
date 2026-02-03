@@ -1,15 +1,40 @@
-import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { HttpInterceptorFn, HttpErrorResponse, HttpRequest, HttpHandlerFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { Router } from '@angular/router';
-import { catchError, throwError } from 'rxjs';
+import { BehaviorSubject, Observable, throwError } from 'rxjs';
+import { catchError, filter, switchMap, take } from 'rxjs/operators';
+import { AuthService } from '../services/auth.service';
 
 const AUTH_TOKEN_KEY = 'holape_auth_token';
 const USER_KEY = 'holape_current_user';
 const REFRESH_TOKEN_KEY = 'holape_refresh_token';
 const OTP_SESSION_KEY = 'holape_otp_session';
 
+// Shared state for coordinating refresh across requests
+let isRefreshing = false;
+const refreshTokenSubject = new BehaviorSubject<string | null>(null);
+
+/**
+ * URLs that should not trigger token refresh on 401
+ */
+const SKIP_REFRESH_URLS = [
+  '/prelogin',
+  '/verify_otp',
+  '/login',
+  '/auth/refresh',
+  '/auth/logout',
+  '/password/forgot',
+  '/password/reset'
+];
+
+/**
+ * Check if request URL should skip refresh logic
+ */
+function shouldSkipRefresh(url: string): boolean {
+  return SKIP_REFRESH_URLS.some(skipUrl => url.includes(skipUrl));
+}
+
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const router = inject(Router);
+  const authService = inject(AuthService);
 
   // Direct localStorage access - more reliable than inject in interceptors
   let token: string | null = null;
@@ -30,34 +55,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   }
 
   // Clone request with auth header if token exists
-  const authReq = token
-    ? req.clone({
-        setHeaders: {
-          Authorization: `Bearer ${token}`
-        }
-      })
-    : req;
+  const authReq = addTokenToRequest(req, token);
 
   return next(authReq).pipe(
     catchError((error: HttpErrorResponse) => {
       // Handle 401 Unauthorized errors
       if (error.status === 401) {
-        console.warn('[Auth] 401 Unauthorized - Sesión expirada');
-
-        // Don't redirect if already on login page or making login request
-        const isLoginRequest = req.url.includes('/prelogin') ||
-                               req.url.includes('/verify_otp') ||
-                               req.url.includes('/login');
-
-        if (!isLoginRequest) {
-          // Clear all auth data
-          clearAuthData();
-
-          // Redirect to login
-          router.navigate(['/login'], {
-            queryParams: { sessionExpired: 'true' }
-          });
-        }
+        return handle401Error(req, next, authService, token);
       }
 
       // Handle 403 Forbidden errors
@@ -69,6 +73,98 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     })
   );
 };
+
+/**
+ * Add token to request headers
+ */
+function addTokenToRequest(req: HttpRequest<unknown>, token: string | null): HttpRequest<unknown> {
+  if (!token) {
+    return req;
+  }
+
+  return req.clone({
+    setHeaders: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+/**
+ * Handle 401 Unauthorized errors with automatic token refresh
+ */
+function handle401Error(
+  req: HttpRequest<unknown>,
+  next: HttpHandlerFn,
+  authService: AuthService,
+  currentToken: string | null
+): Observable<any> {
+  // Don't attempt refresh for auth-related requests
+  if (shouldSkipRefresh(req.url)) {
+    console.warn('[Auth] 401 on auth request - not refreshing');
+    return throwError(() => new HttpErrorResponse({
+      error: 'Unauthorized',
+      status: 401,
+      statusText: 'Unauthorized'
+    }));
+  }
+
+  // If not currently refreshing, initiate refresh
+  if (!isRefreshing) {
+    isRefreshing = true;
+    refreshTokenSubject.next(null);
+
+    console.log('[Auth] 401 received - attempting token refresh');
+
+    return authService.refreshToken().pipe(
+      switchMap((success: boolean) => {
+        isRefreshing = false;
+
+        if (success) {
+          // Get new token and retry the request
+          const newToken = localStorage.getItem(AUTH_TOKEN_KEY);
+          refreshTokenSubject.next(newToken);
+          console.log('[Auth] Token refresh successful - retrying request');
+          return next(addTokenToRequest(req, newToken));
+        } else {
+          // Refresh failed - logout and redirect
+          console.warn('[Auth] Token refresh failed - logging out');
+          refreshTokenSubject.next('');
+          authService.forceLogout(true);
+          return throwError(() => new HttpErrorResponse({
+            error: 'Session expired',
+            status: 401,
+            statusText: 'Unauthorized'
+          }));
+        }
+      }),
+      catchError((refreshError) => {
+        isRefreshing = false;
+        refreshTokenSubject.next('');
+        console.error('[Auth] Token refresh error:', refreshError);
+        authService.forceLogout(true);
+        return throwError(() => refreshError);
+      })
+    );
+  }
+
+  // If refresh is already in progress, wait for it to complete
+  return refreshTokenSubject.pipe(
+    filter(token => token !== null),
+    take(1),
+    switchMap(token => {
+      if (token === '') {
+        // Refresh failed - propagate error
+        return throwError(() => new HttpErrorResponse({
+          error: 'Session expired',
+          status: 401,
+          statusText: 'Unauthorized'
+        }));
+      }
+      // Retry with new token
+      return next(addTokenToRequest(req, token));
+    })
+  );
+}
 
 /**
  * Clear all authentication data from localStorage
