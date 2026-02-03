@@ -8,7 +8,8 @@ import {
   RegisteredContact,
   CrmContact,
   PersonalLabel,
-  PhoneUtils
+  PhoneUtils,
+  UserActionHistory
 } from '../../../core/models/crm-contact.model';
 
 /**
@@ -38,6 +39,8 @@ interface ContactSearchResponse {
     managerId?: number;
     managerName?: string;
     hasOpenTicket?: boolean;
+    openTicketId?: number;
+    customFields?: Record<string, unknown>;
   };
 }
 
@@ -83,6 +86,8 @@ export class ElectronContactsService {
             managerName: response.contact.managerName,
             issueNotes: response.contact.issueNotes,
             hasOpenTicket: response.contact.hasOpenTicket,
+            openTicketId: response.contact.openTicketId,
+            customFields: response.contact.customFields,
             createdAt: response.contact.createdAt || ''
           };
 
@@ -158,6 +163,8 @@ export class ElectronContactsService {
             managerName: response.contact.managerName,
             issueNotes: response.contact.issueNotes,
             hasOpenTicket: response.contact.hasOpenTicket,
+            openTicketId: response.contact.openTicketId,
+            customFields: response.contact.customFields,
             createdAt: response.contact.createdAt || ''
           };
 
@@ -281,5 +288,31 @@ export class ElectronContactsService {
    */
   clearLocalContacts(): void {
     this.storage.remove(LOCAL_CONTACTS_KEY);
+  }
+
+  /**
+   * Close a ticket with a specific close type
+   * @param ticketId ID of the ticket to close
+   * @param closeType 'con_acuerdo' | 'sin_acuerdo'
+   */
+  closeTicket(ticketId: number, closeType: string): Observable<{ result: string; ticket: unknown }> {
+    return this.http.post<{ result: string; ticket: unknown }>(
+      `${environment.apiUrl}/app/tickets/${ticketId}/close`,
+      { closeType }
+    );
+  }
+
+  /**
+   * Get action history (audit log) for a user
+   * Shows what actions other agents have taken with this user
+   */
+  getActionHistory(userId: number, page = 0, size = 20): Observable<{ history: UserActionHistory[]; total: number }> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('size', size.toString());
+    return this.http.get<{ history: UserActionHistory[]; total: number }>(
+      `${this.baseUrl}/${userId}/action_history`,
+      { params }
+    );
   }
 }

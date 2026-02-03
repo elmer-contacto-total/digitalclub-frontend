@@ -19,8 +19,10 @@ import {
   PhoneUtils,
   getContactInitials,
   getLabelConfig,
-  ChatSelectedEvent
+  ChatSelectedEvent,
+  UserActionHistory
 } from '../../core/models/crm-contact.model';
+import { CannedMessageService, CannedMessage } from '../../core/services/canned-message.service';
 
 type ViewState = 'empty' | 'loading' | 'contact';
 
@@ -34,6 +36,7 @@ type ViewState = 'empty' | 'loading' | 'contact';
 export class ElectronClientsComponent implements OnInit, OnDestroy {
   private electronService = inject(ElectronService);
   private contactsService = inject(ElectronContactsService);
+  private cannedMessageService = inject(CannedMessageService);
   private destroy$ = new Subject<void>();
 
   // State
@@ -47,6 +50,20 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   selectedLabel = signal<PersonalLabel | undefined>(undefined);
   notesField = signal('');
   isSavingNotes = signal(false);
+
+  // Ticket state
+  isClosingTicket = signal(false);
+  showTicketConfirmation = signal<'con_acuerdo' | 'sin_acuerdo' | null>(null);
+
+  // Canned messages state
+  showCannedMessages = signal(false);
+  cannedMessages = signal<CannedMessage[]>([]);
+  loadingCannedMessages = signal(false);
+
+  // Action history state
+  actionHistory = signal<UserActionHistory[]>([]);
+  loadingHistory = signal(false);
+  showHistoryPanel = signal(false);
 
   // Label options
   readonly labelOptions = PERSONAL_LABELS;
@@ -299,5 +316,194 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       month: 'short',
       year: 'numeric'
     });
+  }
+
+  // ==================== TICKET ACTIONS ====================
+
+  /**
+   * Initiate ticket close process
+   */
+  initiateCloseTicket(closeType: 'con_acuerdo' | 'sin_acuerdo'): void {
+    this.showTicketConfirmation.set(closeType);
+  }
+
+  /**
+   * Confirm and close ticket
+   */
+  confirmCloseTicket(): void {
+    const c = this.contact();
+    const closeType = this.showTicketConfirmation();
+
+    if (!c?.registered?.openTicketId || !closeType) return;
+
+    this.isClosingTicket.set(true);
+
+    this.contactsService.closeTicket(c.registered.openTicketId, closeType).subscribe({
+      next: () => {
+        this.isClosingTicket.set(false);
+        this.showTicketConfirmation.set(null);
+
+        // Update local state
+        if (c.registered) {
+          c.registered.hasOpenTicket = false;
+          c.registered.openTicketId = undefined;
+        }
+      },
+      error: (err) => {
+        console.error('Error closing ticket:', err);
+        this.isClosingTicket.set(false);
+      }
+    });
+  }
+
+  /**
+   * Cancel ticket close
+   */
+  cancelCloseTicket(): void {
+    this.showTicketConfirmation.set(null);
+  }
+
+  // ==================== CANNED MESSAGES ====================
+
+  /**
+   * Load canned messages
+   */
+  loadCannedMessages(): void {
+    if (this.cannedMessages().length > 0) {
+      this.showCannedMessages.set(true);
+      return;
+    }
+
+    this.loadingCannedMessages.set(true);
+    this.cannedMessageService.getCannedMessages().subscribe({
+      next: (response) => {
+        this.cannedMessages.set(response.canned_messages || []);
+        this.loadingCannedMessages.set(false);
+        this.showCannedMessages.set(true);
+      },
+      error: (err) => {
+        console.error('Error loading canned messages:', err);
+        this.loadingCannedMessages.set(false);
+      }
+    });
+  }
+
+  /**
+   * Select canned message and send via Electron
+   */
+  onCannedMessageSelect(message: CannedMessage): void {
+    this.showCannedMessages.set(false);
+
+    // Send message via Electron IPC
+    if (this.electronService.isElectron) {
+      this.sendMessageViaWhatsApp(message.message);
+    }
+  }
+
+  /**
+   * Send message to WhatsApp Web via Electron IPC
+   */
+  private sendMessageViaWhatsApp(text: string): void {
+    // Access Electron API if available
+    const electronAPI = (window as unknown as { electronAPI?: { sendWhatsAppMessage?: (text: string) => Promise<boolean> } }).electronAPI;
+    if (electronAPI?.sendWhatsAppMessage) {
+      electronAPI.sendWhatsAppMessage(text);
+    }
+  }
+
+  /**
+   * Close canned messages dropdown
+   */
+  closeCannedMessages(): void {
+    this.showCannedMessages.set(false);
+  }
+
+  // ==================== ACTION HISTORY ====================
+
+  /**
+   * Load action history for current contact
+   */
+  loadActionHistory(): void {
+    const c = this.contact();
+    if (!c?.registered?.id) return;
+
+    this.loadingHistory.set(true);
+    this.contactsService.getActionHistory(c.registered.id).subscribe({
+      next: (response) => {
+        this.actionHistory.set(response.history);
+        this.loadingHistory.set(false);
+        this.showHistoryPanel.set(true);
+      },
+      error: (err) => {
+        console.error('Error loading history:', err);
+        this.loadingHistory.set(false);
+      }
+    });
+  }
+
+  /**
+   * Close history panel
+   */
+  closeHistoryPanel(): void {
+    this.showHistoryPanel.set(false);
+  }
+
+  /**
+   * Get formatted action for display
+   */
+  formatAction(action: string): string {
+    const actions: Record<string, string> = {
+      'create': 'Creó',
+      'update': 'Actualizó',
+      'destroy': 'Eliminó'
+    };
+    return actions[action] || action;
+  }
+
+  /**
+   * Get summary of audit changes for display
+   */
+  getChangesSummary(changes: Record<string, unknown>): string[] {
+    if (!changes) return [];
+    return Object.keys(changes).slice(0, 3).map(key => this.formatFieldLabel(key));
+  }
+
+  // ==================== CUSTOM FIELDS ====================
+
+  /**
+   * Get custom fields as array of entries for iteration
+   */
+  getCustomFieldsEntries(): { key: string; value: unknown }[] {
+    const fields = this.contact()?.registered?.customFields;
+    if (!fields) return [];
+    return Object.entries(fields).map(([key, value]) => ({ key, value }));
+  }
+
+  /**
+   * Check if contact has custom fields
+   */
+  hasCustomFields(): boolean {
+    const fields = this.contact()?.registered?.customFields;
+    return fields != null && Object.keys(fields).length > 0;
+  }
+
+  /**
+   * Format field label from snake_case or camelCase to Title Case
+   */
+  formatFieldLabel(key: string): string {
+    return key
+      .replace(/_/g, ' ')
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase())
+      .trim();
+  }
+
+  /**
+   * Format field value for display
+   */
+  formatFieldValue(value: unknown): string {
+    if (value === null || value === undefined) return '-';
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
   }
 }

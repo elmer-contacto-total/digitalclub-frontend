@@ -59,7 +59,20 @@ export interface RegisteredContact {
   managerName?: string;
   issueNotes?: string;
   hasOpenTicket?: boolean;
+  openTicketId?: number;
+  customFields?: Record<string, unknown>;
   lastMessageAt?: string;
+  createdAt: string;
+}
+
+/**
+ * User action history from audit log
+ */
+export interface UserActionHistory {
+  id: number;
+  action: string; // 'create' | 'update' | 'destroy'
+  username: string; // Agent who performed the action
+  auditedChanges: Record<string, unknown>;
   createdAt: string;
 }
 

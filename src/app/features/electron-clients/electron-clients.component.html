@@ -115,8 +115,46 @@
                   <i class="ph ph-ticket"></i>
                   <span>Tiene un caso abierto</span>
                 </div>
+
+                <!-- Ticket Actions -->
+                <div class="ticket-actions">
+                  <button
+                    class="btn btn-success"
+                    [disabled]="isClosingTicket()"
+                    (click)="initiateCloseTicket('con_acuerdo')"
+                  >
+                    <i class="ph ph-check-circle"></i>
+                    Cerrar con Acuerdo
+                  </button>
+                  <button
+                    class="btn btn-warning"
+                    [disabled]="isClosingTicket()"
+                    (click)="initiateCloseTicket('sin_acuerdo')"
+                  >
+                    <i class="ph ph-x-circle"></i>
+                    Cerrar sin Acuerdo
+                  </button>
+                </div>
               }
             </div>
+
+            <!-- Custom Fields Section (datos adicionales - e.g., cobranza) -->
+            @if (hasCustomFields()) {
+              <div class="info-section custom-fields-section">
+                <h4 class="section-title">
+                  <i class="ph ph-file-text"></i>
+                  Datos Adicionales
+                </h4>
+                <div class="custom-fields-grid">
+                  @for (entry of getCustomFieldsEntries(); track entry.key) {
+                    <div class="custom-field-item">
+                      <span class="field-label">{{ formatFieldLabel(entry.key) }}</span>
+                      <span class="field-value">{{ formatFieldValue(entry.value) }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
           }
 
           <!-- Personal Label (for local/non-registered contacts) -->
@@ -143,6 +181,50 @@
                   <i class="ph ph-x"></i>
                   Quitar etiqueta
                 </button>
+              }
+            </div>
+          }
+
+          <!-- Canned Messages Section (only for registered contacts) -->
+          @if (isRegistered()) {
+            <div class="info-section">
+              <h4 class="section-title">
+                <i class="ph ph-chat-text"></i>
+                Respuestas Rapidas
+              </h4>
+              <button
+                class="btn btn-outline"
+                [disabled]="loadingCannedMessages()"
+                (click)="loadCannedMessages()"
+              >
+                @if (loadingCannedMessages()) {
+                  <span class="spinner-sm"></span>
+                  Cargando...
+                } @else {
+                  <i class="ph ph-list"></i>
+                  Ver Respuestas Rapidas
+                }
+              </button>
+
+              @if (showCannedMessages()) {
+                <div class="canned-messages-dropdown">
+                  <div class="dropdown-header">
+                    <span>Selecciona un mensaje</span>
+                    <button class="btn-close" (click)="closeCannedMessages()">
+                      <i class="ph ph-x"></i>
+                    </button>
+                  </div>
+                  <div class="canned-messages-list">
+                    @for (msg of cannedMessages(); track msg.id) {
+                      <button class="canned-message-item" (click)="onCannedMessageSelect(msg)">
+                        {{ msg.message }}
+                      </button>
+                    }
+                    @if (cannedMessages().length === 0) {
+                      <p class="empty-message">No hay respuestas rapidas disponibles</p>
+                    }
+                  </div>
+                </div>
               }
             </div>
           }
@@ -180,8 +262,99 @@
               </button>
             </div>
           </div>
+
+          <!-- Action History Section (only for registered contacts) -->
+          @if (isRegistered()) {
+            <div class="info-section">
+              <h4 class="section-title">
+                <i class="ph ph-clock-counter-clockwise"></i>
+                Historial de Acciones
+              </h4>
+              <button
+                class="btn btn-outline"
+                [disabled]="loadingHistory()"
+                (click)="loadActionHistory()"
+              >
+                @if (loadingHistory()) {
+                  <span class="spinner-sm"></span>
+                  Cargando...
+                } @else {
+                  <i class="ph ph-list"></i>
+                  Ver Historial
+                }
+              </button>
+
+              @if (showHistoryPanel()) {
+                <div class="history-panel">
+                  <div class="panel-header">
+                    <span>Historial de cambios</span>
+                    <button class="btn-close" (click)="closeHistoryPanel()">
+                      <i class="ph ph-x"></i>
+                    </button>
+                  </div>
+                  @if (actionHistory().length > 0) {
+                    <div class="history-list">
+                      @for (item of actionHistory(); track item.id) {
+                        <div class="history-item">
+                          <div class="history-header">
+                            <span class="history-user">{{ item.username }}</span>
+                            <span class="history-date">{{ formatDate(item.createdAt) }}</span>
+                          </div>
+                          <div class="history-action">
+                            {{ formatAction(item.action) }}
+                          </div>
+                          @if (item.auditedChanges && getChangesSummary(item.auditedChanges).length > 0) {
+                            <div class="history-changes">
+                              @for (change of getChangesSummary(item.auditedChanges); track change) {
+                                <span class="change-item">{{ change }}</span>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="empty-history">No hay historial de acciones.</p>
+                  }
+                </div>
+              }
+            </div>
+          }
         </div>
       }
+    </div>
+  }
+
+  <!-- Ticket Close Confirmation Modal -->
+  @if (showTicketConfirmation()) {
+    <div class="confirmation-overlay" (click)="cancelCloseTicket()">
+      <div class="confirmation-modal" (click)="$event.stopPropagation()">
+        <h4>Confirmar Cierre de Ticket</h4>
+        <p>
+          @if (showTicketConfirmation() === 'con_acuerdo') {
+            Se cerrara el ticket indicando que hubo un acuerdo con el cliente.
+          } @else {
+            Se cerrara el ticket indicando que NO hubo acuerdo con el cliente.
+          }
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" (click)="cancelCloseTicket()">
+            Cancelar
+          </button>
+          <button
+            class="btn btn-primary"
+            [disabled]="isClosingTicket()"
+            (click)="confirmCloseTicket()"
+          >
+            @if (isClosingTicket()) {
+              <span class="spinner-sm"></span>
+              Cerrando...
+            } @else {
+              Confirmar
+            }
+          </button>
+        </div>
+      </div>
     </div>
   }
 </div>
