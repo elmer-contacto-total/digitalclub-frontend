@@ -225,8 +225,10 @@ function createWindow(): void {
 
   mainWindow.loadURL(ANGULAR_URL);
 
-  // DevTools - siempre abierto para debug
-  mainWindow.webContents.openDevTools({ mode: 'detach' });
+  // DevTools solo en desarrollo o con variable de entorno
+  if (ANGULAR_URL.includes('localhost') || process.env.HOLAPE_DEBUG) {
+    mainWindow.webContents.openDevTools();
+  }
 
   // Log cuando termine de cargar y verificar si la página está en blanco
   mainWindow.webContents.on('did-finish-load', () => {
