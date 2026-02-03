@@ -147,7 +147,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                 <select id="managerId" formControlName="managerId">
                   <option [ngValue]="null">Sin manager asignado</option>
                   @for (manager of availableManagers(); track manager.id) {
-                    <option [ngValue]="manager.id">{{ manager.fullName }} ({{ getRoleDisplayName(manager.role) }})</option>
+                    <option [ngValue]="manager.id">{{ manager.name }} ({{ getRoleDisplayName(manager.role) }})</option>
                   }
                 </select>
               </div>

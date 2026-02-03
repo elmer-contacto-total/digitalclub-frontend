@@ -168,10 +168,11 @@ export interface UserListItem {
 
 /**
  * User for dropdown/select
+ * PARIDAD RAILS: Rails devuelve {id, name} en available_managers
  */
 export interface UserOption {
   id: number;
-  fullName: string;
+  name: string;  // PARIDAD RAILS: campo "name" (first_name + last_name)
   email: string;
   role: UserRole;
 }

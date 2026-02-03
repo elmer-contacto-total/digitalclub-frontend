@@ -67,7 +67,7 @@ interface SubordinateClient {
                       <i class="ph-fill ph-user"></i>
                     </div>
                     <div class="user-info">
-                      <span class="user-name">{{ manager.fullName }}</span>
+                      <span class="user-name">{{ manager.name }}</span>
                     </div>
                     @if (selectedManager()?.id === manager.id) {
                       <i class="ph-fill ph-check-circle selected-icon"></i>
@@ -410,7 +410,7 @@ export class ManagerAssignmentsComponent implements OnInit, OnDestroy {
         this.isAssigning.set(false);
 
         if (response.result === 'success') {
-          this.toast.success(response.message || `${clientIds.length} cliente(s) asignados a ${manager.fullName}`);
+          this.toast.success(response.message || `${clientIds.length} cliente(s) asignados a ${manager.name}`);
           this.selectedClientIds.set(new Set());
           this.loadClients();
         } else {

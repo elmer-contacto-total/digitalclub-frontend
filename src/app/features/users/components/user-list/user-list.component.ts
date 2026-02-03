@@ -303,7 +303,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
                       <select [(ngModel)]="editForm.managerId">
                         <option [ngValue]="null">Sin asignar</option>
                         @for (manager of availableManagers(); track manager.id) {
-                          <option [ngValue]="manager.id">{{ manager.fullName }}</option>
+                          <option [ngValue]="manager.id">{{ manager.name }}</option>
                         }
                       </select>
                     </div>
