@@ -735,13 +735,13 @@ export class LoginAsComponent implements OnInit, OnDestroy {
 
     console.log('[LoginAs] Loading users, current user:', currentUser?.id, 'role:', currentUserRole);
 
-    // Get all users with larger page size
-    this.userService.getUsers({ pageSize: 500 })
+    // Get internal users (non-standard roles) - PARIDAD Rails get_login_as
+    this.userService.getInternalUsers({ pageSize: 500 })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
           const users = (response.data || []) as any[];
-          console.log('[LoginAs] Received users:', users.length);
+          console.log('[LoginAs] Received internal users:', users.length);
 
           // Filter users based on current user role
           // PARIDAD: Rails get_login_as filtering logic
@@ -752,15 +752,7 @@ export class LoginAsComponent implements OnInit, OnDestroy {
               // Exclude current user
               if (u.id === currentUser?.id) return false;
 
-              // Always exclude standard and whatsapp_business users
-              if (userRole === UserRole.STANDARD || userRole === UserRole.WHATSAPP_BUSINESS) return false;
-
-              // PARIDAD RAILS: super_admin excludes super_admin, standard, whatsapp_business
-              if (currentUserRole === UserRole.SUPER_ADMIN) {
-                if (userRole === UserRole.SUPER_ADMIN) return false;
-              }
-
-              // PARIDAD RAILS: admin excludes super_admin, admin, standard, whatsapp_business
+              // PARIDAD RAILS: admin cannot impersonate super_admin or other admins
               if (currentUserRole === UserRole.ADMIN) {
                 if (userRole === UserRole.SUPER_ADMIN || userRole === UserRole.ADMIN) return false;
               }

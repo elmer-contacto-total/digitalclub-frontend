@@ -6,9 +6,38 @@ import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { LoginAsResponse, ImpersonationState, LoginAsUser } from '../models/login-as.model';
+import { ImpersonationState, LoginAsUser } from '../models/login-as.model';
 import { StorageService } from './storage.service';
 import { UserRole } from '../models/user.model';
+import { CurrentUser } from '../models/auth.model';
+
+/**
+ * Response from login_as endpoint
+ * Backend returns camelCase fields
+ */
+interface LoginAsApiResponse {
+  result: 'success' | 'error';
+  token?: string;
+  user?: {
+    id: number;
+    email: string;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+    phone?: string;
+    role: number;
+    status: number;
+    clientId?: number;
+    clientName?: string;
+    timeZone?: string;
+    locale?: string;
+    countryId?: number;
+    avatarData?: string;
+    uuidToken?: string;
+  };
+  original_user_id?: number;
+  error?: string;
+}
 
 const ORIGINAL_USER_KEY = 'original_user';
 const ORIGINAL_TOKEN_KEY = 'original_token';
@@ -52,7 +81,7 @@ export class LoginAsService {
   /**
    * Login as another user (impersonate)
    */
-  loginAs(userId: number): Observable<LoginAsResponse> {
+  loginAs(userId: number): Observable<LoginAsApiResponse> {
     // Store current user/token before switching
     const currentToken = this.storage.getString('token');
     const currentUserStr = this.storage.getString('user');
@@ -62,27 +91,44 @@ export class LoginAsService {
       this.storage.setString(ORIGINAL_USER_KEY, currentUserStr);
     }
 
-    return this.http.post<LoginAsResponse>(`${this.baseUrl}/${userId}/login_as`, {}).pipe(
+    return this.http.post<LoginAsApiResponse>(`${this.baseUrl}/${userId}/login_as`, {}).pipe(
       tap(response => {
         if (response.result === 'success' && response.token && response.user) {
+          // Map response user to CurrentUser format expected by AuthService
+          const currentUser: CurrentUser = {
+            id: response.user.id,
+            email: response.user.email,
+            firstName: response.user.firstName || '',
+            lastName: response.user.lastName || '',
+            fullName: response.user.fullName || `${response.user.firstName} ${response.user.lastName}`.trim(),
+            phone: response.user.phone || '',
+            role: response.user.role,
+            status: response.user.status,
+            clientId: response.user.clientId || 0,
+            countryId: response.user.countryId || null,
+            timeZone: response.user.timeZone || 'America/Lima',
+            locale: response.user.locale || 'es',
+            avatarData: response.user.avatarData,
+            uuidToken: response.user.uuidToken || ''
+          };
+
           // Update token and user
           this.storage.setString('token', response.token);
-          this.storage.setString('user', JSON.stringify(response.user));
+          this.storage.setString('user', JSON.stringify(currentUser));
+
+          console.log('[LoginAs] Impersonation successful, new user:', currentUser.email, 'role:', currentUser.role);
 
           // Update impersonation state
           const originalUser = currentUserStr ? JSON.parse(currentUserStr) : null;
           const originalName = originalUser?.firstName && originalUser?.lastName
             ? `${originalUser.firstName} ${originalUser.lastName}`
             : originalUser?.email || null;
-          const currentName = response.user.first_name && response.user.last_name
-            ? `${response.user.first_name} ${response.user.last_name}`
-            : response.user.email;
 
           this._impersonationState.set({
             isImpersonating: true,
             originalUserId: response.original_user_id || null,
             originalUserName: originalName,
-            currentUserName: currentName
+            currentUserName: currentUser.fullName
           });
         }
       })
@@ -92,7 +138,7 @@ export class LoginAsService {
   /**
    * Return from impersonation to original user
    */
-  returnFromImpersonation(): Observable<LoginAsResponse> {
+  returnFromImpersonation(): Observable<LoginAsApiResponse> {
     const originalUserId = this._impersonationState().originalUserId;
 
     if (!originalUserId) {
@@ -101,16 +147,36 @@ export class LoginAsService {
 
     const params = new HttpParams().set('originalUserId', originalUserId.toString());
 
-    return this.http.post<LoginAsResponse>(
+    return this.http.post<LoginAsApiResponse>(
       `${this.baseUrl}/return_from_impersonation`,
       {},
       { params }
     ).pipe(
       tap(response => {
         if (response.result === 'success' && response.token && response.user) {
+          // Map response user to CurrentUser format expected by AuthService
+          const currentUser: CurrentUser = {
+            id: response.user.id,
+            email: response.user.email,
+            firstName: response.user.firstName || '',
+            lastName: response.user.lastName || '',
+            fullName: response.user.fullName || `${response.user.firstName} ${response.user.lastName}`.trim(),
+            phone: response.user.phone || '',
+            role: response.user.role,
+            status: response.user.status,
+            clientId: response.user.clientId || 0,
+            countryId: response.user.countryId || null,
+            timeZone: response.user.timeZone || 'America/Lima',
+            locale: response.user.locale || 'es',
+            avatarData: response.user.avatarData,
+            uuidToken: response.user.uuidToken || ''
+          };
+
           // Restore original token and user
           this.storage.setString('token', response.token);
-          this.storage.setString('user', JSON.stringify(response.user));
+          this.storage.setString('user', JSON.stringify(currentUser));
+
+          console.log('[LoginAs] Returned to original user:', currentUser.email);
 
           // Clear stored original values
           this.storage.remove(ORIGINAL_TOKEN_KEY);
@@ -149,6 +215,13 @@ export class LoginAsService {
       try {
         const original = JSON.parse(originalUserStr);
         const current = JSON.parse(currentUserStr);
+
+        // Only show impersonation if current user is DIFFERENT from original
+        if (original.id === current.id) {
+          // Same user - not impersonating, clear stale state
+          this.clearImpersonationState();
+          return;
+        }
 
         const originalName = original.firstName && original.lastName
           ? `${original.firstName} ${original.lastName}`
