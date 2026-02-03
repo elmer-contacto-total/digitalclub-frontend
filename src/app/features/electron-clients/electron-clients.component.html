@@ -17,20 +17,25 @@
     <div class="crm-panel">
       <!-- Header -->
       <div class="panel-header">
-        <h1>
+        <div class="header-content">
           <i class="ph ph-address-book"></i>
-          Panel CRM
-        </h1>
+          <span>Panel CRM</span>
+        </div>
       </div>
 
       <!-- Empty State -->
       @if (viewState() === 'empty') {
         <div class="empty-state">
           <div class="empty-content">
-            <i class="ph ph-chat-circle-dots"></i>
+            <div class="empty-icon">
+              <i class="ph ph-chats-circle"></i>
+            </div>
             <h3>Sin contacto seleccionado</h3>
             <p>Selecciona un chat en WhatsApp para ver la informacion del contacto</p>
-            <p class="hint">Tip: Guarda contactos con formato "Nombre - Telefono" para mejor deteccion</p>
+            <div class="empty-tip">
+              <i class="ph ph-lightbulb"></i>
+              <span>Tip: Guarda contactos con formato "Nombre - Telefono"</span>
+            </div>
           </div>
         </div>
       }
@@ -46,9 +51,9 @@
       <!-- Contact Info -->
       @if (viewState() === 'contact') {
         <div class="contact-info">
-          <!-- Contact Header -->
-          <div class="contact-header">
-            <div class="avatar">
+          <!-- Contact Card -->
+          <div class="contact-card">
+            <div class="contact-avatar">
               @if (getAvatarUrl()) {
                 <img [src]="getAvatarUrl()" alt="Avatar" class="avatar-img" />
               } @else {
@@ -56,271 +61,254 @@
                   {{ initials() }}
                 </div>
               }
-            </div>
-            <div class="contact-details">
-              <h2 class="contact-name">{{ displayName() }}</h2>
-              <p class="contact-phone">
-                <i class="ph ph-phone"></i>
-                {{ displayPhone() }}
-              </p>
               @if (isRegistered()) {
-                <span class="badge badge-success">
-                  <i class="ph ph-check-circle"></i>
-                  Registrado
+                <div class="status-indicator registered" title="Cliente Registrado">
+                  <i class="ph ph-check"></i>
+                </div>
+              }
+            </div>
+            <div class="contact-main">
+              <h2 class="contact-name">{{ displayName() }}</h2>
+              <div class="contact-phone">
+                <i class="ph ph-phone"></i>
+                <span>{{ displayPhone() }}</span>
+              </div>
+            </div>
+            <div class="contact-type">
+              @if (isRegistered()) {
+                <span class="type-badge registered">
+                  <i class="ph ph-user-check"></i>
+                  Cliente
                 </span>
               } @else {
-                <span class="badge badge-secondary">
+                <span class="type-badge personal">
                   <i class="ph ph-user"></i>
-                  Contacto Personal
+                  Personal
                 </span>
               }
             </div>
           </div>
 
-          <!-- Registered Contact Info -->
-          @if (isRegistered()) {
-            <div class="info-section">
-              <h4 class="section-title">
-                <i class="ph ph-info"></i>
-                Informacion del Cliente
-              </h4>
-              <div class="info-grid">
-                @if (getCodigo()) {
-                  <div class="info-item">
-                    <span class="info-label">Codigo:</span>
-                    <span class="info-value">{{ getCodigo() }}</span>
-                  </div>
-                }
-                @if (getEmail()) {
-                  <div class="info-item">
-                    <span class="info-label">Email:</span>
-                    <span class="info-value">{{ getEmail() }}</span>
-                  </div>
-                }
-                @if (getManagerName()) {
-                  <div class="info-item">
-                    <span class="info-label">Agente asignado:</span>
-                    <span class="info-value">{{ getManagerName() }}</span>
-                  </div>
-                }
-                @if (contact()?.registered?.createdAt) {
-                  <div class="info-item">
-                    <span class="info-label">Cliente desde:</span>
-                    <span class="info-value">{{ formatDate(contact()?.registered?.createdAt) }}</span>
-                  </div>
-                }
-              </div>
-
-              @if (hasOpenTicket()) {
-                <div class="ticket-alert">
-                  <i class="ph ph-ticket"></i>
-                  <span>Tiene un caso abierto</span>
+          <!-- Scrollable Content -->
+          <div class="scrollable-content">
+            <!-- Registered Contact Info -->
+            @if (isRegistered()) {
+              <!-- Client Details -->
+              <div class="section">
+                <div class="section-header">
+                  <i class="ph ph-identification-card"></i>
+                  <span>Datos del Cliente</span>
                 </div>
-
-                <!-- Ticket Actions -->
-                <div class="ticket-actions">
-                  <button
-                    class="btn btn-success"
-                    [disabled]="isClosingTicket()"
-                    (click)="initiateCloseTicket('con_acuerdo')"
-                  >
-                    <i class="ph ph-check-circle"></i>
-                    Cerrar con Acuerdo
-                  </button>
-                  <button
-                    class="btn btn-warning"
-                    [disabled]="isClosingTicket()"
-                    (click)="initiateCloseTicket('sin_acuerdo')"
-                  >
-                    <i class="ph ph-x-circle"></i>
-                    Cerrar sin Acuerdo
-                  </button>
-                </div>
-              }
-            </div>
-
-            <!-- Custom Fields Section (datos adicionales - e.g., cobranza) -->
-            @if (hasCustomFields()) {
-              <div class="info-section custom-fields-section">
-                <h4 class="section-title">
-                  <i class="ph ph-file-text"></i>
-                  Datos Adicionales
-                </h4>
-                <div class="custom-fields-grid">
-                  @for (entry of getCustomFieldsEntries(); track entry.key) {
-                    <div class="custom-field-item">
-                      <span class="field-label">{{ formatFieldLabel(entry.key) }}</span>
-                      <span class="field-value">{{ formatFieldValue(entry.value) }}</span>
+                <div class="details-grid">
+                  @if (getCodigo()) {
+                    <div class="detail-item">
+                      <span class="detail-label">Codigo</span>
+                      <span class="detail-value">{{ getCodigo() }}</span>
+                    </div>
+                  }
+                  @if (getEmail()) {
+                    <div class="detail-item">
+                      <span class="detail-label">Email</span>
+                      <span class="detail-value">{{ getEmail() }}</span>
+                    </div>
+                  }
+                  @if (getManagerName()) {
+                    <div class="detail-item">
+                      <span class="detail-label">Agente</span>
+                      <span class="detail-value">{{ getManagerName() }}</span>
+                    </div>
+                  }
+                  @if (contact()?.registered?.createdAt) {
+                    <div class="detail-item">
+                      <span class="detail-label">Cliente desde</span>
+                      <span class="detail-value">{{ formatDate(contact()?.registered?.createdAt) }}</span>
                     </div>
                   }
                 </div>
-              </div>
-            }
-          }
 
-          <!-- Personal Label (for local/non-registered contacts) -->
-          @if (!isRegistered()) {
-            <div class="info-section">
-              <h4 class="section-title">
-                <i class="ph ph-tag"></i>
-                Etiqueta Personal
-              </h4>
-              <div class="label-selector">
-                @for (option of labelOptions; track option.value) {
-                  <button
-                    class="label-chip"
-                    [class.selected]="selectedLabel() === option.value"
-                    (click)="onLabelChange(option.value)"
-                  >
-                    <i [class]="option.icon"></i>
-                    {{ option.label }}
-                  </button>
-                }
-              </div>
-              @if (selectedLabel()) {
-                <button class="btn-clear-label" (click)="onLabelChange('')">
-                  <i class="ph ph-x"></i>
-                  Quitar etiqueta
-                </button>
-              }
-            </div>
-          }
-
-          <!-- Canned Messages Section (only for registered contacts) -->
-          @if (isRegistered()) {
-            <div class="info-section">
-              <h4 class="section-title">
-                <i class="ph ph-chat-text"></i>
-                Respuestas Rapidas
-              </h4>
-              <button
-                class="btn btn-outline"
-                [disabled]="loadingCannedMessages()"
-                (click)="loadCannedMessages()"
-              >
-                @if (loadingCannedMessages()) {
-                  <span class="spinner-sm"></span>
-                  Cargando...
-                } @else {
-                  <i class="ph ph-list"></i>
-                  Ver Respuestas Rapidas
-                }
-              </button>
-
-              @if (showCannedMessages()) {
-                <div class="canned-messages-dropdown">
-                  <div class="dropdown-header">
-                    <span>Selecciona un mensaje</span>
-                    <button class="btn-close" (click)="closeCannedMessages()">
-                      <i class="ph ph-x"></i>
-                    </button>
+                @if (hasOpenTicket()) {
+                  <div class="ticket-badge">
+                    <i class="ph ph-ticket"></i>
+                    <span>Caso abierto</span>
                   </div>
-                  <div class="canned-messages-list">
-                    @for (msg of cannedMessages(); track msg.id) {
-                      <button class="canned-message-item" (click)="onCannedMessageSelect(msg)">
-                        {{ msg.message }}
-                      </button>
-                    }
-                    @if (cannedMessages().length === 0) {
-                      <p class="empty-message">No hay respuestas rapidas disponibles</p>
+                }
+              </div>
+
+              <!-- Custom Fields -->
+              @if (hasCustomFields()) {
+                <div class="section">
+                  <div class="section-header">
+                    <i class="ph ph-database"></i>
+                    <span>Datos Adicionales</span>
+                  </div>
+                  <div class="custom-fields">
+                    @for (entry of getCustomFieldsEntries(); track entry.key) {
+                      <div class="field-item">
+                        <span class="field-label">{{ formatFieldLabel(entry.key) }}</span>
+                        <span class="field-value">{{ formatFieldValue(entry.value) }}</span>
+                      </div>
                     }
                   </div>
                 </div>
               }
-            </div>
-          }
 
-          <!-- Notes Section -->
-          <div class="info-section">
-            <h4 class="section-title">
-              <i class="ph ph-note-pencil"></i>
-              @if (isRegistered()) {
-                Notas del Cliente
-              } @else {
-                Notas Personales
-              }
-            </h4>
-            <div class="notes-form">
-              <textarea
-                class="notes-textarea"
-                [ngModel]="notesField()"
-                (ngModelChange)="notesField.set($event)"
-                placeholder="Escribe notas sobre este contacto..."
-                rows="4"
-              ></textarea>
-              <button
-                class="btn btn-primary btn-save-notes"
-                [disabled]="isSavingNotes()"
-                (click)="saveNotes()"
-              >
-                @if (isSavingNotes()) {
-                  <span class="spinner-sm"></span>
-                  Guardando...
+              <!-- Quick Replies -->
+              <div class="section">
+                <div class="section-header">
+                  <i class="ph ph-lightning"></i>
+                  <span>Respuestas Rapidas</span>
+                </div>
+                @if (!showCannedMessages()) {
+                  <button
+                    class="action-btn"
+                    [disabled]="loadingCannedMessages()"
+                    (click)="loadCannedMessages()"
+                  >
+                    @if (loadingCannedMessages()) {
+                      <span class="spinner-sm"></span>
+                      <span>Cargando...</span>
+                    } @else {
+                      <i class="ph ph-chat-text"></i>
+                      <span>Ver mensajes predefinidos</span>
+                    }
+                  </button>
                 } @else {
-                  <i class="ph ph-floppy-disk"></i>
-                  Guardar Notas
-                }
-              </button>
-            </div>
-          </div>
-
-          <!-- Action History Section (only for registered contacts) -->
-          @if (isRegistered()) {
-            <div class="info-section">
-              <h4 class="section-title">
-                <i class="ph ph-clock-counter-clockwise"></i>
-                Historial de Acciones
-              </h4>
-              <button
-                class="btn btn-outline"
-                [disabled]="loadingHistory()"
-                (click)="loadActionHistory()"
-              >
-                @if (loadingHistory()) {
-                  <span class="spinner-sm"></span>
-                  Cargando...
-                } @else {
-                  <i class="ph ph-list"></i>
-                  Ver Historial
-                }
-              </button>
-
-              @if (showHistoryPanel()) {
-                <div class="history-panel">
-                  <div class="panel-header">
-                    <span>Historial de cambios</span>
-                    <button class="btn-close" (click)="closeHistoryPanel()">
-                      <i class="ph ph-x"></i>
-                    </button>
-                  </div>
-                  @if (actionHistory().length > 0) {
-                    <div class="history-list">
-                      @for (item of actionHistory(); track item.id) {
-                        <div class="history-item">
-                          <div class="history-header">
-                            <span class="history-user">{{ item.username }}</span>
-                            <span class="history-date">{{ formatDate(item.createdAt) }}</span>
-                          </div>
-                          <div class="history-action">
-                            {{ formatAction(item.action) }}
-                          </div>
-                          @if (item.auditedChanges && getChangesSummary(item.auditedChanges).length > 0) {
-                            <div class="history-changes">
-                              @for (change of getChangesSummary(item.auditedChanges); track change) {
-                                <span class="change-item">{{ change }}</span>
-                              }
-                            </div>
-                          }
-                        </div>
+                  <div class="dropdown-panel">
+                    <div class="dropdown-header">
+                      <span>Selecciona un mensaje</span>
+                      <button class="close-btn" (click)="closeCannedMessages()">
+                        <i class="ph ph-x"></i>
+                      </button>
+                    </div>
+                    <div class="dropdown-content">
+                      @for (msg of cannedMessages(); track msg.id) {
+                        <button class="dropdown-item" (click)="onCannedMessageSelect(msg)">
+                          {{ msg.message }}
+                        </button>
+                      }
+                      @if (cannedMessages().length === 0) {
+                        <div class="dropdown-empty">No hay mensajes disponibles</div>
                       }
                     </div>
-                  } @else {
-                    <p class="empty-history">No hay historial de acciones.</p>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Personal Label (for non-registered contacts) -->
+            @if (!isRegistered()) {
+              <div class="section">
+                <div class="section-header">
+                  <i class="ph ph-tag"></i>
+                  <span>Etiqueta</span>
+                </div>
+                <div class="label-chips">
+                  @for (option of labelOptions; track option.value) {
+                    <button
+                      class="label-chip"
+                      [class.selected]="selectedLabel() === option.value"
+                      (click)="onLabelChange(option.value)"
+                    >
+                      <i [class]="option.icon"></i>
+                      <span>{{ option.label }}</span>
+                    </button>
                   }
                 </div>
-              }
+                @if (selectedLabel()) {
+                  <button class="clear-label-btn" (click)="onLabelChange('')">
+                    <i class="ph ph-x"></i>
+                    <span>Quitar etiqueta</span>
+                  </button>
+                }
+              </div>
+            }
+
+            <!-- Notes Section -->
+            <div class="section">
+              <div class="section-header">
+                <i class="ph ph-note-pencil"></i>
+                <span>{{ isRegistered() ? 'Notas del Cliente' : 'Notas Personales' }}</span>
+              </div>
+              <textarea
+                class="notes-input"
+                [ngModel]="notesField()"
+                (ngModelChange)="notesField.set($event)"
+                (blur)="saveNotes()"
+                placeholder="Escribe notas sobre este contacto..."
+                rows="3"
+              ></textarea>
             </div>
-          }
+
+            <!-- Action Buttons (for registered contacts) -->
+            @if (isRegistered()) {
+              <div class="section actions-section">
+                <div class="action-buttons">
+                  <button class="action-btn primary" (click)="onCloseWithAgreement()">
+                    <i class="ph ph-handshake"></i>
+                    <span>Cerrar con Acuerdo</span>
+                  </button>
+                  <button class="action-btn secondary" (click)="onCloseWithoutAgreement()">
+                    <i class="ph ph-x-circle"></i>
+                    <span>Cerrar sin Acuerdo</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- History Section -->
+              <div class="section">
+                <div class="section-header">
+                  <i class="ph ph-clock-counter-clockwise"></i>
+                  <span>Historial</span>
+                </div>
+                @if (!showHistoryPanel()) {
+                  <button
+                    class="action-btn"
+                    [disabled]="loadingHistory()"
+                    (click)="loadActionHistory()"
+                  >
+                    @if (loadingHistory()) {
+                      <span class="spinner-sm"></span>
+                      <span>Cargando...</span>
+                    } @else {
+                      <i class="ph ph-list-bullets"></i>
+                      <span>Ver historial de acciones</span>
+                    }
+                  </button>
+                } @else {
+                  <div class="dropdown-panel">
+                    <div class="dropdown-header">
+                      <span>Historial de cambios</span>
+                      <button class="close-btn" (click)="closeHistoryPanel()">
+                        <i class="ph ph-x"></i>
+                      </button>
+                    </div>
+                    <div class="dropdown-content history-content">
+                      @if (actionHistory().length > 0) {
+                        @for (item of actionHistory(); track item.id) {
+                          <div class="history-item">
+                            <div class="history-row">
+                              <span class="history-user">{{ item.username }}</span>
+                              <span class="history-date">{{ formatDate(item.createdAt) }}</span>
+                            </div>
+                            <div class="history-action">{{ formatAction(item.action) }}</div>
+                            @if (item.auditedChanges && getChangesSummary(item.auditedChanges).length > 0) {
+                              <div class="history-tags">
+                                @for (change of getChangesSummary(item.auditedChanges); track change) {
+                                  <span class="history-tag">{{ change }}</span>
+                                }
+                              </div>
+                            }
+                          </div>
+                        }
+                      } @else {
+                        <div class="dropdown-empty">No hay historial de acciones</div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
         </div>
       }
     </div>
@@ -328,22 +316,25 @@
 
   <!-- Ticket Close Confirmation Modal -->
   @if (showTicketConfirmation()) {
-    <div class="confirmation-overlay" (click)="cancelCloseTicket()">
-      <div class="confirmation-modal" (click)="$event.stopPropagation()">
-        <h4>Confirmar Cierre de Ticket</h4>
-        <p>
+    <div class="modal-overlay" (click)="cancelCloseTicket()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <i class="ph ph-warning-circle"></i>
+          <h4>Confirmar Cierre</h4>
+        </div>
+        <p class="modal-body">
           @if (showTicketConfirmation() === 'con_acuerdo') {
-            Se cerrara el ticket indicando que hubo un acuerdo con el cliente.
+            Se cerrara el caso indicando que <strong>hubo un acuerdo</strong> con el cliente.
           } @else {
-            Se cerrara el ticket indicando que NO hubo acuerdo con el cliente.
+            Se cerrara el caso indicando que <strong>NO hubo acuerdo</strong> con el cliente.
           }
         </p>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" (click)="cancelCloseTicket()">
+        <div class="modal-footer">
+          <button class="modal-btn cancel" (click)="cancelCloseTicket()">
             Cancelar
           </button>
           <button
-            class="btn btn-primary"
+            class="modal-btn confirm"
             [disabled]="isClosingTicket()"
             (click)="confirmCloseTicket()"
           >

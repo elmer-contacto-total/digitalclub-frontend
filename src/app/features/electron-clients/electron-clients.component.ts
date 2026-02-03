@@ -312,6 +312,24 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   // ==================== TICKET ACTIONS ====================
 
   /**
+   * Handle "Cerrar con Acuerdo" button click
+   * TODO: Implement actual functionality
+   */
+  onCloseWithAgreement(): void {
+    console.log('[CRM] Cerrar con Acuerdo clicked');
+    // TODO: Implement functionality
+  }
+
+  /**
+   * Handle "Cerrar sin Acuerdo" button click
+   * TODO: Implement actual functionality
+   */
+  onCloseWithoutAgreement(): void {
+    console.log('[CRM] Cerrar sin Acuerdo clicked');
+    // TODO: Implement functionality
+  }
+
+  /**
    * Initiate ticket close process
    */
   initiateCloseTicket(closeType: 'con_acuerdo' | 'sin_acuerdo'): void {
