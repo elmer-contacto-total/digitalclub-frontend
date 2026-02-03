@@ -1220,6 +1220,28 @@ function setupIPC(): void {
     return whatsappVisible;
   });
 
+  // === Overlay Mode (para ocultar WhatsApp cuando hay menús abiertos) ===
+  ipcMain.handle('whatsapp:set-overlay-mode', (_, overlayOpen: boolean) => {
+    if (!mainWindow || !whatsappView) return false;
+
+    if (overlayOpen) {
+      // Ocultar WhatsApp temporalmente (remover del window)
+      if (whatsappVisible && mainWindow.getBrowserViews().includes(whatsappView)) {
+        mainWindow.removeBrowserView(whatsappView);
+        console.log('[HablaPe] WhatsApp ocultado temporalmente (overlay abierto)');
+      }
+    } else {
+      // Restaurar WhatsApp si estaba visible
+      if (whatsappVisible && !mainWindow.getBrowserViews().includes(whatsappView)) {
+        mainWindow.addBrowserView(whatsappView);
+        updateWhatsAppViewBounds();
+        console.log('[HablaPe] WhatsApp restaurado (overlay cerrado)');
+      }
+    }
+
+    return true;
+  });
+
   // Toggle sidebar
   ipcMain.on('toggle-sidebar', () => {
     // Actualizar bounds de WhatsApp view cuando cambia sidebar

@@ -62,26 +62,33 @@ export class HeaderComponent {
   }
 
   onToggleUserMenu(): void {
-    this.showUserMenu.update(v => !v);
+    const willOpen = !this.showUserMenu();
+    this.showUserMenu.set(willOpen);
     this.showNotifications.set(false);
     this.showLanguageMenu.set(false);
+    this.updateOverlayMode(willOpen);
   }
 
   onToggleNotifications(): void {
-    this.showNotifications.update(v => !v);
+    const willOpen = !this.showNotifications();
+    this.showNotifications.set(willOpen);
     this.showUserMenu.set(false);
     this.showLanguageMenu.set(false);
+    this.updateOverlayMode(willOpen);
   }
 
   onToggleLanguageMenu(): void {
-    this.showLanguageMenu.update(v => !v);
+    const willOpen = !this.showLanguageMenu();
+    this.showLanguageMenu.set(willOpen);
     this.showUserMenu.set(false);
     this.showNotifications.set(false);
+    this.updateOverlayMode(willOpen);
   }
 
   onSelectLanguage(lang: typeof this.languages[0]): void {
     this.currentLanguage.set(lang);
     this.showLanguageMenu.set(false);
+    this.updateOverlayMode(false);
     // TODO: Implement i18n language change
   }
 
@@ -102,9 +109,23 @@ export class HeaderComponent {
   }
 
   closeAllMenus(): void {
+    const hadOpenMenu = this.showUserMenu() || this.showNotifications() || this.showLanguageMenu();
     this.showUserMenu.set(false);
     this.showNotifications.set(false);
     this.showLanguageMenu.set(false);
+    if (hadOpenMenu) {
+      this.updateOverlayMode(false);
+    }
+  }
+
+  /**
+   * Update WhatsApp overlay mode based on menu state
+   * Hides WhatsApp BrowserView when menus are open to prevent z-index issues
+   */
+  private updateOverlayMode(overlayOpen: boolean): void {
+    if (this.electronService.isElectron) {
+      this.electronService.setWhatsAppOverlayMode(overlayOpen);
+    }
   }
 
   // Electron window controls

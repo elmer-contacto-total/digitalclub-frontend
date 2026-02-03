@@ -155,6 +155,11 @@ const electronAPI = {
     return ipcRenderer.invoke('whatsapp:send-message', text);
   },
 
+  // Modo overlay: ocultar/mostrar WhatsApp cuando hay menús abiertos
+  setWhatsAppOverlayMode: (overlayOpen: boolean): Promise<boolean> => {
+    return ipcRenderer.invoke('whatsapp:set-overlay-mode', overlayOpen);
+  },
+
   // Limpiar listeners
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel);
@@ -200,6 +205,7 @@ declare global {
       onAppClosing: (callback: () => void) => void;
       fullReset: () => Promise<boolean>;
       sendWhatsAppMessage: (text: string) => Promise<boolean>;
+      setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
       removeAllListeners: (channel: string) => void;
     };
   }

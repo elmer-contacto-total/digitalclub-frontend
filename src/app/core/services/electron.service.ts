@@ -31,6 +31,7 @@ interface ElectronAPI {
   showWhatsApp?(): Promise<boolean>;
   hideWhatsApp?(): Promise<boolean>;
   isWhatsAppVisible?(): Promise<boolean>;
+  setWhatsAppOverlayMode?(overlayOpen: boolean): Promise<boolean>;
 
   // Angular bounds
   getAngularBounds?(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
@@ -266,6 +267,22 @@ export class ElectronService {
    */
   get isAppClosing(): boolean {
     return this.appClosingSubject.value;
+  }
+
+  /**
+   * Set overlay mode - temporarily hides WhatsApp when menus/modals are open
+   * This prevents WhatsApp BrowserView from covering Angular overlays
+   * @param overlayOpen true to hide WhatsApp, false to restore it
+   */
+  async setWhatsAppOverlayMode(overlayOpen: boolean): Promise<boolean> {
+    if (window.electronAPI?.setWhatsAppOverlayMode) {
+      try {
+        return await window.electronAPI.setWhatsAppOverlayMode(overlayOpen);
+      } catch {
+        return false;
+      }
+    }
+    return false;
   }
 
   /**
