@@ -91,6 +91,7 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
       sendAuditLog({
         action: 'MEDIA_CAPTURED',
         userId: payload.userId,
+        agentId: payload.agentId,
         mimeType: payload.mimeType,
         size: payload.size,
         chatPhone: payload.chatPhone,
@@ -107,7 +108,17 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
 /**
  * Callback para manejar medios capturados desde el BrowserView
  */
-function handleMediaCaptured(data: { data: string; type: string; size: number; chatPhone: string; timestamp: string; source: string; duration?: number }): void {
+function handleMediaCaptured(data: {
+  data: string;
+  type: string;
+  size: number;
+  chatPhone: string;
+  timestamp: string;
+  source: string;
+  duration?: number;
+  messageSentAt?: string;
+  whatsappMessageId?: string;
+}): void {
   const isImage = data.type.startsWith('image/');
   const isAudio = data.type.startsWith('audio/');
 
@@ -128,10 +139,12 @@ function handleMediaCaptured(data: { data: string; type: string; size: number; c
     size: data.size,
     duration: data.duration,
     capturedAt: data.timestamp,
+    messageSentAt: data.messageSentAt,
+    whatsappMessageId: data.whatsappMessageId,
     source: data.source as 'PREVIEW' | 'PLAYBACK'
   };
 
-  console.log('[HablaPe Media] Capturando media, agentId:', loggedInUserId);
+  console.log('[HablaPe Media] Capturando media, agentId:', loggedInUserId, 'messageSentAt:', data.messageSentAt);
   sendMediaToServer(payload);
 }
 
@@ -559,7 +572,11 @@ function createWhatsAppView(): void {
       sendMediaToServer(payload);
     },
     onAuditLog: (payload) => {
-      sendAuditLog(payload);
+      // Add agent ID to audit log
+      sendAuditLog({
+        ...payload,
+        agentId: loggedInUserId
+      });
     }
   });
 

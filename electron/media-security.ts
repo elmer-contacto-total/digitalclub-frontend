@@ -24,12 +24,15 @@ export interface MediaCapturePayload {
   size: number;
   duration?: number;
   capturedAt: string;
+  messageSentAt?: string; // When the WhatsApp message was originally sent
+  whatsappMessageId?: string; // WhatsApp message ID (data-id)
   source: 'PREVIEW' | 'PLAYBACK';
 }
 
 export interface AuditLogPayload {
   action: 'DOWNLOAD_BLOCKED' | 'MEDIA_CAPTURED' | 'BLOCKED_FILE_ATTEMPT';
   userId: string;
+  agentId?: number | null; // Logged-in user ID in Angular
   filename?: string;
   mimeType?: string;
   size?: number;
@@ -533,6 +536,66 @@ const MEDIA_CAPTURE_SCRIPT = `
     return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
+  // Extract message timestamp from WhatsApp DOM element
+  function extractMessageTimestamp(element) {
+    try {
+      // Navigate up to find the message container
+      let messageEl = element.closest('[data-id]') ||
+                      element.closest('[data-testid="msg-container"]');
+
+      if (!messageEl) {
+        // Try to find in ancestors
+        let parent = element.parentElement;
+        for (let i = 0; i < 15 && parent; i++) {
+          if (parent.getAttribute('data-id') ||
+              parent.getAttribute('data-testid') === 'msg-container') {
+            messageEl = parent;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+      }
+
+      if (!messageEl) return { messageSentAt: null, whatsappMessageId: null };
+
+      // Get WhatsApp message ID
+      const whatsappMessageId = messageEl.getAttribute('data-id') || null;
+
+      // Look for timestamp in data-pre-plain-text attribute
+      // Format: "[HH:mm, DD/MM/YYYY] Nombre: "
+      const timeEl = messageEl.querySelector('[data-pre-plain-text]');
+      if (timeEl) {
+        const prePlainText = timeEl.getAttribute('data-pre-plain-text') || '';
+        const timeMatch = prePlainText.match(/\\[(\\d{1,2}:\\d{2}),\\s*(\\d{1,2}\\/\\d{1,2}\\/\\d{4})\\]/);
+        if (timeMatch) {
+          const [, time, date] = timeMatch;
+          const [day, month, year] = date.split('/');
+          // Format as ISO timestamp
+          const messageSentAt = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + time + ':00';
+          return { messageSentAt, whatsappMessageId };
+        }
+      }
+
+      // Fallback: look for time in metadata spans
+      const timeSpans = messageEl.querySelectorAll('span[dir="auto"]');
+      for (const span of timeSpans) {
+        const text = span.textContent?.trim() || '';
+        // Match time format like "10:30" or "10:30 a. m."
+        if (/^\\d{1,2}:\\d{2}(\\s*(a\\.?\\s*m\\.?|p\\.?\\s*m\\.?))?$/i.test(text)) {
+          // We have time but not date - use today
+          const today = new Date();
+          const [hours, minutes] = text.split(':');
+          const messageSentAt = today.toISOString().split('T')[0] + 'T' + hours.padStart(2, '0') + ':' + minutes.substring(0, 2) + ':00';
+          return { messageSentAt, whatsappMessageId };
+        }
+      }
+
+      return { messageSentAt: null, whatsappMessageId };
+    } catch (err) {
+      return { messageSentAt: null, whatsappMessageId: null };
+    }
+  }
+
   async function captureImage(element, source = 'PREVIEW') {
     try {
       let imageData, mimeType, size;
@@ -571,12 +634,17 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       if (!imageData || imageData.length < 1000) return;
 
+      // Extract message timestamp
+      const { messageSentAt, whatsappMessageId } = extractMessageTimestamp(element);
+
       window.__hablapeMediaQueue.push({
         data: imageData,
         type: mimeType,
         size: size,
         chatPhone: getCurrentChatPhone(),
         timestamp: new Date().toISOString(),
+        messageSentAt: messageSentAt,
+        whatsappMessageId: whatsappMessageId,
         source: source,
         mediaType: 'IMAGE'
       });
@@ -710,6 +778,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   HTMLAudioElement.prototype.play = async function() {
     const audioSrc = this.src || this.currentSrc;
+    const audioElement = this;
 
     if (audioSrc && audioSrc.startsWith('blob:')) {
       const hash = await simpleHash(audioSrc);
@@ -720,15 +789,20 @@ const MEDIA_CAPTURE_SCRIPT = `
           const response = await fetch(audioSrc);
           const blob = await response.blob();
 
+          // Extract message timestamp from the audio element's parent
+          const { messageSentAt, whatsappMessageId } = extractMessageTimestamp(audioElement);
+
           const reader = new FileReader();
           reader.onloadend = () => {
             window.__hablapeMediaQueue.push({
               data: reader.result,
               type: blob.type || 'audio/ogg',
               size: blob.size,
-              duration: this.duration || 0,
+              duration: audioElement.duration || 0,
               chatPhone: getCurrentChatPhone(),
               timestamp: new Date().toISOString(),
+              messageSentAt: messageSentAt,
+              whatsappMessageId: whatsappMessageId,
               source: 'PLAYBACK',
               mediaType: 'AUDIO'
             });
@@ -831,6 +905,8 @@ export function setupMediaCapture(
             size: item.size,
             duration: item.duration,
             capturedAt: item.timestamp,
+            messageSentAt: item.messageSentAt || undefined,
+            whatsappMessageId: item.whatsappMessageId || undefined,
             source: item.source
           };
 
