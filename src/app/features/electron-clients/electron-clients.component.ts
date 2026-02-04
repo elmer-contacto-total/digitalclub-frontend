@@ -128,6 +128,11 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
 
         // Notificar a Electron del cliente activo (para captura de medios)
         this.notifyElectronOfActiveClient(result);
+
+        // Auto-load action history for registered contacts
+        if (result.type === 'registered' && result.registered?.id) {
+          this.loadActionHistoryAuto(result.registered.id);
+        }
       } else if (this.currentPhone()) {
         // No contact found in backend, but we have a phone - show local contact state
         this.contact.set(null);
@@ -482,6 +487,25 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         this.actionHistory.set(response.history);
         this.loadingHistory.set(false);
         this.showHistoryPanel.set(true);
+      },
+      error: (err) => {
+        console.error('Error loading history:', err);
+        this.loadingHistory.set(false);
+      }
+    });
+  }
+
+  /**
+   * Load action history automatically (called when contact loads)
+   */
+  private loadActionHistoryAuto(userId: number): void {
+    this.loadingHistory.set(true);
+    this.actionHistory.set([]); // Clear previous history
+
+    this.contactsService.getActionHistory(userId).subscribe({
+      next: (response) => {
+        this.actionHistory.set(response.history);
+        this.loadingHistory.set(false);
       },
       error: (err) => {
         console.error('Error loading history:', err);
