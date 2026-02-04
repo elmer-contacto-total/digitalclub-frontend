@@ -659,133 +659,68 @@ const MEDIA_CAPTURE_SCRIPT = `
       mutation.addedNodes.forEach((node) => {
         if (node.nodeType !== 1) return;
 
-        // Visor de medios fullscreen
-        const mediaViewer = node.querySelector?.('[data-testid="media-viewer"]') ||
-                           node.querySelector?.('[data-testid="image-viewer"]') ||
-                           node.querySelector?.('[data-testid="gallery-viewer"]') ||
-                           node.querySelector?.('[data-testid="media-viewer-modal"]') ||
-                           node.querySelector?.('[data-testid="lightbox"]') ||
-                           node.matches?.('[data-testid="media-viewer"]') ||
-                           node.matches?.('[data-testid="lightbox"]');
+        // Visor de medios fullscreen - detectar por data-testid O por ser un overlay
+        const isMediaViewer = node.querySelector?.('[data-testid="media-viewer"]') ||
+                              node.querySelector?.('[data-testid="image-viewer"]') ||
+                              node.querySelector?.('[data-testid="gallery-viewer"]') ||
+                              node.matches?.('[data-testid="media-viewer"]') ||
+                              node.matches?.('[data-testid="image-viewer"]');
 
-        if (mediaViewer || node.matches?.('[data-testid="media-viewer"]') || node.matches?.('[data-testid="lightbox"]')) {
-          // Only capture the MAIN visible image, not all images in the gallery
-          // The srcObserver will capture other images when user navigates with < >
+        // También detectar overlays genéricos (position fixed con imágenes blob)
+        const isOverlay = node.style?.position === 'fixed' ||
+                         node.getAttribute?.('role') === 'dialog' ||
+                         node.getAttribute?.('aria-modal') === 'true';
+
+        if (isMediaViewer || isOverlay) {
+          // Buscar la PRIMERA imagen blob o canvas - NO todas
+          // El srcObserver captura cuando el usuario navega con < >
           const target = node.querySelector?.('[data-testid="media-canvas"]') ||
+                        node.querySelector?.('img[src^="blob:"]') ||
+                        node.querySelector?.('img[src^="data:"]') ||
                         node.querySelector?.('canvas');
 
           if (target) {
             setTimeout(() => captureImage(target, 'PREVIEW'), 500);
-          } else {
-            // Fallback: find the main visible image with delay for loading
-            const findAndCaptureMainImage = () => {
-              const allImages = Array.from(node.querySelectorAll?.('img[src^="blob:"], img[src^="data:"]') || []);
-
-              if (allImages.length === 0) return;
-
-              // If only one image, capture it
-              if (allImages.length === 1) {
-                captureImage(allImages[0], 'PREVIEW');
-                return;
-              }
-
-              // Find the largest loaded image
-              let mainImage = null;
-              let maxSize = 0;
-
-              for (const img of allImages) {
-                const w = img.naturalWidth || img.width || img.offsetWidth || 0;
-                const h = img.naturalHeight || img.height || img.offsetHeight || 0;
-                const size = w * h;
-
-                // Accept images that are reasonably sized (> 100px in any dimension)
-                if (size > maxSize && (w > 100 || h > 100)) {
-                  maxSize = size;
-                  mainImage = img;
-                }
-              }
-
-              if (mainImage) {
-                captureImage(mainImage, 'PREVIEW');
-              } else {
-                // Fallback: just capture the first blob image
-                const firstBlob = allImages.find(img => img.src?.startsWith('blob:'));
-                if (firstBlob) captureImage(firstBlob, 'PREVIEW');
-              }
-            };
-
-            // Wait for images to load
-            setTimeout(findAndCaptureMainImage, 800);
           }
         }
 
         // Stickers
-        const stickers = node.querySelectorAll?.('[data-testid="sticker"] img, [data-testid="sticker"] canvas') || [];
         if (node.matches?.('[data-testid="sticker"]')) {
           const stickerImg = node.querySelector('img') || node.querySelector('canvas');
           if (stickerImg) setTimeout(() => captureImage(stickerImg, 'PREVIEW'), 300);
         }
+        const stickers = node.querySelectorAll?.('[data-testid="sticker"] img, [data-testid="sticker"] canvas') || [];
         stickers.forEach((sticker) => setTimeout(() => captureImage(sticker, 'PREVIEW'), 300));
 
         // GIFs
-        const gifs = node.querySelectorAll?.('[data-testid="gif"] img, [data-testid="gif"] canvas') || [];
         if (node.matches?.('[data-testid="gif"]')) {
           const gifImg = node.querySelector('img') || node.querySelector('canvas');
           if (gifImg) setTimeout(() => captureImage(gifImg, 'PREVIEW'), 300);
         }
+        const gifs = node.querySelectorAll?.('[data-testid="gif"] img, [data-testid="gif"] canvas') || [];
         gifs.forEach((gif) => setTimeout(() => captureImage(gif, 'PREVIEW'), 300));
-
-        // Fallback: overlay/modal con imagen grande
-        // Only capture the MAIN visible image, not all images
-        const isOverlay = node.style?.position === 'fixed' ||
-                         node.style?.position === 'absolute' ||
-                         node.classList?.contains('overlay') ||
-                         node.getAttribute?.('role') === 'dialog' ||
-                         node.getAttribute?.('aria-modal') === 'true';
-
-        if (isOverlay) {
-          // Find the largest/main image only
-          const findMainImage = () => {
-            const overlayImages = Array.from(node.querySelectorAll?.('img[src^="blob:"], img[src^="data:"]') || []);
-            let mainImage = null;
-            let maxSize = 0;
-
-            for (const img of overlayImages) {
-              const w = img.naturalWidth || img.width || img.offsetWidth || 0;
-              const h = img.naturalHeight || img.height || img.offsetHeight || 0;
-              const size = w * h;
-
-              if (size > maxSize && w > 200) {
-                maxSize = size;
-                mainImage = img;
-              }
-            }
-
-            if (mainImage) {
-              captureImage(mainImage, 'PREVIEW');
-            } else if (overlayImages.length === 1) {
-              captureImage(overlayImages[0], 'PREVIEW');
-            }
-          };
-
-          // Wait for images to load
-          setTimeout(findMainImage, 800);
-        }
       });
     });
   });
 
   imageObserver.observe(document.body, { childList: true, subtree: true });
 
-  // Observer para cambio de src en galería
+  // Observer para cambio de src en galería (cuando usuario navega con < >)
   const srcObserver = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
         const img = mutation.target;
         if (img.tagName === 'IMG' && img.src?.startsWith('blob:')) {
-          if (img.closest('[data-testid="media-viewer"]') ||
-              img.closest('[data-testid="image-viewer"]') ||
-              img.closest('[data-testid="gallery-viewer"]')) {
+          // Detectar si está en un visor de medios o overlay
+          const inViewer = img.closest('[data-testid="media-viewer"]') ||
+                          img.closest('[data-testid="image-viewer"]') ||
+                          img.closest('[data-testid="gallery-viewer"]') ||
+                          img.closest('[role="dialog"]') ||
+                          img.closest('[aria-modal="true"]') ||
+                          img.closest('[style*="position: fixed"]') ||
+                          img.closest('[style*="position:fixed"]');
+
+          if (inViewer) {
             setTimeout(() => captureImage(img, 'PREVIEW'), 300);
           }
         }
@@ -795,55 +730,27 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   srcObserver.observe(document.body, { attributes: true, attributeFilter: ['src'], subtree: true });
 
-  // Fallback: click en imágenes - only capture the main visible image
+  // Fallback: click en imágenes - capturar la primera imagen blob del visor
   document.addEventListener('click', (e) => {
     const target = e.target;
     if (target.tagName === 'IMG' && target.src) {
       setTimeout(() => {
+        // Buscar cualquier visor/overlay abierto
         const viewer = document.querySelector('[data-testid="media-viewer"]') ||
                       document.querySelector('[data-testid="image-viewer"]') ||
-                      document.querySelector('[data-testid="lightbox"]') ||
                       document.querySelector('[role="dialog"]') ||
                       document.querySelector('[aria-modal="true"]');
 
         if (viewer) {
-          // Find the main/largest image in the viewer
-          const canvas = viewer.querySelector?.('canvas');
-          if (canvas) {
-            captureImage(canvas, 'PREVIEW');
-            return;
-          }
-
-          const images = Array.from(viewer.querySelectorAll?.('img[src^="blob:"], img[src^="data:"]') || []);
-
-          if (images.length === 1) {
-            captureImage(images[0], 'PREVIEW');
-            return;
-          }
-
-          let mainImage = null;
-          let maxSize = 0;
-
-          for (const img of images) {
-            const w = img.naturalWidth || img.width || img.offsetWidth || 0;
-            const h = img.naturalHeight || img.height || img.offsetHeight || 0;
-            const size = w * h;
-
-            if (size > maxSize && w > 100) {
-              maxSize = size;
-              mainImage = img;
-            }
-          }
-
-          if (mainImage) {
-            captureImage(mainImage, 'PREVIEW');
-          } else if (images.length > 0) {
-            // Fallback: capture first blob image
-            const firstBlob = images.find(img => img.src?.startsWith('blob:'));
-            if (firstBlob) captureImage(firstBlob, 'PREVIEW');
+          // Buscar la primera imagen blob - simple y directo
+          const firstBlobImg = viewer.querySelector('img[src^="blob:"]') ||
+                               viewer.querySelector('img[src^="data:"]') ||
+                               viewer.querySelector('canvas');
+          if (firstBlobImg) {
+            captureImage(firstBlobImg, 'PREVIEW');
           }
         }
-      }, 1000);
+      }, 800);
     }
   }, true);
 
