@@ -114,13 +114,18 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
 /**
  * Callback para manejar medios capturados desde el BrowserView
  * Agrega agentId, clientUserId, y usa datos del cliente activo de Angular
+ *
+ * IMPORTANTE: Prioridad de datos para evitar cruce de chats:
+ * 1. data.chatPhone (del script, capturado al momento de la captura) - MÁS CONFIABLE
+ * 2. activeClientPhone (de Angular) - solo si coincide con el script
+ * 3. lastDetectedPhone (del chat scanner) - fallback
  */
 function handleMediaCaptured(data: RawMediaCaptureData): void {
   console.log('[HablaPe Media] ========== MEDIA CAPTURE START ==========');
   console.log('[HablaPe Media] Estado actual de loggedInUserId:', loggedInUserId);
-  console.log('[HablaPe Media] Estado actual de loggedInUserName:', loggedInUserName);
   console.log('[HablaPe Media] Datos recibidos del script:');
   console.log('[HablaPe Media]   chatPhone:', data.chatPhone);
+  console.log('[HablaPe Media]   chatName:', data.chatName);
   console.log('[HablaPe Media]   messageSentAt:', data.messageSentAt);
   console.log('[HablaPe Media]   whatsappMessageId:', data.whatsappMessageId);
   console.log('[HablaPe Media]   type:', data.type);
@@ -134,20 +139,42 @@ function handleMediaCaptured(data: RawMediaCaptureData): void {
     return;
   }
 
-  // Usar el teléfono del cliente activo (de Angular) > chat scanner > script
-  const effectiveChatPhone = activeClientPhone
-    || (data.chatPhone && data.chatPhone !== 'unknown' ? data.chatPhone : null)
-    || lastDetectedPhone
-    || 'unknown';
+  // PRIORIDAD CORREGIDA: Script > Angular > Chat Scanner
+  // El script captura el teléfono al momento exacto de la captura, evitando cruces de chat
+  const scriptPhone = data.chatPhone && data.chatPhone !== 'unknown' ? data.chatPhone : null;
+  const effectiveChatPhone = scriptPhone || activeClientPhone || lastDetectedPhone || 'unknown';
 
-  // Usar el nombre del cliente activo (de Angular) > chat scanner > script
-  const effectiveChatName = activeClientName || data.chatName || lastDetectedName || null;
+  // Lo mismo para el nombre
+  const scriptName = data.chatName || null;
+  const effectiveChatName = scriptName || activeClientName || lastDetectedName || null;
+
+  // Normalizar teléfonos para comparación (quitar + y espacios)
+  const normalizePhone = (p: string | null) => p ? p.replace(/[^\d]/g, '') : null;
+  const normalizedScriptPhone = normalizePhone(scriptPhone);
+  const normalizedActivePhone = normalizePhone(activeClientPhone);
+
+  // SOLO enviar clientUserId si el teléfono del script coincide con el teléfono de Angular
+  // Esto evita asignar un clientUserId de otro chat
+  let effectiveClientUserId: number | null = null;
+  if (activeClientUserId && normalizedScriptPhone && normalizedActivePhone) {
+    // Comparar últimos 9 dígitos (para ignorar código de país)
+    const scriptLast9 = normalizedScriptPhone.slice(-9);
+    const activeLast9 = normalizedActivePhone.slice(-9);
+
+    if (scriptLast9 === activeLast9) {
+      effectiveClientUserId = activeClientUserId;
+      console.log('[HablaPe Media] clientUserId CONFIRMADO - teléfonos coinciden:', scriptLast9);
+    } else {
+      console.log('[HablaPe Media] clientUserId DESCARTADO - teléfonos NO coinciden:');
+      console.log('[HablaPe Media]   script:', scriptLast9, 'vs angular:', activeLast9);
+    }
+  }
 
   const payload: MediaCapturePayload = {
     mediaId: generateMediaId(),
     userId: userFingerprint.odaId,
     agentId: loggedInUserId, // Include logged-in agent ID
-    clientUserId: activeClientUserId, // Include client user ID from CRM
+    clientUserId: effectiveClientUserId, // Solo si coinciden los teléfonos
     chatPhone: effectiveChatPhone,
     chatName: effectiveChatName,
     mediaType: isImage ? 'IMAGE' : 'AUDIO',
@@ -616,9 +643,35 @@ function createWhatsAppView(): void {
 
   // Inyectar anti-fingerprinting único ANTES de que cargue cualquier script de WhatsApp
   const evasionScript = generateEvasionScript(userFingerprint);
+
+  // CSS para ocultar el botón de adjuntar archivos (+) en WhatsApp Web
+  const hideAttachButtonCSS = `
+    (function() {
+      const style = document.createElement('style');
+      style.textContent = \`
+        /* Ocultar botón de adjuntar archivos (+) */
+        [data-testid="clip"],
+        [data-testid="attach-button"],
+        button[aria-label*="Adjuntar"],
+        button[aria-label*="Attach"],
+        span[data-testid="clip"],
+        div[data-testid="clip"] {
+          display: none !important;
+        }
+      \`;
+      document.head.appendChild(style);
+      console.log('[HablaPe] Botón de adjuntar ocultado');
+    })();
+  `;
+
   whatsappView.webContents.on('dom-ready', () => {
+    // Aplicar anti-fingerprinting
     whatsappView?.webContents.executeJavaScript(evasionScript, true)
       .catch(err => console.error('[HablaPe] Error aplicando anti-fingerprinting:', err));
+
+    // Ocultar botón de adjuntar
+    whatsappView?.webContents.executeJavaScript(hideAttachButtonCSS, true)
+      .catch(err => console.error('[HablaPe] Error ocultando botón adjuntar:', err));
   });
 
   // Aplicar zoom cuando cargue
