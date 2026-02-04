@@ -1190,6 +1190,68 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // ==========================================================================
+  // Intentar extraer timestamp de la UI del visor de WhatsApp
+  // WhatsApp a veces muestra la fecha/hora en el header del visor
+  // ==========================================================================
+  function extractTimestampFromViewer() {
+    try {
+      const viewer = isMediaViewerOpen();
+      if (!viewer) return null;
+
+      // Buscar en el header del visor
+      const viewerHeader = document.querySelector('[data-testid="media-viewer"] header') ||
+                          document.querySelector('[data-testid="lightbox"] header') ||
+                          viewer.querySelector?.('header');
+
+      if (viewerHeader) {
+        const headerText = viewerHeader.textContent || '';
+        console.log('[HablaPe Debug] Viewer header text:', headerText);
+
+        // Buscar formato de fecha/hora
+        // Formatos posibles: "10:30", "10:30 a. m.", "04/02/2026", etc.
+        const dateTimeMatch = headerText.match(/(\\d{1,2})[:\\/](\\d{2})(?:[:\\/](\\d{2,4}))?/);
+        if (dateTimeMatch) {
+          console.log('[HablaPe Debug] Fecha/hora encontrada en viewer:', dateTimeMatch[0]);
+          // Intentar parsear...
+        }
+      }
+
+      // Buscar spans con fecha/hora en el visor
+      const spans = viewer.querySelectorAll?.('span') || document.querySelectorAll('[data-testid*="viewer"] span');
+      for (const span of spans) {
+        const text = span.textContent?.trim() || '';
+        // Formato fecha: "4 de febrero de 2026" o "04/02/2026"
+        const dateMatch = text.match(/(\\d{1,2})\\s*(?:de\\s*)?(\\w+|\\/)\\s*(?:de\\s*)?(\\d{4})/i);
+        if (dateMatch) {
+          console.log('[HablaPe Debug] Fecha encontrada en viewer span:', text);
+        }
+        // Formato hora
+        const timeMatch = text.match(/^(\\d{1,2}):(\\d{2})(\\s*[ap]\\.?\\s*m\\.?)?$/i);
+        if (timeMatch) {
+          console.log('[HablaPe Debug] Hora encontrada en viewer span:', text);
+          let hours = parseInt(timeMatch[1]);
+          const minutes = timeMatch[2];
+          const ampm = timeMatch[3]?.toLowerCase() || '';
+
+          if (ampm.includes('p') && hours < 12) hours += 12;
+          if (ampm.includes('a') && hours === 12) hours = 0;
+
+          const now = new Date();
+          const dateStr = now.getFullYear() + '-' +
+                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                         String(now.getDate()).padStart(2, '0');
+          return dateStr + 'T' + String(hours).padStart(2, '0') + ':' + minutes + ':00';
+        }
+      }
+
+      return null;
+    } catch (err) {
+      console.log('[HablaPe Debug] extractTimestampFromViewer error:', err.message);
+      return null;
+    }
+  }
+
+  // ==========================================================================
   // DETECTOR 1: Click en imagen del chat (abre visor) o botones de navegación
   // ==========================================================================
   document.addEventListener('click', (e) => {
@@ -1238,8 +1300,22 @@ const MEDIA_CAPTURE_SCRIPT = `
                          (target.tagName === 'BUTTON' && !target.closest?.('[data-testid*="close"]'));
 
       if (isNavButton) {
+        console.log('[HablaPe Debug] Navegación en visor detectada - RESETEANDO contexto');
+
+        // IMPORTANTE: Resetear timestamp y messageId porque estamos viendo una imagen diferente
+        // El timestamp cacheado del click inicial NO aplica a esta imagen
+        lastKnownMessageTimestamp = null;
+        lastKnownWhatsappMessageId = null;
+
+        // Intentar extraer timestamp de la UI del visor
+        const viewerTimestamp = extractTimestampFromViewer();
+        if (viewerTimestamp) {
+          lastKnownMessageTimestamp = viewerTimestamp;
+          console.log('[HablaPe Debug] Timestamp extraído del visor:', viewerTimestamp);
+        }
+
         // Esperar a que cambie la imagen
-        scheduleCaptureOnce(800); // Aumentado de 500 a 800ms
+        scheduleCaptureOnce(800);
       }
     }
   }, true);
@@ -1258,7 +1334,11 @@ const MEDIA_CAPTURE_SCRIPT = `
         const img = mutation.target;
         if (img.tagName === 'IMG' && img.src?.startsWith('blob:')) {
           hasRelevantChange = true;
-          console.log('[HablaPe Debug] srcObserver: cambio de src detectado');
+          console.log('[HablaPe Debug] srcObserver: cambio de src detectado - RESETEANDO contexto');
+
+          // IMPORTANTE: Resetear timestamp y messageId porque la imagen cambió
+          lastKnownMessageTimestamp = null;
+          lastKnownWhatsappMessageId = null;
         }
       }
     });
@@ -1268,7 +1348,13 @@ const MEDIA_CAPTURE_SCRIPT = `
     // Debounce y esperar más tiempo para que cargue
     if (srcChangeTimeout) clearTimeout(srcChangeTimeout);
     srcChangeTimeout = setTimeout(() => {
-      scheduleCaptureOnce(500); // Más tiempo para cargar
+      // Intentar extraer timestamp del visor antes de capturar
+      const viewerTimestamp = extractTimestampFromViewer();
+      if (viewerTimestamp) {
+        lastKnownMessageTimestamp = viewerTimestamp;
+        console.log('[HablaPe Debug] srcObserver: Timestamp extraído del visor:', viewerTimestamp);
+      }
+      scheduleCaptureOnce(500);
     }, 300);
   });
 
@@ -1287,9 +1373,21 @@ const MEDIA_CAPTURE_SCRIPT = `
 
     // Detectar flechas izquierda/derecha
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      console.log('[HablaPe Debug] Tecla de navegación:', e.key);
+      console.log('[HablaPe Debug] Tecla de navegación:', e.key, '- RESETEANDO contexto');
+
+      // IMPORTANTE: Resetear timestamp y messageId porque estamos navegando a otra imagen
+      lastKnownMessageTimestamp = null;
+      lastKnownWhatsappMessageId = null;
+
+      // Intentar extraer timestamp de la UI del visor
+      const viewerTimestamp = extractTimestampFromViewer();
+      if (viewerTimestamp) {
+        lastKnownMessageTimestamp = viewerTimestamp;
+        console.log('[HablaPe Debug] Timestamp extraído del visor:', viewerTimestamp);
+      }
+
       // Esperar a que cambie la imagen
-      scheduleCaptureOnce(800); // Aumentado de 500 a 800ms
+      scheduleCaptureOnce(800);
     }
   }, true);
 
