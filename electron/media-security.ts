@@ -739,25 +739,45 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // ==========================================================================
-  // DETECTOR 1: Click en imagen del chat (abre visor)
+  // DETECTOR 1: Click en imagen del chat (abre visor) o botones de navegación
   // ==========================================================================
   document.addEventListener('click', (e) => {
     const target = e.target;
 
-    // Detectar click en miniatura de imagen en el chat
+    // CASO A: Click en miniatura de imagen en el chat (abre visor)
     const isImageClick = target.tagName === 'IMG' ||
                         target.closest?.('[data-testid="image-thumb"]') ||
                         target.closest?.('[data-testid="media-thumb"]') ||
                         target.closest?.('img[src^="blob:"]');
 
-    if (isImageClick) {
+    if (isImageClick && !isMediaViewerOpen()) {
       // Esperar a que se abra el visor
       setTimeout(() => {
         if (isMediaViewerOpen()) {
-          // Dar tiempo a que la imagen cargue
           setTimeout(captureViewerImage, 500);
         }
       }, 300);
+      return;
+    }
+
+    // CASO B: Click en botones de navegación < > dentro del visor
+    if (isMediaViewerOpen()) {
+      const isNavButton = target.closest?.('[data-testid*="prev"]') ||
+                         target.closest?.('[data-testid*="next"]') ||
+                         target.closest?.('[data-testid*="arrow"]') ||
+                         target.closest?.('[data-icon="prev"]') ||
+                         target.closest?.('[data-icon="next"]') ||
+                         target.closest?.('[aria-label*="anterior"]') ||
+                         target.closest?.('[aria-label*="siguiente"]') ||
+                         target.closest?.('[aria-label*="previous"]') ||
+                         target.closest?.('[aria-label*="next"]') ||
+                         // Botones genéricos en el visor que no son cerrar
+                         (target.tagName === 'BUTTON' && !target.closest?.('[data-testid*="close"]'));
+
+      if (isNavButton) {
+        // Esperar a que cambie la imagen
+        setTimeout(captureViewerImage, 500);
+      }
     }
   }, true);
 
