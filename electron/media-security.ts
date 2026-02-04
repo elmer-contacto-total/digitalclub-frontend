@@ -632,7 +632,12 @@ const MEDIA_CAPTURE_SCRIPT = `
         return;
       }
 
-      if (!imageData || imageData.length < 1000) return;
+      // Ignorar imágenes muy pequeñas (thumbnails/miniaturas del chat)
+      // Mínimo 20KB - las miniaturas son ~2-5KB, las imágenes reales son 50KB+
+      if (!imageData || size < 20000) {
+        // console.log('[HablaPe Debug] Imagen ignorada por tamaño:', size, 'bytes');
+        return;
+      }
 
       // Extract message timestamp
       const { messageSentAt, whatsappMessageId } = extractMessageTimestamp(element);
