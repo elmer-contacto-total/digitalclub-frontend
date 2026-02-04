@@ -670,16 +670,27 @@ const MEDIA_CAPTURE_SCRIPT = `
                            node.matches?.('[data-testid="lightbox"]');
 
         if (mediaViewer || node.matches?.('[data-testid="media-viewer"]') || node.matches?.('[data-testid="lightbox"]')) {
-          const target = node.querySelector?.('[data-testid="media-canvas"]') ||
-                        node.querySelector?.('img[src^="blob:"]') ||
-                        node.querySelector?.('img[src^="data:"]') ||
+          // Primero intentar canvas (más rápido)
+          const canvas = node.querySelector?.('[data-testid="media-canvas"]') ||
                         node.querySelector?.('canvas');
-
-          if (target) {
-            setTimeout(() => captureImage(target, 'PREVIEW'), 500);
+          if (canvas) {
+            setTimeout(() => captureImage(canvas, 'PREVIEW'), 500);
+          } else {
+            // Buscar imágenes y esperar a que carguen, capturar solo la primera
+            let capturedInViewer = false;
+            const viewerImages = node.querySelectorAll?.('img') || [];
+            viewerImages.forEach((img) => {
+              const checkAndCapture = () => {
+                if (capturedInViewer) return;
+                if (img.src?.startsWith('blob:') || img.src?.startsWith('data:')) {
+                  capturedInViewer = true;
+                  captureImage(img, 'PREVIEW');
+                }
+              };
+              if (img.complete && img.src) setTimeout(checkAndCapture, 300);
+              else img.addEventListener('load', checkAndCapture, { once: true });
+            });
           }
-
-          // ELIMINADO: forEach que capturaba todas las galleryImages
         }
 
         // Stickers
@@ -706,18 +717,22 @@ const MEDIA_CAPTURE_SCRIPT = `
                          node.getAttribute?.('aria-modal') === 'true';
 
         if (isOverlay) {
-          // Solo capturar la PRIMERA imagen grande, no todas
-          const firstBigImg = node.querySelector?.('img[src^="blob:"]') ||
-                             node.querySelector?.('img[src^="data:"]');
-          if (firstBigImg) {
+          // Buscar TODAS las imágenes pero capturar solo la PRIMERA grande con blob
+          let capturedInThisOverlay = false;
+          const overlayImages = node.querySelectorAll?.('img') || [];
+          overlayImages.forEach((img) => {
             const checkAndCapture = () => {
-              if (firstBigImg.naturalWidth > 400 || firstBigImg.width > 400) {
-                captureImage(firstBigImg, 'PREVIEW');
+              if (capturedInThisOverlay) return; // Ya capturamos una de este overlay
+              // Verificar que sea grande Y tenga src blob/data
+              if ((img.naturalWidth > 400 || img.width > 400) &&
+                  (img.src?.startsWith('blob:') || img.src?.startsWith('data:'))) {
+                capturedInThisOverlay = true;
+                captureImage(img, 'PREVIEW');
               }
             };
-            if (firstBigImg.complete) setTimeout(checkAndCapture, 300);
-            else firstBigImg.addEventListener('load', checkAndCapture, { once: true });
-          }
+            if (img.complete) setTimeout(checkAndCapture, 300);
+            else img.addEventListener('load', checkAndCapture, { once: true });
+          });
         }
       });
     });
