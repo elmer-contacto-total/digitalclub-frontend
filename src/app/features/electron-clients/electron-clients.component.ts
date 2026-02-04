@@ -125,15 +125,28 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           this.notesField.set(result.registered.issueNotes || '');
           this.selectedLabel.set(undefined);
         }
+
+        // Notificar a Electron del cliente activo (para captura de medios)
+        this.notifyElectronOfActiveClient(result);
       } else if (this.currentPhone()) {
         // No contact found in backend, but we have a phone - show local contact state
         this.contact.set(null);
         this.viewState.set('contact');
         this.selectedLabel.set(undefined);
         this.notesField.set('');
+
+        // Notificar a Electron con solo el teléfono (sin clientUserId)
+        this.electronService.setActiveClient(
+          null,
+          this.currentPhone() || '',
+          this.currentName() || ''
+        );
       } else {
         // No phone - show empty state
         this.viewState.set('empty');
+
+        // Limpiar cliente activo en Electron
+        this.electronService.clearActiveClient();
       }
     });
   }
@@ -233,6 +246,30 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Notify Electron of the active client for media capture association
+   */
+  private notifyElectronOfActiveClient(contact: CrmContact): void {
+    if (!this.electronService.isElectron) return;
+
+    const phone = contact.phone || this.currentPhone() || '';
+    const name = contact.name || this.currentName() || '';
+
+    if (contact.type === 'registered' && contact.registered) {
+      // Registered contact - pass the client user ID
+      this.electronService.setActiveClient(
+        contact.registered.id,
+        phone,
+        name
+      );
+      console.log('[CRM] Active client set:', contact.registered.id, phone, name);
+    } else {
+      // Local contact - no client user ID
+      this.electronService.setActiveClient(null, phone, name);
+      console.log('[CRM] Active client set (local):', phone, name);
+    }
+  }
+
+  /**
    * Reset component state
    */
   private resetState(): void {
@@ -242,6 +279,9 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     this.contact.set(null);
     this.selectedLabel.set(undefined);
     this.notesField.set('');
+
+    // Clear active client in Electron
+    this.electronService.clearActiveClient();
   }
 
   /**

@@ -16,6 +16,7 @@ export interface MediaCapturePayload {
   mediaId: string;
   userId: string; // Device fingerprint (for audit)
   agentId?: number | null; // Logged-in user ID in Angular
+  clientUserId?: number | null; // Client user ID from CRM lookup
   chatPhone: string;
   chatName: string | null;
   mediaType: 'IMAGE' | 'AUDIO';
@@ -499,32 +500,149 @@ const MEDIA_CAPTURE_SCRIPT = `
   window.__hablapeMediaQueue = window.__hablapeMediaQueue || [];
   const capturedHashes = new Set();
 
+  // =========================================================================
+  // Variable global para guardar contexto del último chat/mensaje clickeado
+  // =========================================================================
+  let lastKnownChatPhone = 'unknown';
+  let lastKnownMessageTimestamp = null;
+  let lastKnownWhatsappMessageId = null;
+
   function getCurrentChatPhone() {
     try {
+      console.log('[HablaPe Debug] ===== getCurrentChatPhone START =====');
+      console.log('[HablaPe Debug] lastKnownChatPhone actual:', lastKnownChatPhone);
+
+      // Método 0: Usar variable global establecida por Electron (MÁS CONFIABLE)
+      if (window.__hablapeCurrentChatPhone && window.__hablapeCurrentChatPhone !== 'unknown') {
+        lastKnownChatPhone = window.__hablapeCurrentChatPhone;
+        console.log('[HablaPe Debug] M0: usando variable de Electron:', window.__hablapeCurrentChatPhone);
+        return window.__hablapeCurrentChatPhone;
+      }
+
+      // Método 1: Header de conversación
       const chatHeader = document.querySelector('[data-testid="conversation-header"]');
+      console.log('[HablaPe Debug] M1: chatHeader encontrado:', !!chatHeader);
+
       if (chatHeader) {
+        // Buscar TODOS los spans con title para debug
+        const allSpans = chatHeader.querySelectorAll('span[title]');
+        console.log('[HablaPe Debug] M1: spans con title:', allSpans.length);
+        allSpans.forEach((s, i) => {
+          console.log('[HablaPe Debug] M1: span[' + i + '] title:', s.getAttribute('title'));
+        });
+
         const phoneSpan = chatHeader.querySelector('span[title]');
         if (phoneSpan) {
           const title = phoneSpan.getAttribute('title');
+          console.log('[HablaPe Debug] M1: title completo:', title);
           const phoneMatch = title?.match(/\\+?[0-9\\s-]{10,}/);
-          if (phoneMatch) return phoneMatch[0].replace(/[\\s-]/g, '');
+          if (phoneMatch) {
+            const phone = phoneMatch[0].replace(/[\\s-]/g, '');
+            lastKnownChatPhone = phone;
+            console.log('[HablaPe Debug] M1: teléfono extraído:', phone);
+            return phone;
+          } else {
+            console.log('[HablaPe Debug] M1: no match de teléfono en title');
+          }
         }
       }
 
+      // Método 2: URL hash
       const hash = window.location.hash;
-      const phoneMatch = hash.match(/@([0-9]+)/);
-      if (phoneMatch) return phoneMatch[1];
-
-      const chatContainer = document.querySelector('[data-id*="@c.us"]');
-      if (chatContainer) {
-        const dataId = chatContainer.getAttribute('data-id');
-        const phoneFromId = dataId?.split('@')[0];
-        if (phoneFromId) return phoneFromId;
+      console.log('[HablaPe Debug] M2: hash URL:', hash);
+      const hashPhoneMatch = hash.match(/@([0-9]+)/);
+      if (hashPhoneMatch) {
+        lastKnownChatPhone = hashPhoneMatch[1];
+        console.log('[HablaPe Debug] M2: teléfono extraído:', hashPhoneMatch[1]);
+        return hashPhoneMatch[1];
       }
 
+      // Método 3: Sidebar - buscar chat activo
+      const sidebar = document.querySelector('#pane-side');
+      console.log('[HablaPe Debug] M3: sidebar encontrado:', !!sidebar);
+
+      if (sidebar) {
+        // Buscar TODOS los elementos con data-id que contengan @c.us
+        const allChats = sidebar.querySelectorAll('[data-id*="@c.us"]');
+        console.log('[HablaPe Debug] M3: elementos con data-id @c.us:', allChats.length);
+
+        const activeChat = sidebar.querySelector('[aria-selected="true"]') ||
+                          sidebar.querySelector('[data-testid="cell-frame-container"]:focus-within');
+        console.log('[HablaPe Debug] M3: activeChat encontrado:', !!activeChat);
+
+        if (activeChat) {
+          let el = activeChat;
+          for (let i = 0; i < 10 && el; i++) {
+            const dataId = el.getAttribute?.('data-id');
+            if (dataId) {
+              console.log('[HablaPe Debug] M3: data-id en nivel ' + i + ':', dataId);
+            }
+            if (dataId && dataId.includes('@c.us')) {
+              let phone = dataId.split('@')[0];
+              phone = phone.replace(/^(true|false)_/, '');
+              if (/^\\d{9,15}$/.test(phone)) {
+                lastKnownChatPhone = phone;
+                console.log('[HablaPe Debug] M3: teléfono extraído:', phone);
+                return phone;
+              }
+            }
+            el = el.parentElement;
+          }
+        }
+      }
+
+      // Método 4: Mensajes con data-id en el área principal
+      const mainPane = document.querySelector('#main');
+      console.log('[HablaPe Debug] M4: #main encontrado:', !!mainPane);
+
+      if (mainPane) {
+        const messagesWithId = mainPane.querySelectorAll('[data-id*="@c.us"]');
+        console.log('[HablaPe Debug] M4: mensajes con data-id @c.us:', messagesWithId.length);
+
+        if (messagesWithId.length > 0) {
+          const dataId = messagesWithId[0].getAttribute('data-id');
+          console.log('[HablaPe Debug] M4: primer data-id:', dataId);
+          let phoneFromId = dataId?.split('@')[0];
+          if (phoneFromId) {
+            phoneFromId = phoneFromId.replace(/^(true|false)_/, '');
+            if (/^\\d{9,15}$/.test(phoneFromId)) {
+              lastKnownChatPhone = phoneFromId;
+              console.log('[HablaPe Debug] M4: teléfono extraído:', phoneFromId);
+              return phoneFromId;
+            }
+          }
+        }
+      }
+
+      // Método 5: Buscar en TODO el documento
+      const anyMessageWithId = document.querySelector('[data-id*="@c.us"]');
+      console.log('[HablaPe Debug] M5: cualquier elemento con @c.us:', !!anyMessageWithId);
+
+      if (anyMessageWithId) {
+        const dataId = anyMessageWithId.getAttribute('data-id');
+        console.log('[HablaPe Debug] M5: data-id encontrado:', dataId);
+        let phoneFromId = dataId?.split('@')[0];
+        if (phoneFromId) {
+          phoneFromId = phoneFromId.replace(/^(true|false)_/, '');
+          if (/^\\d{9,15}$/.test(phoneFromId)) {
+            lastKnownChatPhone = phoneFromId;
+            console.log('[HablaPe Debug] M5: teléfono extraído:', phoneFromId);
+            return phoneFromId;
+          }
+        }
+      }
+
+      // Método 6: Usar caché si existe
+      if (lastKnownChatPhone !== 'unknown') {
+        console.log('[HablaPe Debug] M6: usando caché:', lastKnownChatPhone);
+        return lastKnownChatPhone;
+      }
+
+      console.log('[HablaPe Debug] ===== getCurrentChatPhone END: unknown =====');
       return 'unknown';
     } catch (err) {
-      return 'unknown';
+      console.log('[HablaPe Debug] getCurrentChatPhone error:', err.message);
+      return lastKnownChatPhone !== 'unknown' ? lastKnownChatPhone : 'unknown';
     }
   }
 
@@ -537,6 +655,7 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // Extract message timestamp from WhatsApp DOM element
+  // También guarda el contexto para uso cuando estemos en el visor
   function extractMessageTimestamp(element) {
     try {
       // Navigate up to find the message container
@@ -556,7 +675,14 @@ const MEDIA_CAPTURE_SCRIPT = `
         }
       }
 
-      if (!messageEl) return { messageSentAt: null, whatsappMessageId: null };
+      // Si no encontramos el mensaje (estamos en visor), usar cache
+      if (!messageEl) {
+        console.log('[HablaPe Debug] extractMessageTimestamp: usando cache, msgId:', lastKnownWhatsappMessageId);
+        return {
+          messageSentAt: lastKnownMessageTimestamp,
+          whatsappMessageId: lastKnownWhatsappMessageId
+        };
+      }
 
       // Get WhatsApp message ID
       const whatsappMessageId = messageEl.getAttribute('data-id') || null;
@@ -572,6 +698,12 @@ const MEDIA_CAPTURE_SCRIPT = `
           const [day, month, year] = date.split('/');
           // Format as ISO timestamp
           const messageSentAt = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + time + ':00';
+
+          // Guardar en cache para cuando estemos en el visor
+          lastKnownMessageTimestamp = messageSentAt;
+          lastKnownWhatsappMessageId = whatsappMessageId;
+          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado', messageSentAt, whatsappMessageId);
+
           return { messageSentAt, whatsappMessageId };
         }
       }
@@ -586,13 +718,90 @@ const MEDIA_CAPTURE_SCRIPT = `
           const today = new Date();
           const [hours, minutes] = text.split(':');
           const messageSentAt = today.toISOString().split('T')[0] + 'T' + hours.padStart(2, '0') + ':' + minutes.substring(0, 2) + ':00';
+
+          // Guardar en cache
+          lastKnownMessageTimestamp = messageSentAt;
+          lastKnownWhatsappMessageId = whatsappMessageId;
+          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado via span', messageSentAt);
+
           return { messageSentAt, whatsappMessageId };
         }
       }
 
-      return { messageSentAt: null, whatsappMessageId };
+      // Si no encontramos timestamp pero sí mensaje, guardar el ID
+      if (whatsappMessageId) {
+        lastKnownWhatsappMessageId = whatsappMessageId;
+      }
+
+      console.log('[HablaPe Debug] extractMessageTimestamp: no encontrado, usando cache');
+      return {
+        messageSentAt: lastKnownMessageTimestamp,
+        whatsappMessageId: whatsappMessageId || lastKnownWhatsappMessageId
+      };
     } catch (err) {
-      return { messageSentAt: null, whatsappMessageId: null };
+      console.log('[HablaPe Debug] extractMessageTimestamp error:', err.message);
+      return {
+        messageSentAt: lastKnownMessageTimestamp,
+        whatsappMessageId: lastKnownWhatsappMessageId
+      };
+    }
+  }
+
+  // =========================================================================
+  // Capturar contexto del mensaje ANTES de que se abra el visor
+  // =========================================================================
+  function captureMessageContext(clickTarget) {
+    try {
+      // Buscar el contenedor del mensaje
+      let messageEl = clickTarget.closest('[data-id]') ||
+                      clickTarget.closest('[data-testid="msg-container"]');
+
+      if (!messageEl) {
+        let parent = clickTarget.parentElement;
+        for (let i = 0; i < 15 && parent; i++) {
+          if (parent.getAttribute('data-id') ||
+              parent.getAttribute('data-testid') === 'msg-container') {
+            messageEl = parent;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+      }
+
+      if (messageEl) {
+        // Guardar ID del mensaje
+        const dataId = messageEl.getAttribute('data-id');
+        if (dataId) {
+          lastKnownWhatsappMessageId = dataId;
+
+          // Extraer teléfono del data-id si tiene formato @c.us
+          if (dataId.includes('@c.us')) {
+            let phone = dataId.split('@')[0];
+            phone = phone.replace(/^(true|false)_/, '');
+            if (/^\\d{9,15}$/.test(phone)) {
+              lastKnownChatPhone = phone;
+            }
+          }
+        }
+
+        // Extraer timestamp
+        const timeEl = messageEl.querySelector('[data-pre-plain-text]');
+        if (timeEl) {
+          const prePlainText = timeEl.getAttribute('data-pre-plain-text') || '';
+          const timeMatch = prePlainText.match(/\\[(\\d{1,2}:\\d{2}),\\s*(\\d{1,2}\\/\\d{1,2}\\/\\d{4})\\]/);
+          if (timeMatch) {
+            const [, time, date] = timeMatch;
+            const [day, month, year] = date.split('/');
+            lastKnownMessageTimestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + time + ':00';
+          }
+        }
+
+        console.log('[HablaPe Debug] captureMessageContext: phone=' + lastKnownChatPhone +
+                    ', msgId=' + lastKnownWhatsappMessageId +
+                    ', timestamp=' + lastKnownMessageTimestamp);
+      }
+    } catch (err) {
+      console.log('[HablaPe Debug] captureMessageContext error:', err.message);
     }
   }
 
@@ -633,20 +842,28 @@ const MEDIA_CAPTURE_SCRIPT = `
       }
 
       // Ignorar imágenes muy pequeñas (thumbnails/miniaturas del chat)
-      // Mínimo 20KB - las miniaturas son ~2-5KB, las imágenes reales son 50KB+
-      if (!imageData || size < 20000) {
-        // console.log('[HablaPe Debug] Imagen ignorada por tamaño:', size, 'bytes');
+      // Mínimo 10KB - reducido para capturar más imágenes válidas
+      if (!imageData || size < 10000) {
+        console.log('[HablaPe Debug] Imagen ignorada por tamaño:', size, 'bytes');
         return;
       }
+      console.log('[HablaPe Debug] Imagen aceptada, tamaño:', size, 'bytes');
 
       // Extract message timestamp
       const { messageSentAt, whatsappMessageId } = extractMessageTimestamp(element);
+
+      // Obtener teléfono y nombre del chat
+      const chatPhone = getCurrentChatPhone();
+      const chatName = window.__hablapeCurrentChatName || null;
+
+      console.log('[HablaPe Debug] Agregando a cola - chatPhone:', chatPhone, 'chatName:', chatName);
 
       window.__hablapeMediaQueue.push({
         data: imageData,
         type: mimeType,
         size: size,
-        chatPhone: getCurrentChatPhone(),
+        chatPhone: chatPhone,
+        chatName: chatName,
         timestamp: new Date().toISOString(),
         messageSentAt: messageSentAt,
         whatsappMessageId: whatsappMessageId,
@@ -654,294 +871,311 @@ const MEDIA_CAPTURE_SCRIPT = `
         mediaType: 'IMAGE'
       });
     } catch (err) {
-      // Silently ignore capture errors
+      console.log('[HablaPe Debug] Error en captureImage:', err.message);
     }
   }
 
   // ==========================================================================
-  // ESTRATEGIA DE CAPTURA HEURÍSTICA (RESILIENTE A CAMBIOS DE WHATSAPP)
+  // ESTRATEGIA DE CAPTURA SIMPLIFICADA
   // ==========================================================================
-  //
-  // En lugar de depender de selectores específicos de WhatsApp (data-testid)
-  // que pueden cambiar sin aviso, usamos DETECCIÓN HEURÍSTICA basada en
-  // características visuales inherentes a cualquier visor fullscreen:
-  //
-  // - Elemento con position: fixed que cubre >80% del viewport
-  // - Alto z-index (>100)
-  // - Fondo oscuro o semi-transparente
-  // - Contiene imagen grande centrada
   //
   // REGLA PRINCIPAL: Solo capturar imágenes que el usuario EXPLÍCITAMENTE ve
   // en el visor de pantalla completa (lightbox/gallery).
+  //
+  // NO capturar:
+  // - Miniaturas en el chat (filtradas por tamaño < 20KB)
+  // - Stickers y GIFs (no son imágenes de conversación)
+  // - Fotos de perfil
+  // - Imágenes de UI
+  //
+  // SÍ capturar:
+  // - Imagen abierta en visor fullscreen (una por vez)
+  // - Cada imagen cuando el usuario navega con < >
   // ==========================================================================
 
   // Estado para controlar capturas
   let lastCaptureTime = 0;
-  const CAPTURE_COOLDOWN = 1000; // Mínimo 1 segundo entre capturas
-  let viewerWasOpen = false;
-  let isClosingViewer = false;
+  const CAPTURE_COOLDOWN = 1500; // Mínimo 1.5 segundos entre capturas
+  let captureScheduled = false; // Flag para evitar múltiples capturas programadas
+  let srcChangeTimeout = null; // Para debounce del srcObserver
+  const capturedBlobUrls = new Set(); // Tracking de URLs de blob ya capturadas
 
   // ==========================================================================
-  // DETECCIÓN HEURÍSTICA DE VISOR FULLSCREEN
+  // Función MEJORADA para verificar si estamos en el visor de medios
+  // Usa 4 métodos diferentes para detectar el visor
   // ==========================================================================
-  function detectFullscreenViewer() {
-    const viewportArea = window.innerWidth * window.innerHeight;
-    const COVERAGE_THRESHOLD = 0.80;
-    const MIN_Z_INDEX = 100;
+  function isMediaViewerOpen() {
+    // Método 1: Selectores específicos de WhatsApp (data-testid)
+    const byTestId = document.querySelector('[data-testid="media-viewer"]') ||
+                     document.querySelector('[data-testid="image-viewer"]') ||
+                     document.querySelector('[data-testid="lightbox"]') ||
+                     document.querySelector('[data-testid="media-viewer-modal"]') ||
+                     document.querySelector('[data-testid="media-state-layer"]');
+    if (byTestId) {
+      console.log('[HablaPe Debug] isMediaViewerOpen: encontrado por data-testid');
+      return byTestId;
+    }
 
-    let viewerCandidate = null;
-    let maxZIndex = 0;
+    // Método 2: Buscar overlay/modal con imagen grande
+    // WhatsApp usa un div con role="dialog" o similar para el visor
+    const dialogs = document.querySelectorAll('[role="dialog"], [role="presentation"]');
+    for (const dialog of dialogs) {
+      const hasLargeImage = dialog.querySelector('img[src^="blob:"]');
+      if (hasLargeImage) {
+        console.log('[HablaPe Debug] isMediaViewerOpen: encontrado por role=dialog');
+        return dialog;
+      }
+    }
 
-    // Buscar elementos fixed que cubran el viewport
-    const fixedElements = document.querySelectorAll('div, span, section');
-
-    for (const el of fixedElements) {
+    // Método 3: Buscar imagen blob grande en overlay de pantalla completa
+    // El visor típicamente tiene position:fixed y cubre toda la pantalla
+    const allDivs = document.querySelectorAll('div');
+    for (const el of allDivs) {
       const style = window.getComputedStyle(el);
-      if (style.position !== 'fixed') continue;
-
-      const zIndex = parseInt(style.zIndex, 10) || 0;
-      if (zIndex < MIN_Z_INDEX) continue;
-
-      const rect = el.getBoundingClientRect();
-      const coverage = (rect.width * rect.height) / viewportArea;
-      if (coverage < COVERAGE_THRESHOLD) continue;
-
-      // Verificar fondo oscuro o transparente
-      const bg = style.backgroundColor;
-      const isDarkOrTransparent = bg.includes('rgba') ||
-                                  bg === 'rgb(0, 0, 0)' ||
-                                  bg.includes('rgb(0,') ||
-                                  bg.includes('rgb(17,') ||
-                                  bg.includes('rgb(30,') ||
-                                  bg.includes('rgb(33,');
-
-      if (!isDarkOrTransparent) continue;
-
-      if (zIndex > maxZIndex) {
-        maxZIndex = zIndex;
-        viewerCandidate = el;
-      }
-    }
-
-    return viewerCandidate;
-  }
-
-  // ==========================================================================
-  // BÚSQUEDA DE IMAGEN PRINCIPAL POR SCORE
-  // ==========================================================================
-  function findMainImage(viewer) {
-    const searchArea = viewer || document.body;
-    const centerX = window.innerWidth / 2;
-    const centerY = window.innerHeight / 2;
-
-    const mediaElements = [
-      ...searchArea.querySelectorAll('img'),
-      ...searchArea.querySelectorAll('canvas')
-    ];
-
-    let best = null;
-    let bestScore = 0;
-
-    for (const el of mediaElements) {
-      // Filtrar: solo blob: o data: (para img)
-      if (el.tagName === 'IMG') {
-        const src = el.src || '';
-        if (!src.startsWith('blob:') && !src.startsWith('data:')) continue;
-      }
-
-      // Filtrar: dimensiones mínimas
-      const w = el.naturalWidth || el.width || 0;
-      const h = el.naturalHeight || el.height || 0;
-      if (w < 400 || h < 300) continue;
-
-      // Filtrar: no oculto
-      const style = window.getComputedStyle(el);
-      if (style.display === 'none' || style.visibility === 'hidden') continue;
-
-      // Calcular score basado en tamaño y cercanía al centro
-      const rect = el.getBoundingClientRect();
-      const area = w * h;
-      const distFromCenter = Math.sqrt(
-        Math.pow(rect.left + rect.width / 2 - centerX, 2) +
-        Math.pow(rect.top + rect.height / 2 - centerY, 2)
-      );
-      const maxDist = Math.sqrt(centerX * centerX + centerY * centerY);
-
-      const score = (area / 10000) + ((1 - distFromCenter / maxDist) * 1000);
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = el;
-      }
-    }
-
-    return best;
-  }
-
-  // ==========================================================================
-  // DETECCIÓN DE ACCIONES DE CIERRE
-  // ==========================================================================
-  function isCloseAction(target, eventKey) {
-    // Tecla Escape
-    if (eventKey === 'Escape') return true;
-
-    if (!target) return false;
-
-    // Botón en esquina superior derecha
-    const rect = target.getBoundingClientRect();
-    const isTopRight = rect.right > window.innerWidth - 100 && rect.top < 100;
-
-    // Tiene icono/label de cierre
-    const hasCloseIndicator =
-      target.closest?.('[data-icon="x"]') ||
-      target.closest?.('[data-icon="x-viewer"]') ||
-      target.closest?.('[data-testid*="close"]') ||
-      target.getAttribute?.('aria-label')?.toLowerCase().includes('cerrar') ||
-      target.getAttribute?.('aria-label')?.toLowerCase().includes('close');
-
-    return isTopRight || hasCloseIndicator;
-  }
-
-  // ==========================================================================
-  // DETECCIÓN DE ACCIONES DE NAVEGACIÓN
-  // ==========================================================================
-  function isNavigationAction(target, eventKey) {
-    // Teclas de flecha
-    if (eventKey === 'ArrowLeft' || eventKey === 'ArrowRight') return true;
-
-    if (!target) return false;
-
-    // Botones a los lados del visor
-    const viewer = detectFullscreenViewer();
-    if (!viewer) return false;
-
-    const rect = target.getBoundingClientRect();
-    const isLeftSide = rect.left < 150 || rect.right < 200;
-    const isRightSide = rect.left > window.innerWidth - 200 || rect.right > window.innerWidth - 150;
-    const isButton = target.tagName === 'BUTTON' ||
-                    target.closest('button') ||
-                    target.getAttribute('role') === 'button' ||
-                    target.closest('[role="button"]');
-
-    // También detectar por aria-label
-    const ariaLabel = (target.getAttribute('aria-label') || '').toLowerCase();
-    const hasNavLabel = ariaLabel.includes('anterior') ||
-                       ariaLabel.includes('siguiente') ||
-                       ariaLabel.includes('previous') ||
-                       ariaLabel.includes('next');
-
-    return ((isLeftSide || isRightSide) && isButton) || hasNavLabel;
-  }
-
-  // ==========================================================================
-  // FUNCIÓN PRINCIPAL DE CAPTURA
-  // ==========================================================================
-  function captureViewerImage() {
-    if (isClosingViewer) return;
-
-    const now = Date.now();
-    if (now - lastCaptureTime < CAPTURE_COOLDOWN) return;
-
-    const viewer = detectFullscreenViewer();
-    if (!viewer) {
-      viewerWasOpen = false;
-      return;
-    }
-
-    const mainImage = findMainImage(viewer);
-    if (mainImage) {
-      lastCaptureTime = now;
-      captureImage(mainImage, 'PREVIEW');
-    }
-  }
-
-  // ==========================================================================
-  // DETECTOR 1: Click handler unificado
-  // ==========================================================================
-  document.addEventListener('click', (e) => {
-    const target = e.target;
-
-    // Detectar cierre
-    if (isCloseAction(target, null)) {
-      isClosingViewer = true;
-      viewerWasOpen = false;
-      setTimeout(() => { isClosingViewer = false; }, 500);
-      return;
-    }
-
-    // Detectar click en miniatura (abre visor)
-    const isThumb = target.tagName === 'IMG' &&
-                   (target.src?.startsWith('blob:') || target.src?.startsWith('data:'));
-
-    if (isThumb && !detectFullscreenViewer()) {
-      // Esperar a que se abra el visor
-      setTimeout(() => {
-        const viewer = detectFullscreenViewer();
-        if (viewer) {
-          viewerWasOpen = true;
-          setTimeout(captureViewerImage, 500);
-        }
-      }, 400);
-      return;
-    }
-
-    // Detectar navegación
-    if (viewerWasOpen && isNavigationAction(target, null)) {
-      setTimeout(captureViewerImage, 500);
-    }
-
-    // Si ya hay visor abierto y no es cierre, podría ser navegación
-    if (viewerWasOpen && detectFullscreenViewer()) {
-      const rect = target.getBoundingClientRect();
-      const isLeftSide = rect.left < 200;
-      const isRightSide = rect.right > window.innerWidth - 200;
-      if (isLeftSide || isRightSide) {
-        setTimeout(captureViewerImage, 500);
-      }
-    }
-  }, true);
-
-  // ==========================================================================
-  // DETECTOR 2: Keydown handler
-  // ==========================================================================
-  document.addEventListener('keydown', (e) => {
-    const viewer = detectFullscreenViewer();
-
-    if (!viewerWasOpen && !viewer) return;
-
-    if (isCloseAction(null, e.key)) {
-      isClosingViewer = true;
-      viewerWasOpen = false;
-      setTimeout(() => { isClosingViewer = false; }, 500);
-      return;
-    }
-
-    if (isNavigationAction(null, e.key)) {
-      setTimeout(captureViewerImage, 500);
-    }
-  }, true);
-
-  // ==========================================================================
-  // DETECTOR 3: Observer de cambios de src (para swipe/gestos)
-  // ==========================================================================
-  const srcObserver = new MutationObserver((mutations) => {
-    if (isClosingViewer) return;
-    if (!viewerWasOpen && !detectFullscreenViewer()) return;
-
-    for (const mutation of mutations) {
-      if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
-        const img = mutation.target;
-        if (img.tagName === 'IMG' && img.src?.startsWith('blob:')) {
-          const w = img.naturalWidth || img.width || 0;
-          const h = img.naturalHeight || img.height || 0;
-
-          if (w > 400 && h > 300) {
-            setTimeout(captureViewerImage, 300);
-            break; // Solo una captura por batch de mutaciones
+      if (style.position === 'fixed' || style.position === 'absolute') {
+        const rect = el.getBoundingClientRect();
+        // Si cubre más del 70% de la pantalla
+        if (rect.width > window.innerWidth * 0.7 && rect.height > window.innerHeight * 0.7) {
+          if (el.querySelector('img[src^="blob:"]')) {
+            console.log('[HablaPe Debug] isMediaViewerOpen: encontrado por fixed/absolute overlay');
+            return el;
           }
         }
       }
     }
+
+    // Método 4: Buscar por estructura típica de lightbox
+    // Imagen blob con tamaño de display grande (no naturalWidth)
+    const allBlobImages = document.querySelectorAll('img[src^="blob:"]');
+    for (const img of allBlobImages) {
+      const rect = img.getBoundingClientRect();
+      // Si la imagen ocupa más del 50% de la pantalla, es el visor
+      if (rect.width > window.innerWidth * 0.5 && rect.height > window.innerHeight * 0.5) {
+        console.log('[HablaPe Debug] isMediaViewerOpen: encontrado por imagen grande', rect.width, 'x', rect.height);
+        return img.closest('div') || img;
+      }
+    }
+
+    console.log('[HablaPe Debug] isMediaViewerOpen: NO encontrado');
+    return null;
+  }
+
+  // ==========================================================================
+  // Función MEJORADA para obtener la imagen principal del visor
+  // Usa getBoundingClientRect() para detectar dimensiones visibles
+  // ==========================================================================
+  function getMainViewerImage() {
+    const viewer = isMediaViewerOpen();
+    if (!viewer) {
+      console.log('[HablaPe Debug] getMainViewerImage: visor no abierto');
+      return null;
+    }
+
+    // Buscar todas las imágenes blob en el visor o documento
+    const images = viewer.querySelectorAll?.('img[src^="blob:"]') ||
+                   document.querySelectorAll('img[src^="blob:"]');
+
+    console.log('[HablaPe Debug] getMainViewerImage: encontradas', images.length, 'imágenes blob');
+
+    let mainImg = null;
+    let maxDisplaySize = 0;
+
+    images.forEach((img, idx) => {
+      // Usar getBoundingClientRect() en lugar de naturalWidth
+      // Esto funciona incluso si la imagen aún carga
+      const rect = img.getBoundingClientRect();
+      const displaySize = rect.width * rect.height;
+
+      console.log('[HablaPe Debug] Img[' + idx + ']: display', Math.round(rect.width) + 'x' + Math.round(rect.height), '=', Math.round(displaySize));
+
+      // Umbral más bajo: 200x200 display pixels (no natural)
+      if (displaySize > maxDisplaySize && rect.width > 200 && rect.height > 200) {
+        maxDisplaySize = displaySize;
+        mainImg = img;
+      }
+    });
+
+    // Fallback: buscar canvas
+    if (!mainImg) {
+      const canvas = viewer.querySelector?.('canvas') ||
+                     document.querySelector('canvas');
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        console.log('[HablaPe Debug] Canvas encontrado:', Math.round(rect.width) + 'x' + Math.round(rect.height));
+        if (rect.width > 200 && rect.height > 200) {
+          return canvas;
+        }
+      }
+    }
+
+    console.log('[HablaPe Debug] getMainViewerImage: imagen seleccionada:', mainImg ? 'SI' : 'NO');
+    return mainImg;
+  }
+
+  // ==========================================================================
+  // NUEVA función para esperar a que la imagen esté lista
+  // ==========================================================================
+  async function waitForImageReady(img, maxWait = 2000) {
+    const start = Date.now();
+    while (Date.now() - start < maxWait) {
+      // Verificar si tiene dimensiones naturales válidas
+      if (img.naturalWidth > 100 && img.naturalHeight > 100) {
+        console.log('[HablaPe Debug] waitForImageReady: natural dims OK', img.naturalWidth, 'x', img.naturalHeight);
+        return true;
+      }
+      // Verificar si tiene dimensiones de display válidas
+      const rect = img.getBoundingClientRect();
+      if (rect.width > 200 && rect.height > 200) {
+        console.log('[HablaPe Debug] waitForImageReady: display dims OK', Math.round(rect.width), 'x', Math.round(rect.height));
+        return true;
+      }
+      // Esperar 100ms y reintentar
+      await new Promise(r => setTimeout(r, 100));
+    }
+    console.log('[HablaPe Debug] waitForImageReady: timeout después de', maxWait, 'ms');
+    return false;
+  }
+
+  // ==========================================================================
+  // Función principal de captura MEJORADA (ahora async con waitForImageReady)
+  // ==========================================================================
+  async function captureViewerImage() {
+    console.log('[HablaPe Debug] captureViewerImage() llamada');
+
+    const now = Date.now();
+    if (now - lastCaptureTime < CAPTURE_COOLDOWN) {
+      console.log('[HablaPe Debug] Bloqueado por cooldown, faltan', CAPTURE_COOLDOWN - (now - lastCaptureTime), 'ms');
+      return; // Evitar capturas muy seguidas
+    }
+
+    const mainImage = getMainViewerImage();
+    console.log('[HablaPe Debug] Imagen principal:', mainImage ? mainImage.tagName : 'null');
+
+    if (mainImage) {
+      // Esperar a que esté lista (solo para IMG, no CANVAS)
+      if (mainImage.tagName === 'IMG') {
+        const ready = await waitForImageReady(mainImage);
+        if (!ready) {
+          console.log('[HablaPe Debug] Imagen no está lista después de esperar');
+          return;
+        }
+      }
+
+      // Verificar si ya capturamos este blob URL específico (solo para IMG, no CANVAS)
+      if (mainImage.tagName === 'IMG' && mainImage.src) {
+        console.log('[HablaPe Debug] URL de imagen:', mainImage.src.substring(0, 50) + '...');
+        if (capturedBlobUrls.has(mainImage.src)) {
+          console.log('[HablaPe Debug] URL ya capturada, saltando');
+          return; // Ya capturada esta URL específica
+        }
+      }
+
+      lastCaptureTime = now;
+      await captureImage(mainImage, 'PREVIEW');
+
+      // Agregar al Set DESPUÉS de llamar captureImage (que tiene su propia dedup)
+      if (mainImage.tagName === 'IMG' && mainImage.src) {
+        capturedBlobUrls.add(mainImage.src);
+      }
+      console.log('[HablaPe Debug] Captura enviada a cola');
+    }
+  }
+
+  // ==========================================================================
+  // Función para programar una captura única (evita múltiples disparos simultáneos)
+  // Tiempos AUMENTADOS para mejor detección (default 800ms)
+  // ==========================================================================
+  function scheduleCaptureOnce(delay = 800) {
+    console.log('[HablaPe Debug] scheduleCaptureOnce() delay:', delay, 'scheduled:', captureScheduled);
+    if (captureScheduled) return; // Ya hay una captura programada
+    captureScheduled = true;
+    setTimeout(async () => {
+      await captureViewerImage();
+      captureScheduled = false;
+    }, delay);
+  }
+
+  // ==========================================================================
+  // DETECTOR 1: Click en imagen del chat (abre visor) o botones de navegación
+  // ==========================================================================
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+
+    // CASO A: Click en miniatura de imagen en el chat (abre visor)
+    const isImageClick = target.tagName === 'IMG' ||
+                        target.closest?.('[data-testid="image-thumb"]') ||
+                        target.closest?.('[data-testid="media-thumb"]') ||
+                        target.closest?.('img[src^="blob:"]');
+
+    console.log('[HablaPe Debug] Click detectado - isImageClick:', isImageClick, 'viewerOpen:', !!isMediaViewerOpen());
+
+    if (isImageClick && !isMediaViewerOpen()) {
+      console.log('[HablaPe Debug] Click en imagen, capturando contexto...');
+
+      // IMPORTANTE: Capturar contexto del mensaje ANTES de que se abra el visor
+      captureMessageContext(target);
+
+      // También actualizar el teléfono del chat activo
+      getCurrentChatPhone();
+
+      // Esperar más tiempo a que se abra el visor (500ms en lugar de 300ms)
+      setTimeout(() => {
+        const viewerNow = isMediaViewerOpen();
+        console.log('[HablaPe Debug] Después de 500ms, visor abierto:', !!viewerNow);
+        if (viewerNow) {
+          scheduleCaptureOnce(800); // Aumentado de 500 a 800ms
+        }
+      }, 500); // Aumentado de 300 a 500ms
+      return;
+    }
+
+    // CASO B: Click en botones de navegación < > dentro del visor
+    if (isMediaViewerOpen()) {
+      const isNavButton = target.closest?.('[data-testid*="prev"]') ||
+                         target.closest?.('[data-testid*="next"]') ||
+                         target.closest?.('[data-testid*="arrow"]') ||
+                         target.closest?.('[data-icon="prev"]') ||
+                         target.closest?.('[data-icon="next"]') ||
+                         target.closest?.('[aria-label*="anterior"]') ||
+                         target.closest?.('[aria-label*="siguiente"]') ||
+                         target.closest?.('[aria-label*="previous"]') ||
+                         target.closest?.('[aria-label*="next"]') ||
+                         // Botones genéricos en el visor que no son cerrar
+                         (target.tagName === 'BUTTON' && !target.closest?.('[data-testid*="close"]'));
+
+      if (isNavButton) {
+        // Esperar a que cambie la imagen
+        scheduleCaptureOnce(800); // Aumentado de 500 a 800ms
+      }
+    }
+  }, true);
+
+  // ==========================================================================
+  // DETECTOR 2: Navegación en galería - SIN filtro de dimensiones
+  // ==========================================================================
+  const srcObserver = new MutationObserver((mutations) => {
+    // Solo procesar si el visor está abierto
+    if (!isMediaViewerOpen()) return;
+
+    // Buscar cualquier cambio de src en imagen blob (sin filtrar por dimensiones)
+    let hasRelevantChange = false;
+    mutations.forEach((mutation) => {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
+        const img = mutation.target;
+        if (img.tagName === 'IMG' && img.src?.startsWith('blob:')) {
+          hasRelevantChange = true;
+          console.log('[HablaPe Debug] srcObserver: cambio de src detectado');
+        }
+      }
+    });
+
+    if (!hasRelevantChange) return;
+
+    // Debounce y esperar más tiempo para que cargue
+    if (srcChangeTimeout) clearTimeout(srcChangeTimeout);
+    srcChangeTimeout = setTimeout(() => {
+      scheduleCaptureOnce(500); // Más tiempo para cargar
+    }, 300);
   });
 
   srcObserver.observe(document.body, {
@@ -949,6 +1183,25 @@ const MEDIA_CAPTURE_SCRIPT = `
     attributeFilter: ['src'],
     subtree: true
   });
+
+  // ==========================================================================
+  // DETECTOR 3: Teclas de navegación (← →) en el visor
+  // Tiempo AUMENTADO a 800ms
+  // ==========================================================================
+  document.addEventListener('keydown', (e) => {
+    if (!isMediaViewerOpen()) return;
+
+    // Detectar flechas izquierda/derecha
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      console.log('[HablaPe Debug] Tecla de navegación:', e.key);
+      // Esperar a que cambie la imagen
+      scheduleCaptureOnce(800); // Aumentado de 500 a 800ms
+    }
+  }, true);
+
+  // ==========================================================================
+  // NO usar MutationObserver genérico - causa demasiadas capturas falsas
+  // ==========================================================================
 
   // ===== INTERCEPTAR REPRODUCCIÓN DE AUDIO =====
   const originalAudioPlay = HTMLAudioElement.prototype.play;
@@ -1048,10 +1301,25 @@ export function injectSecurityScripts(view: BrowserView): void {
   });
 }
 
+// Tipo para datos crudos del script de captura
+export interface RawMediaCaptureData {
+  data: string;
+  type: string;
+  size: number;
+  chatPhone: string;
+  chatName?: string;
+  timestamp: string;
+  source: string;
+  duration?: number;
+  messageSentAt?: string;
+  whatsappMessageId?: string;
+  mediaType: 'IMAGE' | 'AUDIO';
+}
+
 export function setupMediaCapture(
   view: BrowserView,
   userId: string,
-  onMediaCaptured: (payload: MediaCapturePayload) => void,
+  onMediaCaptured: (data: RawMediaCaptureData) => void,
   onAuditLog: (payload: AuditLogPayload) => void
 ): void {
   let pollingInterval: NodeJS.Timeout | null = null;
@@ -1071,23 +1339,8 @@ export function setupMediaCapture(
 
       if (result && Array.isArray(result) && result.length > 0) {
         for (const item of result) {
-          const payload: MediaCapturePayload = {
-            mediaId: generateMediaId(),
-            userId: userId,
-            chatPhone: item.chatPhone || 'unknown',
-            chatName: null,
-            mediaType: item.mediaType,
-            mimeType: item.type,
-            data: item.data,
-            size: item.size,
-            duration: item.duration,
-            capturedAt: item.timestamp,
-            messageSentAt: item.messageSentAt || undefined,
-            whatsappMessageId: item.whatsappMessageId || undefined,
-            source: item.source
-          };
-
-          onMediaCaptured(payload);
+          // Pasar datos crudos al callback - main.ts agregará agentId, clientUserId, etc.
+          onMediaCaptured(item);
         }
       }
     } catch (err) {
@@ -1123,7 +1376,7 @@ export function initializeMediaSecurity(
   mainWindow: BrowserWindow,
   userId: string,
   callbacks: {
-    onMediaCaptured: (payload: MediaCapturePayload) => void;
+    onMediaCaptured: (data: RawMediaCaptureData) => void;
     onAuditLog: (payload: AuditLogPayload) => void;
   }
 ): void {

@@ -13,6 +13,7 @@ import {
   initializeMediaSecurity,
   MediaCapturePayload,
   AuditLogPayload,
+  RawMediaCaptureData,
   generateMediaId
 } from './media-security';
 
@@ -31,6 +32,11 @@ let whatsappInitialized = false;
 // Usuario logueado en Angular (para asociar medios capturados)
 let loggedInUserId: number | null = null;
 let loggedInUserName: string | null = null;
+
+// Cliente activo en el chat (para asociar medios al cliente)
+let activeClientUserId: number | null = null;
+let activeClientPhone: string | null = null;
+let activeClientName: string | null = null;
 
 // Configuración de dimensiones (debe coincidir con CSS variables en styles.scss)
 const SIDEBAR_WIDTH = 220;
@@ -107,18 +113,19 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
 
 /**
  * Callback para manejar medios capturados desde el BrowserView
+ * Agrega agentId, clientUserId, y usa datos del cliente activo de Angular
  */
-function handleMediaCaptured(data: {
-  data: string;
-  type: string;
-  size: number;
-  chatPhone: string;
-  timestamp: string;
-  source: string;
-  duration?: number;
-  messageSentAt?: string;
-  whatsappMessageId?: string;
-}): void {
+function handleMediaCaptured(data: RawMediaCaptureData): void {
+  console.log('[HablaPe Media] ========== MEDIA CAPTURE START ==========');
+  console.log('[HablaPe Media] Estado actual de loggedInUserId:', loggedInUserId);
+  console.log('[HablaPe Media] Estado actual de loggedInUserName:', loggedInUserName);
+  console.log('[HablaPe Media] Datos recibidos del script:');
+  console.log('[HablaPe Media]   chatPhone:', data.chatPhone);
+  console.log('[HablaPe Media]   messageSentAt:', data.messageSentAt);
+  console.log('[HablaPe Media]   whatsappMessageId:', data.whatsappMessageId);
+  console.log('[HablaPe Media]   type:', data.type);
+  console.log('[HablaPe Media]   size:', data.size);
+
   const isImage = data.type.startsWith('image/');
   const isAudio = data.type.startsWith('audio/');
 
@@ -127,12 +134,22 @@ function handleMediaCaptured(data: {
     return;
   }
 
+  // Usar el teléfono del cliente activo (de Angular) > chat scanner > script
+  const effectiveChatPhone = activeClientPhone
+    || (data.chatPhone && data.chatPhone !== 'unknown' ? data.chatPhone : null)
+    || lastDetectedPhone
+    || 'unknown';
+
+  // Usar el nombre del cliente activo (de Angular) > chat scanner > script
+  const effectiveChatName = activeClientName || data.chatName || lastDetectedName || null;
+
   const payload: MediaCapturePayload = {
     mediaId: generateMediaId(),
     userId: userFingerprint.odaId,
     agentId: loggedInUserId, // Include logged-in agent ID
-    chatPhone: data.chatPhone,
-    chatName: null,
+    clientUserId: activeClientUserId, // Include client user ID from CRM
+    chatPhone: effectiveChatPhone,
+    chatName: effectiveChatName,
     mediaType: isImage ? 'IMAGE' : 'AUDIO',
     mimeType: data.type,
     data: data.data,
@@ -144,7 +161,20 @@ function handleMediaCaptured(data: {
     source: data.source as 'PREVIEW' | 'PLAYBACK'
   };
 
-  console.log('[HablaPe Media] Capturando media, agentId:', loggedInUserId, 'messageSentAt:', data.messageSentAt);
+  console.log('[HablaPe Media] Active client state (from Angular):');
+  console.log('[HablaPe Media]   activeClientUserId:', activeClientUserId);
+  console.log('[HablaPe Media]   activeClientPhone:', activeClientPhone);
+  console.log('[HablaPe Media]   activeClientName:', activeClientName);
+  console.log('[HablaPe Media] Chat scanner state:');
+  console.log('[HablaPe Media]   lastDetectedPhone:', lastDetectedPhone);
+  console.log('[HablaPe Media]   lastDetectedName:', lastDetectedName);
+  console.log('[HablaPe Media] Payload FINAL a enviar:');
+  console.log('[HablaPe Media]   agentId:', payload.agentId);
+  console.log('[HablaPe Media]   clientUserId:', payload.clientUserId);
+  console.log('[HablaPe Media]   chatPhone:', payload.chatPhone);
+  console.log('[HablaPe Media]   chatName:', payload.chatName);
+  console.log('[HablaPe Media]   messageSentAt:', payload.messageSentAt);
+  console.log('[HablaPe Media] ========== SENDING TO SERVER ==========');
   sendMediaToServer(payload);
 }
 
@@ -568,8 +598,9 @@ function createWhatsAppView(): void {
 
   // ===== INICIALIZAR SISTEMA DE SEGURIDAD DE MEDIOS =====
   initializeMediaSecurity(whatsappView, mainWindow, userFingerprint.odaId, {
-    onMediaCaptured: (payload) => {
-      sendMediaToServer(payload);
+    onMediaCaptured: (data) => {
+      // Pasar los datos crudos a handleMediaCaptured que agrega agentId, clientUserId, etc.
+      handleMediaCaptured(data);
     },
     onAuditLog: (payload) => {
       // Add agent ID to audit log
@@ -615,7 +646,8 @@ function createWhatsAppView(): void {
   });
 
   // Abrir DevTools para debug (quitar en producción)
-  // whatsappView.webContents.openDevTools({ mode: 'detach' });
+  // TEMPORAL: Habilitado para debug de captura de medios
+  whatsappView.webContents.openDevTools({ mode: 'detach' });
   // mainWindow.webContents.openDevTools({ mode: 'detach' });
 }
 
@@ -780,6 +812,23 @@ let lastDetectedPhone = '';
 let lastDetectedName = '';
 let chatScannerInterval: NodeJS.Timeout | null = null;
 let chatScannerRunning = false;
+
+/**
+ * Actualiza el teléfono del chat en el BrowserView de WhatsApp
+ * para que el script de captura pueda usarlo
+ */
+async function updateChatPhoneInWhatsApp(phone: string, name: string): Promise<void> {
+  if (!whatsappView) return;
+  try {
+    await whatsappView.webContents.executeJavaScript(`
+      window.__hablapeCurrentChatPhone = '${phone}';
+      window.__hablapeCurrentChatName = '${name || ''}';
+      console.log('[HablaPe Debug] Chat actualizado desde Electron:', '${phone}', '${name || ''}');
+    `, true);
+  } catch (err) {
+    // Ignorar errores silenciosamente
+  }
+}
 
 // Intervalo de escaneo: 1.5-2.5 segundos
 function getRandomScanInterval(): number {
@@ -960,6 +1009,9 @@ async function scanChat(): Promise<void> {
 
         lastDetectedPhone = phone;
         lastDetectedName = name || '';
+
+        // Actualizar el teléfono en el BrowserView para el script de captura
+        updateChatPhoneInWhatsApp(phone, name || '');
 
         mainWindow.webContents.send('chat-selected', {
           phone,
@@ -1211,13 +1263,38 @@ function setupIPC(): void {
   ipcMain.on('set-logged-in-user', (_, data: { userId: number; userName: string }) => {
     loggedInUserId = data.userId;
     loggedInUserName = data.userName;
-    console.log('[HablaPe] Usuario logueado:', loggedInUserId, loggedInUserName);
+    console.log('[HablaPe] *** Usuario logueado recibido via IPC ***');
+    console.log('[HablaPe] agentId:', loggedInUserId);
+    console.log('[HablaPe] userName:', loggedInUserName);
   });
 
   ipcMain.on('clear-logged-in-user', () => {
     console.log('[HablaPe] Usuario deslogueado:', loggedInUserId);
     loggedInUserId = null;
     loggedInUserName = null;
+  });
+
+  // === Active Client (para asociar medios al cliente del chat) ===
+  ipcMain.on('set-active-client', (_, data: { clientUserId: number | null; chatPhone: string; chatName: string }) => {
+    activeClientUserId = data.clientUserId;
+    activeClientPhone = data.chatPhone;
+    activeClientName = data.chatName;
+    console.log('[HablaPe] *** Cliente activo establecido ***');
+    console.log('[HablaPe] clientUserId:', activeClientUserId);
+    console.log('[HablaPe] chatPhone:', activeClientPhone);
+    console.log('[HablaPe] chatName:', activeClientName);
+
+    // También actualizar en WhatsApp BrowserView
+    if (activeClientPhone) {
+      updateChatPhoneInWhatsApp(activeClientPhone, activeClientName || '');
+    }
+  });
+
+  ipcMain.on('clear-active-client', () => {
+    console.log('[HablaPe] Cliente activo limpiado');
+    activeClientUserId = null;
+    activeClientPhone = null;
+    activeClientName = null;
   });
 
   // === Controles de ventana ===

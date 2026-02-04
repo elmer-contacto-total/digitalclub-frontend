@@ -155,6 +155,16 @@ const electronAPI = {
     ipcRenderer.send('clear-logged-in-user');
   },
 
+  // Notificar a Electron del cliente activo (para asociar medios)
+  setActiveClient: (data: { clientUserId: number | null; chatPhone: string; chatName: string }) => {
+    ipcRenderer.send('set-active-client', data);
+  },
+
+  // Limpiar cliente activo
+  clearActiveClient: () => {
+    ipcRenderer.send('clear-active-client');
+  },
+
   // Restablecimiento completo - limpia todos los datos y reinicia
   fullReset: (): Promise<boolean> => {
     return ipcRenderer.invoke('full-reset');
@@ -218,6 +228,8 @@ declare global {
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
       setLoggedInUser: (userId: number, userName: string) => void;
       clearLoggedInUser: () => void;
+      setActiveClient: (data: { clientUserId: number | null; chatPhone: string; chatName: string }) => void;
+      clearActiveClient: () => void;
       removeAllListeners: (channel: string) => void;
     };
   }

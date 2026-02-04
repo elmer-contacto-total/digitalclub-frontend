@@ -37,6 +37,10 @@ interface ElectronAPI {
   setLoggedInUser?(userId: number, userName: string): void;
   clearLoggedInUser?(): void;
 
+  // Active client (for media capture association with CRM contact)
+  setActiveClient?(data: { clientUserId: number | null; chatPhone: string; chatName: string }): void;
+  clearActiveClient?(): void;
+
   // Angular bounds
   getAngularBounds?(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
 }
@@ -305,6 +309,25 @@ export class ElectronService {
   clearLoggedInUser(): void {
     if (window.electronAPI?.clearLoggedInUser) {
       window.electronAPI.clearLoggedInUser();
+    }
+  }
+
+  /**
+   * Set active client info in Electron (for media capture association)
+   * Should be called when a contact is found/selected in the CRM panel
+   */
+  setActiveClient(clientUserId: number | null, chatPhone: string, chatName: string): void {
+    if ((window as any).electronAPI?.setActiveClient) {
+      (window as any).electronAPI.setActiveClient({ clientUserId, chatPhone, chatName });
+    }
+  }
+
+  /**
+   * Clear active client info in Electron
+   */
+  clearActiveClient(): void {
+    if ((window as any).electronAPI?.clearActiveClient) {
+      (window as any).electronAPI.clearActiveClient();
     }
   }
 
