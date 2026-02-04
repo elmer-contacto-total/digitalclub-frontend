@@ -17,39 +17,54 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Message, MessageDirection, isIncoming, isOutgoing } from '../../../../core/models/message.model';
+import { CapturedMedia } from '../../../../core/models/conversation.model';
 import { MessageItemComponent } from '../message-item/message-item.component';
+import { CapturedMediaItemComponent } from '../captured-media-item/captured-media-item.component';
 
-interface MessageGroup {
+// Union type for timeline items (messages + captured media)
+export interface TimelineItem {
+  type: 'message' | 'captured_media';
+  timestamp: Date;
+  data: Message | CapturedMedia;
+}
+
+interface TimelineGroup {
   date: string;
-  messages: Message[];
+  items: TimelineItem[];
 }
 
 @Component({
   selector: 'app-message-list',
   standalone: true,
-  imports: [CommonModule, MessageItemComponent],
+  imports: [CommonModule, MessageItemComponent, CapturedMediaItemComponent],
   styleUrl: './message-list.component.scss',
   template: `
     <div class="message-list" #scrollContainer (scroll)="onScroll($event)">
-      @if (messageGroups().length === 0) {
+      @if (timelineGroups().length === 0) {
         <div class="empty-state">
           <i class="ph ph-chat-text"></i>
           <p>No hay mensajes en esta conversación</p>
         </div>
       } @else {
-        @for (group of messageGroups(); track group.date) {
+        @for (group of timelineGroups(); track group.date) {
           <div class="message-group">
             <!-- Date Separator -->
             <div class="date-separator">
               <span class="date-label">{{ formatDateLabel(group.date) }}</span>
             </div>
 
-            <!-- Messages -->
-            @for (message of group.messages; track message.id) {
-              <app-message-item
-                [message]="message"
-                [showAvatar]="shouldShowAvatar(message, $index, group.messages)"
-              />
+            <!-- Timeline Items (Messages + Captured Media) -->
+            @for (item of group.items; track trackTimelineItem(item, $index)) {
+              @if (item.type === 'message') {
+                <app-message-item
+                  [message]="asMessage(item.data)"
+                  [showAvatar]="shouldShowAvatarForItem(item, $index, group.items)"
+                />
+              } @else {
+                <app-captured-media-item
+                  [media]="asCapturedMedia(item.data)"
+                />
+              }
             }
           </div>
         }
@@ -74,6 +89,7 @@ export class MessageListComponent implements AfterViewInit {
 
   // Inputs
   messages = input<Message[]>([]);
+  capturedMedia = input<CapturedMedia[]>([]);
   clientId = input<number>(0);
   isTyping = input(false);
 
@@ -81,22 +97,24 @@ export class MessageListComponent implements AfterViewInit {
   loadMore = output<void>();
 
   // Computed
-  messageGroups = signal<MessageGroup[]>([]);
+  timelineGroups = signal<TimelineGroup[]>([]);
 
   private autoScrollEnabled = true;
-  private lastMessageCount = 0;
+  private lastItemCount = 0;
 
   constructor() {
-    // Group messages by date when messages change
+    // Group timeline items by date when messages or capturedMedia change
     effect(() => {
       const msgs = this.messages();
-      this.messageGroups.set(this.groupMessagesByDate(msgs));
+      const media = this.capturedMedia();
+      this.timelineGroups.set(this.groupTimelineByDate(msgs, media));
 
-      // Auto-scroll to bottom on new messages
-      if (msgs.length > this.lastMessageCount && this.autoScrollEnabled) {
+      // Auto-scroll to bottom on new items
+      const totalItems = msgs.length + media.length;
+      if (totalItems > this.lastItemCount && this.autoScrollEnabled) {
         setTimeout(() => this.scrollToBottom(), 100);
       }
-      this.lastMessageCount = msgs.length;
+      this.lastItemCount = totalItems;
     }, { allowSignalWrites: true });
   }
 
@@ -119,14 +137,37 @@ export class MessageListComponent implements AfterViewInit {
     this.autoScrollEnabled = atBottom;
   }
 
-  shouldShowAvatar(message: Message, index: number, groupMessages: Message[]): boolean {
+  // Type guard helpers for template
+  asMessage(data: Message | CapturedMedia): Message {
+    return data as Message;
+  }
+
+  asCapturedMedia(data: Message | CapturedMedia): CapturedMedia {
+    return data as CapturedMedia;
+  }
+
+  trackTimelineItem(item: TimelineItem, index: number): string {
+    if (item.type === 'message') {
+      return `msg-${(item.data as Message).id}`;
+    }
+    return `media-${(item.data as CapturedMedia).id}`;
+  }
+
+  shouldShowAvatarForItem(item: TimelineItem, index: number, groupItems: TimelineItem[]): boolean {
+    // Only for messages
+    if (item.type !== 'message') return false;
+    const message = item.data as Message;
+
     // Show avatar for incoming messages when:
-    // 1. It's the first message in the group, OR
-    // 2. Previous message was from a different sender
+    // 1. It's the first item in the group, OR
+    // 2. Previous item was different type or from different sender
     if (!isIncoming(message)) return false;
     if (index === 0) return true;
 
-    const prevMessage = groupMessages[index - 1];
+    const prevItem = groupItems[index - 1];
+    if (prevItem.type !== 'message') return true;
+
+    const prevMessage = prevItem.data as Message;
     return prevMessage.direction !== message.direction;
   }
 
@@ -150,20 +191,37 @@ export class MessageListComponent implements AfterViewInit {
     });
   }
 
-  private groupMessagesByDate(messages: Message[]): MessageGroup[] {
-    const groups: Map<string, Message[]> = new Map();
+  private groupTimelineByDate(messages: Message[], capturedMedia: CapturedMedia[]): TimelineGroup[] {
+    const groups: Map<string, TimelineItem[]> = new Map();
 
+    // Add messages to timeline
     messages.forEach(message => {
-      const dateKey = new Date(message.createdAt).toDateString();
+      const timestamp = new Date(message.createdAt);
+      const dateKey = timestamp.toDateString();
       const existing = groups.get(dateKey) || [];
-      groups.set(dateKey, [...existing, message]);
+      groups.set(dateKey, [...existing, {
+        type: 'message' as const,
+        timestamp,
+        data: message
+      }]);
     });
 
-    return Array.from(groups.entries()).map(([date, msgs]) => ({
+    // Add captured media to timeline
+    capturedMedia.forEach(media => {
+      const timestamp = new Date(media.messageSentAt || media.capturedAt);
+      const dateKey = timestamp.toDateString();
+      const existing = groups.get(dateKey) || [];
+      groups.set(dateKey, [...existing, {
+        type: 'captured_media' as const,
+        timestamp,
+        data: media
+      }]);
+    });
+
+    // Sort items within each group by timestamp
+    return Array.from(groups.entries()).map(([date, items]) => ({
       date,
-      messages: msgs.sort((a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      )
+      items: items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
     })).sort((a, b) =>
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
