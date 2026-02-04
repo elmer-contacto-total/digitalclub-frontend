@@ -654,26 +654,22 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // ===== OBSERVER PARA IMÁGENES =====
+  // CÓDIGO ORIGINAL RESTAURADO - solo se eliminó el forEach que capturaba todas las imágenes
   const imageObserver = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       mutation.addedNodes.forEach((node) => {
         if (node.nodeType !== 1) return;
 
-        // Visor de medios fullscreen - detectar por data-testid O por ser un overlay
-        const isMediaViewer = node.querySelector?.('[data-testid="media-viewer"]') ||
-                              node.querySelector?.('[data-testid="image-viewer"]') ||
-                              node.querySelector?.('[data-testid="gallery-viewer"]') ||
-                              node.matches?.('[data-testid="media-viewer"]') ||
-                              node.matches?.('[data-testid="image-viewer"]');
+        // Visor de medios fullscreen
+        const mediaViewer = node.querySelector?.('[data-testid="media-viewer"]') ||
+                           node.querySelector?.('[data-testid="image-viewer"]') ||
+                           node.querySelector?.('[data-testid="gallery-viewer"]') ||
+                           node.querySelector?.('[data-testid="media-viewer-modal"]') ||
+                           node.querySelector?.('[data-testid="lightbox"]') ||
+                           node.matches?.('[data-testid="media-viewer"]') ||
+                           node.matches?.('[data-testid="lightbox"]');
 
-        // También detectar overlays genéricos (position fixed con imágenes blob)
-        const isOverlay = node.style?.position === 'fixed' ||
-                         node.getAttribute?.('role') === 'dialog' ||
-                         node.getAttribute?.('aria-modal') === 'true';
-
-        if (isMediaViewer || isOverlay) {
-          // Buscar la PRIMERA imagen blob o canvas - NO todas
-          // El srcObserver captura cuando el usuario navega con < >
+        if (mediaViewer || node.matches?.('[data-testid="media-viewer"]') || node.matches?.('[data-testid="lightbox"]')) {
           const target = node.querySelector?.('[data-testid="media-canvas"]') ||
                         node.querySelector?.('img[src^="blob:"]') ||
                         node.querySelector?.('img[src^="data:"]') ||
@@ -682,45 +678,62 @@ const MEDIA_CAPTURE_SCRIPT = `
           if (target) {
             setTimeout(() => captureImage(target, 'PREVIEW'), 500);
           }
+
+          // ELIMINADO: forEach que capturaba todas las galleryImages
         }
 
         // Stickers
+        const stickers = node.querySelectorAll?.('[data-testid="sticker"] img, [data-testid="sticker"] canvas') || [];
         if (node.matches?.('[data-testid="sticker"]')) {
           const stickerImg = node.querySelector('img') || node.querySelector('canvas');
           if (stickerImg) setTimeout(() => captureImage(stickerImg, 'PREVIEW'), 300);
         }
-        const stickers = node.querySelectorAll?.('[data-testid="sticker"] img, [data-testid="sticker"] canvas') || [];
         stickers.forEach((sticker) => setTimeout(() => captureImage(sticker, 'PREVIEW'), 300));
 
         // GIFs
+        const gifs = node.querySelectorAll?.('[data-testid="gif"] img, [data-testid="gif"] canvas') || [];
         if (node.matches?.('[data-testid="gif"]')) {
           const gifImg = node.querySelector('img') || node.querySelector('canvas');
           if (gifImg) setTimeout(() => captureImage(gifImg, 'PREVIEW'), 300);
         }
-        const gifs = node.querySelectorAll?.('[data-testid="gif"] img, [data-testid="gif"] canvas') || [];
         gifs.forEach((gif) => setTimeout(() => captureImage(gif, 'PREVIEW'), 300));
+
+        // Fallback: overlay/modal con imagen grande
+        const isOverlay = node.style?.position === 'fixed' ||
+                         node.style?.position === 'absolute' ||
+                         node.classList?.contains('overlay') ||
+                         node.getAttribute?.('role') === 'dialog' ||
+                         node.getAttribute?.('aria-modal') === 'true';
+
+        if (isOverlay) {
+          // Solo capturar la PRIMERA imagen grande, no todas
+          const firstBigImg = node.querySelector?.('img[src^="blob:"]') ||
+                             node.querySelector?.('img[src^="data:"]');
+          if (firstBigImg) {
+            const checkAndCapture = () => {
+              if (firstBigImg.naturalWidth > 400 || firstBigImg.width > 400) {
+                captureImage(firstBigImg, 'PREVIEW');
+              }
+            };
+            if (firstBigImg.complete) setTimeout(checkAndCapture, 300);
+            else firstBigImg.addEventListener('load', checkAndCapture, { once: true });
+          }
+        }
       });
     });
   });
 
   imageObserver.observe(document.body, { childList: true, subtree: true });
 
-  // Observer para cambio de src en galería (cuando usuario navega con < >)
+  // Observer para cambio de src en galería
   const srcObserver = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
         const img = mutation.target;
         if (img.tagName === 'IMG' && img.src?.startsWith('blob:')) {
-          // Detectar si está en un visor de medios o overlay
-          const inViewer = img.closest('[data-testid="media-viewer"]') ||
-                          img.closest('[data-testid="image-viewer"]') ||
-                          img.closest('[data-testid="gallery-viewer"]') ||
-                          img.closest('[role="dialog"]') ||
-                          img.closest('[aria-modal="true"]') ||
-                          img.closest('[style*="position: fixed"]') ||
-                          img.closest('[style*="position:fixed"]');
-
-          if (inViewer) {
+          if (img.closest('[data-testid="media-viewer"]') ||
+              img.closest('[data-testid="image-viewer"]') ||
+              img.closest('[data-testid="gallery-viewer"]')) {
             setTimeout(() => captureImage(img, 'PREVIEW'), 300);
           }
         }
@@ -730,26 +743,26 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   srcObserver.observe(document.body, { attributes: true, attributeFilter: ['src'], subtree: true });
 
-  // Fallback: click en imágenes - capturar la primera imagen blob del visor
+  // Fallback: click en imágenes
   document.addEventListener('click', (e) => {
     const target = e.target;
     if (target.tagName === 'IMG' && target.src) {
       setTimeout(() => {
-        // Buscar cualquier visor/overlay abierto
         const viewer = document.querySelector('[data-testid="media-viewer"]') ||
                       document.querySelector('[data-testid="image-viewer"]') ||
-                      document.querySelector('[role="dialog"]') ||
-                      document.querySelector('[aria-modal="true"]');
+                      document.querySelector('[data-testid="lightbox"]') ||
+                      document.querySelector('[role="dialog"] img') ||
+                      document.querySelector('[aria-modal="true"] img');
 
         if (viewer) {
-          // Buscar la primera imagen blob - simple y directo
-          const firstBlobImg = viewer.querySelector('img[src^="blob:"]') ||
-                               viewer.querySelector('img[src^="data:"]') ||
-                               viewer.querySelector('canvas');
-          if (firstBlobImg) {
-            captureImage(firstBlobImg, 'PREVIEW');
-          }
+          const bigImg = viewer.querySelector?.('img[src^="blob:"]') ||
+                        viewer.querySelector?.('img[src^="data:"]') ||
+                        viewer.querySelector?.('canvas') ||
+                        (viewer.tagName === 'IMG' ? viewer : null);
+          if (bigImg) captureImage(bigImg, 'PREVIEW');
         }
+
+        // ELIMINADO: forEach que capturaba todas las allBigImages
       }, 800);
     }
   }, true);
