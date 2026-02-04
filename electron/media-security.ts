@@ -659,79 +659,196 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // ==========================================================================
-  // ESTRATEGIA DE CAPTURA SIMPLIFICADA
+  // ESTRATEGIA DE CAPTURA HEURÍSTICA (RESILIENTE A CAMBIOS DE WHATSAPP)
   // ==========================================================================
+  //
+  // En lugar de depender de selectores específicos de WhatsApp (data-testid)
+  // que pueden cambiar sin aviso, usamos DETECCIÓN HEURÍSTICA basada en
+  // características visuales inherentes a cualquier visor fullscreen:
+  //
+  // - Elemento con position: fixed que cubre >80% del viewport
+  // - Alto z-index (>100)
+  // - Fondo oscuro o semi-transparente
+  // - Contiene imagen grande centrada
   //
   // REGLA PRINCIPAL: Solo capturar imágenes que el usuario EXPLÍCITAMENTE ve
   // en el visor de pantalla completa (lightbox/gallery).
-  //
-  // NO capturar:
-  // - Miniaturas en el chat (filtradas por tamaño < 20KB)
-  // - Stickers y GIFs (no son imágenes de conversación)
-  // - Fotos de perfil
-  // - Imágenes de UI
-  //
-  // SÍ capturar:
-  // - Imagen abierta en visor fullscreen (una por vez)
-  // - Cada imagen cuando el usuario navega con < >
   // ==========================================================================
 
   // Estado para controlar capturas
   let lastCaptureTime = 0;
   const CAPTURE_COOLDOWN = 1000; // Mínimo 1 segundo entre capturas
+  let viewerWasOpen = false;
+  let isClosingViewer = false;
 
-  // Función para verificar si estamos en el visor de medios
-  function isMediaViewerOpen() {
-    return document.querySelector('[data-testid="media-viewer"]') ||
-           document.querySelector('[data-testid="image-viewer"]') ||
-           document.querySelector('[data-testid="lightbox"]') ||
-           document.querySelector('[data-testid="media-viewer-modal"]');
-  }
+  // ==========================================================================
+  // DETECCIÓN HEURÍSTICA DE VISOR FULLSCREEN
+  // ==========================================================================
+  function detectFullscreenViewer() {
+    const viewportArea = window.innerWidth * window.innerHeight;
+    const COVERAGE_THRESHOLD = 0.80;
+    const MIN_Z_INDEX = 100;
 
-  // Función para obtener la imagen principal del visor
-  function getMainViewerImage() {
-    const viewer = isMediaViewerOpen();
-    if (!viewer) return null;
+    let viewerCandidate = null;
+    let maxZIndex = 0;
 
-    // Buscar canvas primero (WhatsApp a veces usa canvas)
-    const canvas = viewer.querySelector?.('canvas') ||
-                   document.querySelector('[data-testid="media-canvas"]');
-    if (canvas && canvas.width > 300 && canvas.height > 300) {
-      return canvas;
-    }
+    // Buscar elementos fixed que cubran el viewport
+    const fixedElements = document.querySelectorAll('div, span, section');
 
-    // Buscar la imagen más grande dentro del visor
-    const images = viewer.querySelectorAll?.('img') ||
-                   document.querySelectorAll('[data-testid="media-viewer"] img');
+    for (const el of fixedElements) {
+      const style = window.getComputedStyle(el);
+      if (style.position !== 'fixed') continue;
 
-    let mainImg = null;
-    let maxSize = 0;
+      const zIndex = parseInt(style.zIndex, 10) || 0;
+      if (zIndex < MIN_Z_INDEX) continue;
 
-    images.forEach((img) => {
-      if (!img.src?.startsWith('blob:') && !img.src?.startsWith('data:')) return;
+      const rect = el.getBoundingClientRect();
+      const coverage = (rect.width * rect.height) / viewportArea;
+      if (coverage < COVERAGE_THRESHOLD) continue;
 
-      const w = img.naturalWidth || img.width || 0;
-      const h = img.naturalHeight || img.height || 0;
-      const size = w * h;
+      // Verificar fondo oscuro o transparente
+      const bg = style.backgroundColor;
+      const isDarkOrTransparent = bg.includes('rgba') ||
+                                  bg === 'rgb(0, 0, 0)' ||
+                                  bg.includes('rgb(0,') ||
+                                  bg.includes('rgb(17,') ||
+                                  bg.includes('rgb(30,') ||
+                                  bg.includes('rgb(33,');
 
-      // Solo considerar imágenes grandes (no thumbnails de navegación)
-      if (size > maxSize && w > 400 && h > 300) {
-        maxSize = size;
-        mainImg = img;
+      if (!isDarkOrTransparent) continue;
+
+      if (zIndex > maxZIndex) {
+        maxZIndex = zIndex;
+        viewerCandidate = el;
       }
-    });
-
-    return mainImg;
-  }
-
-  // Función principal de captura con cooldown
-  function captureViewerImage() {
-    const now = Date.now();
-    if (now - lastCaptureTime < CAPTURE_COOLDOWN) {
-      return; // Evitar capturas muy seguidas
     }
 
-    const mainImage = getMainViewerImage();
+    return viewerCandidate;
+  }
+
+  // ==========================================================================
+  // BÚSQUEDA DE IMAGEN PRINCIPAL POR SCORE
+  // ==========================================================================
+  function findMainImage(viewer) {
+    const searchArea = viewer || document.body;
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+
+    const mediaElements = [
+      ...searchArea.querySelectorAll('img'),
+      ...searchArea.querySelectorAll('canvas')
+    ];
+
+    let best = null;
+    let bestScore = 0;
+
+    for (const el of mediaElements) {
+      // Filtrar: solo blob: o data: (para img)
+      if (el.tagName === 'IMG') {
+        const src = el.src || '';
+        if (!src.startsWith('blob:') && !src.startsWith('data:')) continue;
+      }
+
+      // Filtrar: dimensiones mínimas
+      const w = el.naturalWidth || el.width || 0;
+      const h = el.naturalHeight || el.height || 0;
+      if (w < 400 || h < 300) continue;
+
+      // Filtrar: no oculto
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+
+      // Calcular score basado en tamaño y cercanía al centro
+      const rect = el.getBoundingClientRect();
+      const area = w * h;
+      const distFromCenter = Math.sqrt(
+        Math.pow(rect.left + rect.width / 2 - centerX, 2) +
+        Math.pow(rect.top + rect.height / 2 - centerY, 2)
+      );
+      const maxDist = Math.sqrt(centerX * centerX + centerY * centerY);
+
+      const score = (area / 10000) + ((1 - distFromCenter / maxDist) * 1000);
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = el;
+      }
+    }
+
+    return best;
+  }
+
+  // ==========================================================================
+  // DETECCIÓN DE ACCIONES DE CIERRE
+  // ==========================================================================
+  function isCloseAction(target, eventKey) {
+    // Tecla Escape
+    if (eventKey === 'Escape') return true;
+
+    if (!target) return false;
+
+    // Botón en esquina superior derecha
+    const rect = target.getBoundingClientRect();
+    const isTopRight = rect.right > window.innerWidth - 100 && rect.top < 100;
+
+    // Tiene icono/label de cierre
+    const hasCloseIndicator =
+      target.closest?.('[data-icon="x"]') ||
+      target.closest?.('[data-icon="x-viewer"]') ||
+      target.closest?.('[data-testid*="close"]') ||
+      target.getAttribute?.('aria-label')?.toLowerCase().includes('cerrar') ||
+      target.getAttribute?.('aria-label')?.toLowerCase().includes('close');
+
+    return isTopRight || hasCloseIndicator;
+  }
+
+  // ==========================================================================
+  // DETECCIÓN DE ACCIONES DE NAVEGACIÓN
+  // ==========================================================================
+  function isNavigationAction(target, eventKey) {
+    // Teclas de flecha
+    if (eventKey === 'ArrowLeft' || eventKey === 'ArrowRight') return true;
+
+    if (!target) return false;
+
+    // Botones a los lados del visor
+    const viewer = detectFullscreenViewer();
+    if (!viewer) return false;
+
+    const rect = target.getBoundingClientRect();
+    const isLeftSide = rect.left < 150 || rect.right < 200;
+    const isRightSide = rect.left > window.innerWidth - 200 || rect.right > window.innerWidth - 150;
+    const isButton = target.tagName === 'BUTTON' ||
+                    target.closest('button') ||
+                    target.getAttribute('role') === 'button' ||
+                    target.closest('[role="button"]');
+
+    // También detectar por aria-label
+    const ariaLabel = (target.getAttribute('aria-label') || '').toLowerCase();
+    const hasNavLabel = ariaLabel.includes('anterior') ||
+                       ariaLabel.includes('siguiente') ||
+                       ariaLabel.includes('previous') ||
+                       ariaLabel.includes('next');
+
+    return ((isLeftSide || isRightSide) && isButton) || hasNavLabel;
+  }
+
+  // ==========================================================================
+  // FUNCIÓN PRINCIPAL DE CAPTURA
+  // ==========================================================================
+  function captureViewerImage() {
+    if (isClosingViewer) return;
+
+    const now = Date.now();
+    if (now - lastCaptureTime < CAPTURE_COOLDOWN) return;
+
+    const viewer = detectFullscreenViewer();
+    if (!viewer) {
+      viewerWasOpen = false;
+      return;
+    }
+
+    const mainImage = findMainImage(viewer);
     if (mainImage) {
       lastCaptureTime = now;
       captureImage(mainImage, 'PREVIEW');
@@ -739,69 +856,92 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // ==========================================================================
-  // DETECTOR 1: Click en imagen del chat (abre visor) o botones de navegación
+  // DETECTOR 1: Click handler unificado
   // ==========================================================================
   document.addEventListener('click', (e) => {
     const target = e.target;
 
-    // CASO A: Click en miniatura de imagen en el chat (abre visor)
-    const isImageClick = target.tagName === 'IMG' ||
-                        target.closest?.('[data-testid="image-thumb"]') ||
-                        target.closest?.('[data-testid="media-thumb"]') ||
-                        target.closest?.('img[src^="blob:"]');
-
-    if (isImageClick && !isMediaViewerOpen()) {
-      // Esperar a que se abra el visor
-      setTimeout(() => {
-        if (isMediaViewerOpen()) {
-          setTimeout(captureViewerImage, 500);
-        }
-      }, 300);
+    // Detectar cierre
+    if (isCloseAction(target, null)) {
+      isClosingViewer = true;
+      viewerWasOpen = false;
+      setTimeout(() => { isClosingViewer = false; }, 500);
       return;
     }
 
-    // CASO B: Click en botones de navegación < > dentro del visor
-    if (isMediaViewerOpen()) {
-      const isNavButton = target.closest?.('[data-testid*="prev"]') ||
-                         target.closest?.('[data-testid*="next"]') ||
-                         target.closest?.('[data-testid*="arrow"]') ||
-                         target.closest?.('[data-icon="prev"]') ||
-                         target.closest?.('[data-icon="next"]') ||
-                         target.closest?.('[aria-label*="anterior"]') ||
-                         target.closest?.('[aria-label*="siguiente"]') ||
-                         target.closest?.('[aria-label*="previous"]') ||
-                         target.closest?.('[aria-label*="next"]') ||
-                         // Botones genéricos en el visor que no son cerrar
-                         (target.tagName === 'BUTTON' && !target.closest?.('[data-testid*="close"]'));
+    // Detectar click en miniatura (abre visor)
+    const isThumb = target.tagName === 'IMG' &&
+                   (target.src?.startsWith('blob:') || target.src?.startsWith('data:'));
 
-      if (isNavButton) {
-        // Esperar a que cambie la imagen
+    if (isThumb && !detectFullscreenViewer()) {
+      // Esperar a que se abra el visor
+      setTimeout(() => {
+        const viewer = detectFullscreenViewer();
+        if (viewer) {
+          viewerWasOpen = true;
+          setTimeout(captureViewerImage, 500);
+        }
+      }, 400);
+      return;
+    }
+
+    // Detectar navegación
+    if (viewerWasOpen && isNavigationAction(target, null)) {
+      setTimeout(captureViewerImage, 500);
+    }
+
+    // Si ya hay visor abierto y no es cierre, podría ser navegación
+    if (viewerWasOpen && detectFullscreenViewer()) {
+      const rect = target.getBoundingClientRect();
+      const isLeftSide = rect.left < 200;
+      const isRightSide = rect.right > window.innerWidth - 200;
+      if (isLeftSide || isRightSide) {
         setTimeout(captureViewerImage, 500);
       }
     }
   }, true);
 
   // ==========================================================================
-  // DETECTOR 2: Navegación en galería (< > arrows)
+  // DETECTOR 2: Keydown handler
+  // ==========================================================================
+  document.addEventListener('keydown', (e) => {
+    const viewer = detectFullscreenViewer();
+
+    if (!viewerWasOpen && !viewer) return;
+
+    if (isCloseAction(null, e.key)) {
+      isClosingViewer = true;
+      viewerWasOpen = false;
+      setTimeout(() => { isClosingViewer = false; }, 500);
+      return;
+    }
+
+    if (isNavigationAction(null, e.key)) {
+      setTimeout(captureViewerImage, 500);
+    }
+  }, true);
+
+  // ==========================================================================
+  // DETECTOR 3: Observer de cambios de src (para swipe/gestos)
   // ==========================================================================
   const srcObserver = new MutationObserver((mutations) => {
-    // Solo procesar si el visor está abierto
-    if (!isMediaViewerOpen()) return;
+    if (isClosingViewer) return;
+    if (!viewerWasOpen && !detectFullscreenViewer()) return;
 
-    mutations.forEach((mutation) => {
+    for (const mutation of mutations) {
       if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
         const img = mutation.target;
         if (img.tagName === 'IMG' && img.src?.startsWith('blob:')) {
-          // Verificar que sea una imagen grande (no thumbnail de navegación)
           const w = img.naturalWidth || img.width || 0;
           const h = img.naturalHeight || img.height || 0;
 
           if (w > 400 && h > 300) {
             setTimeout(captureViewerImage, 300);
+            break; // Solo una captura por batch de mutaciones
           }
         }
       }
-    });
+    }
   });
 
   srcObserver.observe(document.body, {
@@ -809,23 +949,6 @@ const MEDIA_CAPTURE_SCRIPT = `
     attributeFilter: ['src'],
     subtree: true
   });
-
-  // ==========================================================================
-  // DETECTOR 3: Teclas de navegación (← →) en el visor
-  // ==========================================================================
-  document.addEventListener('keydown', (e) => {
-    if (!isMediaViewerOpen()) return;
-
-    // Detectar flechas izquierda/derecha
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      // Esperar a que cambie la imagen
-      setTimeout(captureViewerImage, 500);
-    }
-  }, true);
-
-  // ==========================================================================
-  // NO usar MutationObserver genérico - causa demasiadas capturas falsas
-  // ==========================================================================
 
   // ===== INTERCEPTAR REPRODUCCIÓN DE AUDIO =====
   const originalAudioPlay = HTMLAudioElement.prototype.play;
