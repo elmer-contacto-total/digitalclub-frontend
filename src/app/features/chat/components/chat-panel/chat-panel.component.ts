@@ -9,7 +9,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
 import { WebSocketService } from '../../../../core/services/websocket.service';
 import { AuthService } from '../../../../core/services/auth.service';
-import { ConversationDetail } from '../../../../core/models/conversation.model';
+import { ConversationDetail, CapturedMedia } from '../../../../core/models/conversation.model';
 import { Message } from '../../../../core/models/message.model';
 import { ChatHeaderComponent } from '../chat-header/chat-header.component';
 import { MessageListComponent } from '../message-list/message-list.component';
@@ -45,6 +45,86 @@ import { MessageInputComponent } from '../message-input/message-input.component'
           [isWhatsappBusiness]="conversationDetail()!.isWhatsappBusiness"
           (closeTicket)="onCloseTicket($event)"
         />
+
+        <!-- Captured Media Gallery -->
+        @if (capturedMedia().length > 0) {
+          <div class="captured-media-section">
+            <button class="media-toggle-btn" (click)="toggleMediaGallery()">
+              <i class="ph-fill" [class.ph-caret-down]="showMediaGallery()" [class.ph-caret-right]="!showMediaGallery()"></i>
+              <i class="ph-fill ph-images"></i>
+              <span>Medios Capturados ({{ capturedMedia().length }})</span>
+              <span class="media-counts">
+                @if (capturedImages().length > 0) {
+                  <span class="count-badge images">
+                    <i class="ph-fill ph-image"></i> {{ capturedImages().length }}
+                  </span>
+                }
+                @if (capturedAudios().length > 0) {
+                  <span class="count-badge audios">
+                    <i class="ph-fill ph-speaker-high"></i> {{ capturedAudios().length }}
+                  </span>
+                }
+              </span>
+            </button>
+
+            @if (showMediaGallery()) {
+              <div class="media-gallery">
+                <!-- Images Section -->
+                @if (capturedImages().length > 0) {
+                  <div class="media-group">
+                    <h4><i class="ph-fill ph-image"></i> Imágenes</h4>
+                    <div class="images-grid">
+                      @for (media of capturedImages(); track media.id) {
+                        <div class="media-item image-item" (click)="openMediaViewer(media)">
+                          @if (media.publicUrl) {
+                            <img [src]="media.publicUrl" [alt]="'Imagen capturada'" loading="lazy" />
+                          } @else {
+                            <div class="no-preview">
+                              <i class="ph-fill ph-image"></i>
+                              <span>Sin URL</span>
+                            </div>
+                          }
+                          <div class="media-overlay">
+                            <span class="media-date">{{ formatMediaDate(media.messageSentAt || media.capturedAt) }}</span>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+
+                <!-- Audios Section -->
+                @if (capturedAudios().length > 0) {
+                  <div class="media-group">
+                    <h4><i class="ph-fill ph-speaker-high"></i> Audios</h4>
+                    <div class="audios-list">
+                      @for (media of capturedAudios(); track media.id) {
+                        <div class="media-item audio-item">
+                          <div class="audio-info">
+                            <i class="ph-fill ph-speaker-high"></i>
+                            <span class="audio-duration">
+                              @if (media.durationSeconds) {
+                                {{ formatDuration(media.durationSeconds) }}
+                              } @else {
+                                --:--
+                              }
+                            </span>
+                            <span class="audio-date">{{ formatMediaDate(media.messageSentAt || media.capturedAt) }}</span>
+                          </div>
+                          @if (media.publicUrl) {
+                            <audio controls [src]="media.publicUrl" preload="none"></audio>
+                          } @else {
+                            <span class="no-preview">Sin URL</span>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
 
         <!-- Messages -->
         <app-message-list
@@ -90,9 +170,15 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
   // Local state
   messages = signal<Message[]>([]);
   isTyping = signal(false);
+  showMediaGallery = signal(false);
   private typingTimeout: any;
   private ticketUnsubscribe: (() => void) | null = null;
   private notificationSound: HTMLAudioElement | null = null;
+
+  // Computed signals for captured media
+  capturedMedia = computed(() => this.conversationDetail()?.capturedMedia || []);
+  capturedImages = computed(() => this.capturedMedia().filter(m => m.mediaType === 'image'));
+  capturedAudios = computed(() => this.capturedMedia().filter(m => m.mediaType === 'audio'));
 
   constructor() {
     // Update messages when conversation detail changes
@@ -163,6 +249,33 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
 
   onCloseTicket(event: { ticketId: number; closeType?: string; notes?: string }): void {
     this.closeTicket.emit(event);
+  }
+
+  toggleMediaGallery(): void {
+    this.showMediaGallery.update(v => !v);
+  }
+
+  openMediaViewer(media: CapturedMedia): void {
+    if (media.publicUrl) {
+      window.open(media.publicUrl, '_blank');
+    }
+  }
+
+  formatMediaDate(dateStr: string | null): string {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-PE', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  formatDuration(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
   private subscribeToTicket(ticketId?: number): void {

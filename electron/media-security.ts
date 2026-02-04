@@ -132,6 +132,54 @@ canvas,
   user-select: none !important;
 }
 
+/* ========== ESTILOS PARA IMÁGENES PROTEGIDAS (BLUR) ========== */
+.hablape-protected-image {
+  filter: blur(20px) grayscale(50%) !important;
+  transition: filter 0.3s ease !important;
+}
+
+.hablape-protected-image.revealed {
+  filter: none !important;
+}
+
+.hablape-image-overlay {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 100 !important;
+  cursor: pointer !important;
+  border-radius: 8px !important;
+  transition: opacity 0.3s ease !important;
+}
+
+.hablape-image-overlay:hover {
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+.hablape-image-overlay.hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.hablape-overlay-icon {
+  font-size: 32px !important;
+  margin-bottom: 8px !important;
+}
+
+.hablape-overlay-text {
+  color: white !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5) !important;
+}
+
 /* ========== DESHABILITAR SELECCIÓN EN VISORES ========== */
 [data-testid="media-viewer"],
 [data-testid="image-viewer"],
@@ -489,6 +537,8 @@ const BLOCK_DOWNLOAD_SCRIPT = `
 `;
 
 // ==================== SCRIPTS DE CAPTURA ====================
+// ESTRATEGIA: Capturar imágenes automáticamente cuando aparecen en el chat
+// Esto garantiza acceso directo al timestamp del mensaje
 
 const MEDIA_CAPTURE_SCRIPT = `
 (function() {
@@ -498,16 +548,19 @@ const MEDIA_CAPTURE_SCRIPT = `
   window.__hablapeMediaCaptureInjected = true;
 
   window.__hablapeMediaQueue = window.__hablapeMediaQueue || [];
-  const capturedHashes = new Set();
+  const capturedHashes = new Set();      // Para deduplicación por hash
+  const capturedBlobUrls = new Set();    // Para deduplicación por URL
+  const processedMessageIds = new Set(); // Mensajes ya procesados
 
-  // =========================================================================
-  // Variable global para guardar contexto del último chat/mensaje clickeado
-  // IMPORTANTE: Se resetean al detectar un nuevo click en imagen
-  // =========================================================================
+  // Configuración
+  const MIN_IMAGE_SIZE = 10000;          // Mínimo 10KB para evitar thumbnails
+  const CAPTURE_DELAY = 500;             // Delay antes de capturar (para que cargue)
+
+  // Variables de estado para contexto del mensaje
   let lastKnownChatPhone = 'unknown';
   let lastKnownMessageTimestamp = null;
   let lastKnownWhatsappMessageId = null;
-  let lastContextCaptureTime = 0; // Para evitar usar contexto muy antiguo
+  let lastContextCaptureTime = 0;
 
   function getCurrentChatPhone() {
     try {
@@ -970,501 +1023,375 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // ==========================================================================
-  // ESTRATEGIA DE CAPTURA SIMPLIFICADA
+  // NUEVA ESTRATEGIA: Captura automática cuando imágenes llegan al chat
   // ==========================================================================
   //
-  // REGLA PRINCIPAL: Solo capturar imágenes que el usuario EXPLÍCITAMENTE ve
-  // en el visor de pantalla completa (lightbox/gallery).
+  // VENTAJAS:
+  // - Acceso directo al mensaje con timestamp correcto
+  // - No depende de que el usuario abra el visor
+  // - Sin problemas de navegación en galería
   //
-  // NO capturar:
-  // - Miniaturas en el chat (filtradas por tamaño < 20KB)
-  // - Stickers y GIFs (no son imágenes de conversación)
-  // - Fotos de perfil
-  // - Imágenes de UI
-  //
-  // SÍ capturar:
-  // - Imagen abierta en visor fullscreen (una por vez)
-  // - Cada imagen cuando el usuario navega con < >
+  // CÓMO FUNCIONA:
+  // 1. MutationObserver detecta nuevos mensajes en el chat
+  // 2. Para cada mensaje con imagen, extrae contexto (timestamp, messageId)
+  // 3. Espera a que la imagen cargue (blob URL disponible)
+  // 4. Captura automáticamente
   // ==========================================================================
 
-  // Estado para controlar capturas
-  let lastCaptureTime = 0;
-  const CAPTURE_COOLDOWN = 1500; // Mínimo 1.5 segundos entre capturas
-  let captureScheduled = false; // Flag para evitar múltiples capturas programadas
-  let srcChangeTimeout = null; // Para debounce del srcObserver
-  const capturedBlobUrls = new Set(); // Tracking de URLs de blob ya capturadas
+  console.log('[HablaPe] Iniciando captura automática de imágenes en chat...');
 
   // ==========================================================================
-  // Función MEJORADA para verificar si estamos en el visor de medios
-  // Usa 4 métodos diferentes para detectar el visor
+  // Función para extraer timestamp directamente del elemento del mensaje
   // ==========================================================================
-  function isMediaViewerOpen() {
-    // Método 1: Selectores específicos de WhatsApp (data-testid)
-    const byTestId = document.querySelector('[data-testid="media-viewer"]') ||
-                     document.querySelector('[data-testid="image-viewer"]') ||
-                     document.querySelector('[data-testid="lightbox"]') ||
-                     document.querySelector('[data-testid="media-viewer-modal"]') ||
-                     document.querySelector('[data-testid="media-state-layer"]');
-    if (byTestId) {
-      console.log('[HablaPe Debug] isMediaViewerOpen: encontrado por data-testid');
-      return byTestId;
-    }
-
-    // Método 2: Buscar overlay/modal con imagen grande
-    // WhatsApp usa un div con role="dialog" o similar para el visor
-    const dialogs = document.querySelectorAll('[role="dialog"], [role="presentation"]');
-    for (const dialog of dialogs) {
-      const hasLargeImage = dialog.querySelector('img[src^="blob:"]');
-      if (hasLargeImage) {
-        console.log('[HablaPe Debug] isMediaViewerOpen: encontrado por role=dialog');
-        return dialog;
-      }
-    }
-
-    // Método 3: Buscar imagen blob grande en overlay de pantalla completa
-    // El visor típicamente tiene position:fixed y cubre toda la pantalla
-    const allDivs = document.querySelectorAll('div');
-    for (const el of allDivs) {
-      const style = window.getComputedStyle(el);
-      if (style.position === 'fixed' || style.position === 'absolute') {
-        const rect = el.getBoundingClientRect();
-        // Si cubre más del 70% de la pantalla
-        if (rect.width > window.innerWidth * 0.7 && rect.height > window.innerHeight * 0.7) {
-          if (el.querySelector('img[src^="blob:"]')) {
-            console.log('[HablaPe Debug] isMediaViewerOpen: encontrado por fixed/absolute overlay');
-            return el;
-          }
-        }
-      }
-    }
-
-    // Método 4: Buscar por estructura típica de lightbox
-    // Imagen blob con tamaño de display grande (no naturalWidth)
-    const allBlobImages = document.querySelectorAll('img[src^="blob:"]');
-    for (const img of allBlobImages) {
-      const rect = img.getBoundingClientRect();
-      // Si la imagen ocupa más del 50% de la pantalla, es el visor
-      if (rect.width > window.innerWidth * 0.5 && rect.height > window.innerHeight * 0.5) {
-        console.log('[HablaPe Debug] isMediaViewerOpen: encontrado por imagen grande', rect.width, 'x', rect.height);
-        return img.closest('div') || img;
-      }
-    }
-
-    console.log('[HablaPe Debug] isMediaViewerOpen: NO encontrado');
-    return null;
-  }
-
-  // ==========================================================================
-  // Función MEJORADA para obtener la imagen principal del visor
-  // Usa getBoundingClientRect() para detectar dimensiones visibles
-  // ==========================================================================
-  function getMainViewerImage() {
-    const viewer = isMediaViewerOpen();
-    if (!viewer) {
-      console.log('[HablaPe Debug] getMainViewerImage: visor no abierto');
-      return null;
-    }
-
-    // Buscar todas las imágenes blob en el visor o documento
-    const images = viewer.querySelectorAll?.('img[src^="blob:"]') ||
-                   document.querySelectorAll('img[src^="blob:"]');
-
-    console.log('[HablaPe Debug] getMainViewerImage: encontradas', images.length, 'imágenes blob');
-
-    let mainImg = null;
-    let maxDisplaySize = 0;
-
-    images.forEach((img, idx) => {
-      // Usar getBoundingClientRect() en lugar de naturalWidth
-      // Esto funciona incluso si la imagen aún carga
-      const rect = img.getBoundingClientRect();
-      const displaySize = rect.width * rect.height;
-
-      console.log('[HablaPe Debug] Img[' + idx + ']: display', Math.round(rect.width) + 'x' + Math.round(rect.height), '=', Math.round(displaySize));
-
-      // Umbral más bajo: 200x200 display pixels (no natural)
-      if (displaySize > maxDisplaySize && rect.width > 200 && rect.height > 200) {
-        maxDisplaySize = displaySize;
-        mainImg = img;
-      }
-    });
-
-    // Fallback: buscar canvas
-    if (!mainImg) {
-      const canvas = viewer.querySelector?.('canvas') ||
-                     document.querySelector('canvas');
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect();
-        console.log('[HablaPe Debug] Canvas encontrado:', Math.round(rect.width) + 'x' + Math.round(rect.height));
-        if (rect.width > 200 && rect.height > 200) {
-          return canvas;
-        }
-      }
-    }
-
-    console.log('[HablaPe Debug] getMainViewerImage: imagen seleccionada:', mainImg ? 'SI' : 'NO');
-    return mainImg;
-  }
-
-  // ==========================================================================
-  // NUEVA función para esperar a que la imagen esté lista
-  // ==========================================================================
-  async function waitForImageReady(img, maxWait = 2000) {
-    const start = Date.now();
-    while (Date.now() - start < maxWait) {
-      // Verificar si tiene dimensiones naturales válidas
-      if (img.naturalWidth > 100 && img.naturalHeight > 100) {
-        console.log('[HablaPe Debug] waitForImageReady: natural dims OK', img.naturalWidth, 'x', img.naturalHeight);
-        return true;
-      }
-      // Verificar si tiene dimensiones de display válidas
-      const rect = img.getBoundingClientRect();
-      if (rect.width > 200 && rect.height > 200) {
-        console.log('[HablaPe Debug] waitForImageReady: display dims OK', Math.round(rect.width), 'x', Math.round(rect.height));
-        return true;
-      }
-      // Esperar 100ms y reintentar
-      await new Promise(r => setTimeout(r, 100));
-    }
-    console.log('[HablaPe Debug] waitForImageReady: timeout después de', maxWait, 'ms');
-    return false;
-  }
-
-  // ==========================================================================
-  // Función principal de captura MEJORADA (ahora async con waitForImageReady)
-  // ==========================================================================
-  async function captureViewerImage() {
-    console.log('[HablaPe Debug] captureViewerImage() llamada');
-
-    const now = Date.now();
-    if (now - lastCaptureTime < CAPTURE_COOLDOWN) {
-      console.log('[HablaPe Debug] Bloqueado por cooldown, faltan', CAPTURE_COOLDOWN - (now - lastCaptureTime), 'ms');
-      return; // Evitar capturas muy seguidas
-    }
-
-    const mainImage = getMainViewerImage();
-    console.log('[HablaPe Debug] Imagen principal:', mainImage ? mainImage.tagName : 'null');
-
-    if (mainImage) {
-      // Esperar a que esté lista (solo para IMG, no CANVAS)
-      if (mainImage.tagName === 'IMG') {
-        const ready = await waitForImageReady(mainImage);
-        if (!ready) {
-          console.log('[HablaPe Debug] Imagen no está lista después de esperar');
-          return;
-        }
-      }
-
-      // Verificar si ya capturamos este blob URL específico (solo para IMG, no CANVAS)
-      if (mainImage.tagName === 'IMG' && mainImage.src) {
-        console.log('[HablaPe Debug] URL de imagen:', mainImage.src.substring(0, 50) + '...');
-        if (capturedBlobUrls.has(mainImage.src)) {
-          console.log('[HablaPe Debug] URL ya capturada, saltando');
-          return; // Ya capturada esta URL específica
-        }
-      }
-
-      lastCaptureTime = now;
-      await captureImage(mainImage, 'PREVIEW');
-
-      // Agregar al Set DESPUÉS de llamar captureImage (que tiene su propia dedup)
-      if (mainImage.tagName === 'IMG' && mainImage.src) {
-        capturedBlobUrls.add(mainImage.src);
-      }
-      console.log('[HablaPe Debug] Captura enviada a cola');
-    }
-  }
-
-  // ==========================================================================
-  // Función para programar una captura única (evita múltiples disparos simultáneos)
-  // Tiempos AUMENTADOS para mejor detección (default 800ms)
-  // ==========================================================================
-  function scheduleCaptureOnce(delay = 800) {
-    console.log('[HablaPe Debug] scheduleCaptureOnce() delay:', delay, 'scheduled:', captureScheduled);
-    if (captureScheduled) return; // Ya hay una captura programada
-    captureScheduled = true;
-    setTimeout(async () => {
-      await captureViewerImage();
-      captureScheduled = false;
-    }, delay);
-  }
-
-  // ==========================================================================
-  // Intentar extraer timestamp de la UI del visor de WhatsApp
-  // El timestamp está en el header del visor, debajo del nombre del usuario
-  // Formato típico: "hoy a las 17:34" o "4 feb 2026 a las 10:30"
-  // ==========================================================================
-  function extractTimestampFromViewer() {
+  function extractTimestampFromMessage(messageEl) {
     try {
-      console.log('[HablaPe Debug] extractTimestampFromViewer: buscando timestamp en visor...');
-
-      const viewer = isMediaViewerOpen();
-      if (!viewer) {
-        console.log('[HablaPe Debug] extractTimestampFromViewer: visor no abierto');
-        return null;
-      }
-
-      // Mapa de meses en español
-      const monthMap = {
-        'ene': 1, 'enero': 1,
-        'feb': 2, 'febrero': 2,
-        'mar': 3, 'marzo': 3,
-        'abr': 4, 'abril': 4,
-        'may': 5, 'mayo': 5,
-        'jun': 6, 'junio': 6,
-        'jul': 7, 'julio': 7,
-        'ago': 8, 'agosto': 8,
-        'sep': 9, 'sept': 9, 'septiembre': 9,
-        'oct': 10, 'octubre': 10,
-        'nov': 11, 'noviembre': 11,
-        'dic': 12, 'diciembre': 12
-      };
-
-      // Función para parsear fecha/hora
-      function parseDateTime(text) {
-        console.log('[HablaPe Debug] Parseando texto:', text);
-
-        const now = new Date();
-        let year = now.getFullYear();
-        let month = now.getMonth() + 1;
-        let day = now.getDate();
-        let hours = null;
-        let minutes = null;
-
-        // Detectar "hoy" o "ayer"
-        const lowerText = text.toLowerCase();
-        if (lowerText.includes('ayer')) {
-          const yesterday = new Date(now);
-          yesterday.setDate(yesterday.getDate() - 1);
-          year = yesterday.getFullYear();
-          month = yesterday.getMonth() + 1;
-          day = yesterday.getDate();
-        }
-
-        // Buscar hora: "17:34" o "5:30 p. m." o "a las 17:34"
-        const timeMatch = text.match(/(\\d{1,2}):(\\d{2})(?:\\s*([ap])\\.?\\s*m\\.?)?/i);
+      // MÉTODO 1: data-pre-plain-text - formato "[HH:mm, DD/MM/YYYY] Nombre:"
+      const timeEl = messageEl.querySelector('[data-pre-plain-text]');
+      if (timeEl) {
+        const prePlainText = timeEl.getAttribute('data-pre-plain-text') || '';
+        const timeMatch = prePlainText.match(/\\[(\\d{1,2}:\\d{2}),\\s*(\\d{1,2}\\/(\\d{1,2})\\/(\\d{4}))\\]/);
         if (timeMatch) {
-          hours = parseInt(timeMatch[1]);
-          minutes = timeMatch[2];
-          const ampm = timeMatch[3]?.toLowerCase() || '';
-
-          // Convertir a 24h si es necesario
-          if (ampm === 'p' && hours < 12) hours += 12;
-          if (ampm === 'a' && hours === 12) hours = 0;
-
-          console.log('[HablaPe Debug] Hora encontrada:', hours + ':' + minutes);
-        }
-
-        // Buscar fecha: "4 feb 2026" o "4 de febrero de 2026" o "04/02/2026"
-        // Formato con mes en texto
-        const dateTextMatch = text.match(/(\\d{1,2})\\s*(?:de\\s*)?(ene|feb|mar|abr|may|jun|jul|ago|sep|sept|oct|nov|dic|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(?:\\s*(?:de\\s*)?(\\d{4}))?/i);
-        if (dateTextMatch) {
-          day = parseInt(dateTextMatch[1]);
-          const monthName = dateTextMatch[2].toLowerCase();
-          month = monthMap[monthName] || month;
-          if (dateTextMatch[3]) {
-            year = parseInt(dateTextMatch[3]);
+          const [, time, , dayStr, monthStr, yearStr] = timeMatch;
+          const fullDate = prePlainText.match(/(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/);
+          if (fullDate) {
+            const [, day, month, year] = fullDate;
+            const timestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + time + ':00';
+            console.log('[HablaPe Auto] Timestamp extraído (método 1):', timestamp);
+            return timestamp;
           }
-          console.log('[HablaPe Debug] Fecha texto encontrada:', day + '/' + month + '/' + year);
-        }
-
-        // Formato numérico: "04/02/2026" o "4/2/2026"
-        const dateNumMatch = text.match(/(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/);
-        if (dateNumMatch) {
-          day = parseInt(dateNumMatch[1]);
-          month = parseInt(dateNumMatch[2]);
-          year = parseInt(dateNumMatch[3]);
-          console.log('[HablaPe Debug] Fecha numérica encontrada:', day + '/' + month + '/' + year);
-        }
-
-        // Si encontramos hora, construir timestamp
-        if (hours !== null && minutes !== null) {
-          const timestamp = year + '-' +
-                           String(month).padStart(2, '0') + '-' +
-                           String(day).padStart(2, '0') + 'T' +
-                           String(hours).padStart(2, '0') + ':' + minutes + ':00';
-          console.log('[HablaPe Debug] Timestamp construido:', timestamp);
-          return timestamp;
-        }
-
-        return null;
-      }
-
-      // ========== ESTRATEGIA 1: Buscar en el header del visor ==========
-      // El header típicamente tiene: [Botón atrás] [Avatar] [Nombre] [Fecha/hora]
-      const headerSelectors = [
-        '[data-testid="media-viewer"] header',
-        '[data-testid="lightbox"] header',
-        '[data-testid="image-viewer"] header',
-        'header[data-testid]',
-        // Buscar divs con position fixed/absolute que podrían ser el header
-        'div[style*="position: fixed"] header',
-        'div[style*="position:fixed"] header'
-      ];
-
-      for (const selector of headerSelectors) {
-        const header = document.querySelector(selector);
-        if (header) {
-          const headerText = header.textContent || '';
-          console.log('[HablaPe Debug] Header encontrado (' + selector + '):', headerText.substring(0, 100));
-          const timestamp = parseDateTime(headerText);
-          if (timestamp) return timestamp;
         }
       }
 
-      // ========== ESTRATEGIA 2: Buscar todos los spans en el visor ==========
-      // Buscar spans que contengan patrones de fecha/hora
-      const allSpans = document.querySelectorAll('span');
+      // MÉTODO 2: Buscar span con hora visible en el mensaje
+      const allSpans = messageEl.querySelectorAll('span');
       for (const span of allSpans) {
         const text = span.textContent?.trim() || '';
-        if (!text || text.length > 100) continue;
+        const hourMatch = text.match(/^(\\d{1,2}):(\\d{2})(\\s*[ap]\\.?\\s*m\\.?)?$/i);
+        if (hourMatch) {
+          let hours = parseInt(hourMatch[1]);
+          const minutes = hourMatch[2];
+          const ampm = hourMatch[3]?.toLowerCase() || '';
 
-        // Verificar si contiene patrón de hora
-        if (/(\\d{1,2}):(\\d{2})/.test(text)) {
-          // Verificar que el span esté visible y en posición superior (header)
-          const rect = span.getBoundingClientRect();
-          if (rect.top < 150 && rect.top > 0) { // En los primeros 150px (header area)
-            console.log('[HablaPe Debug] Span con hora en header area:', text, 'top:', rect.top);
-            const timestamp = parseDateTime(text);
-            if (timestamp) return timestamp;
-          }
+          if (ampm.includes('p') && hours < 12) hours += 12;
+          if (ampm.includes('a') && hours === 12) hours = 0;
+
+          const now = new Date();
+          const dateStr = now.getFullYear() + '-' +
+                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                         String(now.getDate()).padStart(2, '0');
+          const timestamp = dateStr + 'T' + String(hours).padStart(2, '0') + ':' + minutes + ':00';
+          console.log('[HablaPe Auto] Timestamp extraído (método 2):', timestamp, 'from:', text);
+          return timestamp;
         }
       }
 
-      // ========== ESTRATEGIA 3: Buscar divs con texto de fecha en área superior ==========
-      const allDivs = document.querySelectorAll('div');
-      for (const div of allDivs) {
-        const rect = div.getBoundingClientRect();
-        // Solo divs en el área del header (primeros 150px)
-        if (rect.top > 150 || rect.top < 0) continue;
-        if (rect.height > 100) continue; // Ignorar contenedores grandes
-
-        const text = div.textContent?.trim() || '';
-        if (!text || text.length > 150) continue;
-
-        // Verificar si contiene patrón de fecha/hora
-        if (/(\\d{1,2}):(\\d{2})/.test(text) ||
-            /(hoy|ayer)/i.test(text) ||
-            /(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)/i.test(text)) {
-          console.log('[HablaPe Debug] Div con fecha/hora en header:', text.substring(0, 80), 'top:', rect.top);
-          const timestamp = parseDateTime(text);
-          if (timestamp) return timestamp;
+      // MÉTODO 3: Buscar en msg-meta
+      const msgMeta = messageEl.querySelector('[data-testid="msg-meta"]');
+      if (msgMeta) {
+        const metaText = msgMeta.textContent?.trim() || '';
+        const metaMatch = metaText.match(/(\\d{1,2}):(\\d{2})/);
+        if (metaMatch) {
+          const now = new Date();
+          const dateStr = now.getFullYear() + '-' +
+                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                         String(now.getDate()).padStart(2, '0');
+          const timestamp = dateStr + 'T' + metaMatch[1].padStart(2, '0') + ':' + metaMatch[2] + ':00';
+          console.log('[HablaPe Auto] Timestamp extraído (método 3):', timestamp);
+          return timestamp;
         }
       }
 
-      console.log('[HablaPe Debug] extractTimestampFromViewer: no se encontró timestamp');
+      console.log('[HablaPe Auto] No se pudo extraer timestamp del mensaje');
       return null;
     } catch (err) {
-      console.log('[HablaPe Debug] extractTimestampFromViewer error:', err.message);
+      console.log('[HablaPe Auto] Error extrayendo timestamp:', err.message);
       return null;
     }
   }
 
   // ==========================================================================
-  // DETECTOR 1: Click en imagen del chat (abre visor) o botones de navegación
+  // Función para capturar una imagen de un mensaje
   // ==========================================================================
-  document.addEventListener('click', (e) => {
-    const target = e.target;
+  async function captureImageFromMessage(img, messageEl) {
+    try {
+      const blobUrl = img.src;
+      if (!blobUrl || !blobUrl.startsWith('blob:')) {
+        console.log('[HablaPe Auto] No es blob URL, ignorando');
+        return;
+      }
 
-    // CASO A: Click en miniatura de imagen en el chat (abre visor)
-    const isImageClick = target.tagName === 'IMG' ||
-                        target.closest?.('[data-testid="image-thumb"]') ||
-                        target.closest?.('[data-testid="media-thumb"]') ||
-                        target.closest?.('img[src^="blob:"]');
+      // Verificar si ya capturamos esta URL
+      if (capturedBlobUrls.has(blobUrl)) {
+        console.log('[HablaPe Auto] URL ya capturada:', blobUrl.substring(0, 50));
+        return;
+      }
 
-    console.log('[HablaPe Debug] Click detectado - isImageClick:', isImageClick, 'viewerOpen:', !!isMediaViewerOpen());
+      // Obtener data-id del mensaje
+      const messageId = messageEl.getAttribute('data-id') || null;
+      if (messageId && processedMessageIds.has(messageId)) {
+        console.log('[HablaPe Auto] Mensaje ya procesado:', messageId);
+        return;
+      }
 
-    if (isImageClick && !isMediaViewerOpen()) {
-      console.log('[HablaPe Debug] Click en imagen, capturando contexto...');
+      // Marcar como procesado
+      capturedBlobUrls.add(blobUrl);
+      if (messageId) processedMessageIds.add(messageId);
 
-      // IMPORTANTE: Capturar contexto del mensaje ANTES de que se abra el visor
-      captureMessageContext(target);
+      // Descargar la imagen
+      const response = await fetch(blobUrl);
+      const blob = await response.blob();
+      const mimeType = blob.type || 'image/jpeg';
+      const size = blob.size;
 
-      // También actualizar el teléfono del chat activo
-      getCurrentChatPhone();
+      // Filtrar imágenes muy pequeñas
+      if (size < MIN_IMAGE_SIZE) {
+        console.log('[HablaPe Auto] Imagen muy pequeña:', size, 'bytes, ignorando');
+        return;
+      }
 
-      // Esperar más tiempo a que se abra el visor (500ms en lugar de 300ms)
-      setTimeout(() => {
-        const viewerNow = isMediaViewerOpen();
-        console.log('[HablaPe Debug] Después de 500ms, visor abierto:', !!viewerNow);
-        if (viewerNow) {
-          scheduleCaptureOnce(800); // Aumentado de 500 a 800ms
+      // Convertir a base64
+      const reader = new FileReader();
+      const imageData = await new Promise((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      // Extraer timestamp del mensaje
+      const messageSentAt = extractTimestampFromMessage(messageEl);
+
+      // Extraer teléfono del data-id
+      let chatPhone = window.__hablapeCurrentChatPhone || 'unknown';
+      if (messageId && messageId.includes('@c.us')) {
+        let phone = messageId.split('@')[0];
+        phone = phone.replace(/^(true|false)_/, '');
+        if (/^\\d{9,15}$/.test(phone)) {
+          chatPhone = phone;
         }
-      }, 500); // Aumentado de 300 a 500ms
+      }
+
+      const chatName = window.__hablapeCurrentChatName || null;
+
+      console.log('[HablaPe Auto] ✓ Capturando imagen:');
+      console.log('[HablaPe Auto]   size:', size, 'bytes');
+      console.log('[HablaPe Auto]   chatPhone:', chatPhone);
+      console.log('[HablaPe Auto]   messageSentAt:', messageSentAt);
+      console.log('[HablaPe Auto]   messageId:', messageId);
+
+      // Agregar a la cola
+      window.__hablapeMediaQueue.push({
+        data: imageData,
+        type: mimeType,
+        size: size,
+        chatPhone: chatPhone,
+        chatName: chatName,
+        timestamp: new Date().toISOString(),
+        messageSentAt: messageSentAt,
+        whatsappMessageId: messageId,
+        source: 'CHAT_AUTO',
+        mediaType: 'IMAGE'
+      });
+
+    } catch (err) {
+      console.log('[HablaPe Auto] Error capturando imagen:', err.message);
+    }
+  }
+
+  // ==========================================================================
+  // Función para proteger (blur) una imagen y agregar overlay
+  // ==========================================================================
+  function protectImage(img, messageEl) {
+    // Verificar si ya está protegida
+    if (img.classList.contains('hablape-protected-image')) return;
+    if (img.__hablapeProtected) return;
+    img.__hablapeProtected = true;
+
+    // Verificar que la imagen tiene dimensiones válidas (no es thumbnail tiny)
+    const rect = img.getBoundingClientRect();
+    if (rect.width < 80 || rect.height < 80) {
+      console.log('[HablaPe Protect] Imagen muy pequeña, no proteger:', rect.width, 'x', rect.height);
       return;
     }
 
-    // CASO B: Click en botones de navegación < > dentro del visor
-    if (isMediaViewerOpen()) {
-      const isNavButton = target.closest?.('[data-testid*="prev"]') ||
-                         target.closest?.('[data-testid*="next"]') ||
-                         target.closest?.('[data-testid*="arrow"]') ||
-                         target.closest?.('[data-icon="prev"]') ||
-                         target.closest?.('[data-icon="next"]') ||
-                         target.closest?.('[aria-label*="anterior"]') ||
-                         target.closest?.('[aria-label*="siguiente"]') ||
-                         target.closest?.('[aria-label*="previous"]') ||
-                         target.closest?.('[aria-label*="next"]') ||
-                         // Botones genéricos en el visor que no son cerrar
-                         (target.tagName === 'BUTTON' && !target.closest?.('[data-testid*="close"]'));
+    // Solo proteger imágenes blob
+    if (!img.src?.startsWith('blob:')) return;
 
-      if (isNavButton) {
-        console.log('[HablaPe Debug] Navegación en visor detectada - RESETEANDO contexto');
+    console.log('[HablaPe Protect] Protegiendo imagen:', rect.width, 'x', rect.height);
 
-        // IMPORTANTE: Resetear timestamp y messageId porque estamos viendo una imagen diferente
-        // El timestamp cacheado del click inicial NO aplica a esta imagen
-        lastKnownMessageTimestamp = null;
-        lastKnownWhatsappMessageId = null;
+    // Aplicar blur a la imagen
+    img.classList.add('hablape-protected-image');
 
-        // Intentar extraer timestamp de la UI del visor
-        const viewerTimestamp = extractTimestampFromViewer();
-        if (viewerTimestamp) {
-          lastKnownMessageTimestamp = viewerTimestamp;
-          console.log('[HablaPe Debug] Timestamp extraído del visor:', viewerTimestamp);
+    // Buscar o crear contenedor relativo
+    let container = img.parentElement;
+    if (!container) return;
+
+    // Asegurar que el contenedor tenga position relative
+    const containerStyle = window.getComputedStyle(container);
+    if (containerStyle.position === 'static') {
+      container.style.position = 'relative';
+    }
+
+    // Crear overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'hablape-image-overlay';
+    overlay.innerHTML = '<span class="hablape-overlay-icon">🔒</span><span class="hablape-overlay-text">Presionar para ver</span>';
+
+    // Handler para revelar, capturar y abrir visor
+    overlay.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      console.log('[HablaPe Protect] ✓ Click - Revelando, capturando y abriendo visor');
+
+      // Revelar imagen
+      img.classList.add('revealed');
+      overlay.classList.add('hidden');
+
+      // Capturar la imagen
+      await captureImageFromMessage(img, messageEl);
+
+      // Remover overlay después de la animación
+      setTimeout(() => {
+        overlay.remove();
+      }, 300);
+
+      // Simular click en la imagen para abrir el visor de WhatsApp
+      // Pequeño delay para que la captura termine primero
+      setTimeout(() => {
+        // Buscar el elemento clickeable (puede ser la imagen o un contenedor)
+        const clickTarget = img.closest('[data-testid="image-thumb"]') ||
+                           img.closest('[role="button"]') ||
+                           img;
+
+        if (clickTarget) {
+          console.log('[HablaPe Protect] Abriendo visor de WhatsApp...');
+          // Crear y disparar evento de click nativo
+          const clickEvent = new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+          });
+          clickTarget.dispatchEvent(clickEvent);
+        }
+      }, 100);
+    });
+
+    // Insertar overlay
+    container.appendChild(overlay);
+  }
+
+  // ==========================================================================
+  // Función para procesar un mensaje que podría contener imagen
+  // ==========================================================================
+  async function processMessageForImages(messageEl) {
+    // Buscar imágenes blob en el mensaje
+    const images = messageEl.querySelectorAll('img[src^="blob:"]');
+    if (images.length === 0) return;
+
+    console.log('[HablaPe Auto] Mensaje con', images.length, 'imagen(es) encontrado');
+
+    for (const img of images) {
+      // Esperar un poco para que la imagen cargue completamente
+      await new Promise(r => setTimeout(r, CAPTURE_DELAY));
+
+      // Proteger la imagen (blur + overlay) en lugar de capturar automáticamente
+      protectImage(img, messageEl);
+    }
+  }
+
+  // ==========================================================================
+  // MutationObserver para detectar nuevos mensajes en el chat
+  // ==========================================================================
+  const chatObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType !== 1) continue; // Solo elementos
+
+        // Verificar si es un mensaje (tiene data-id con @c.us o @lid)
+        const isMessage = node.getAttribute?.('data-id')?.includes?.('@') ||
+                         node.querySelector?.('[data-id*="@"]');
+
+        if (isMessage) {
+          // Es un mensaje, buscar imágenes
+          const messageEl = node.getAttribute?.('data-id')?.includes?.('@') ? node :
+                           node.querySelector?.('[data-id*="@"]');
+
+          if (messageEl) {
+            // Delay para que las imágenes blob se carguen
+            setTimeout(() => processMessageForImages(messageEl), 1000);
+          }
         }
 
-        // Esperar a que cambie la imagen
-        scheduleCaptureOnce(800);
+        // También buscar imágenes blob directamente agregadas
+        if (node.tagName === 'IMG' && node.src?.startsWith('blob:')) {
+          const messageEl = node.closest('[data-id]');
+          if (messageEl) {
+            setTimeout(() => protectImage(node, messageEl), CAPTURE_DELAY);
+          }
+        }
+
+        // Buscar imágenes en nodos hijos
+        const blobImages = node.querySelectorAll?.('img[src^="blob:"]');
+        if (blobImages?.length > 0) {
+          blobImages.forEach(img => {
+            const messageEl = img.closest('[data-id]');
+            if (messageEl) {
+              setTimeout(() => protectImage(img, messageEl), CAPTURE_DELAY);
+            }
+          });
+        }
       }
     }
-  }, true);
+  });
+
+  // Observar el área principal del chat
+  function startChatObserver() {
+    const mainPane = document.querySelector('#main') ||
+                    document.querySelector('[data-testid="conversation-panel-body"]');
+
+    if (mainPane) {
+      chatObserver.observe(mainPane, {
+        childList: true,
+        subtree: true
+      });
+      console.log('[HablaPe Auto] ✓ Observer iniciado en área de chat');
+
+      // Escanear mensajes existentes con imágenes
+      const existingMessages = mainPane.querySelectorAll('[data-id*="@"]');
+      console.log('[HablaPe Auto] Escaneando', existingMessages.length, 'mensajes existentes...');
+
+      existingMessages.forEach((messageEl, idx) => {
+        // Delay escalonado para no saturar
+        setTimeout(() => processMessageForImages(messageEl), idx * 200);
+      });
+    } else {
+      // Reintentar en 2 segundos
+      console.log('[HablaPe Auto] Área de chat no encontrada, reintentando...');
+      setTimeout(startChatObserver, 2000);
+    }
+  }
+
+  // Iniciar después de que cargue la página
+  setTimeout(startChatObserver, 3000);
 
   // ==========================================================================
-  // DETECTOR 2: Navegación en galería - SIN filtro de dimensiones
+  // Observer para detectar cambios de src en imágenes (por si cambia el blob)
   // ==========================================================================
   const srcObserver = new MutationObserver((mutations) => {
-    // Solo procesar si el visor está abierto
-    if (!isMediaViewerOpen()) return;
-
-    // Buscar cualquier cambio de src en imagen blob (sin filtrar por dimensiones)
-    let hasRelevantChange = false;
     mutations.forEach((mutation) => {
       if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
         const img = mutation.target;
         if (img.tagName === 'IMG' && img.src?.startsWith('blob:')) {
-          hasRelevantChange = true;
-          console.log('[HablaPe Debug] srcObserver: cambio de src detectado - RESETEANDO contexto');
-
-          // IMPORTANTE: Resetear timestamp y messageId porque la imagen cambió
-          lastKnownMessageTimestamp = null;
-          lastKnownWhatsappMessageId = null;
+          // Solo proteger si no está ya protegida
+          if (!img.__hablapeProtected && !img.classList.contains('revealed')) {
+            const messageEl = img.closest('[data-id]');
+            if (messageEl) {
+              setTimeout(() => protectImage(img, messageEl), CAPTURE_DELAY);
+            }
+          }
         }
       }
     });
-
-    if (!hasRelevantChange) return;
-
-    // Debounce y esperar más tiempo para que cargue
-    if (srcChangeTimeout) clearTimeout(srcChangeTimeout);
-    srcChangeTimeout = setTimeout(() => {
-      // Intentar extraer timestamp del visor antes de capturar
-      const viewerTimestamp = extractTimestampFromViewer();
-      if (viewerTimestamp) {
-        lastKnownMessageTimestamp = viewerTimestamp;
-        console.log('[HablaPe Debug] srcObserver: Timestamp extraído del visor:', viewerTimestamp);
-      }
-      scheduleCaptureOnce(500);
-    }, 300);
   });
 
   srcObserver.observe(document.body, {
@@ -1472,37 +1399,6 @@ const MEDIA_CAPTURE_SCRIPT = `
     attributeFilter: ['src'],
     subtree: true
   });
-
-  // ==========================================================================
-  // DETECTOR 3: Teclas de navegación (← →) en el visor
-  // Tiempo AUMENTADO a 800ms
-  // ==========================================================================
-  document.addEventListener('keydown', (e) => {
-    if (!isMediaViewerOpen()) return;
-
-    // Detectar flechas izquierda/derecha
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      console.log('[HablaPe Debug] Tecla de navegación:', e.key, '- RESETEANDO contexto');
-
-      // IMPORTANTE: Resetear timestamp y messageId porque estamos navegando a otra imagen
-      lastKnownMessageTimestamp = null;
-      lastKnownWhatsappMessageId = null;
-
-      // Intentar extraer timestamp de la UI del visor
-      const viewerTimestamp = extractTimestampFromViewer();
-      if (viewerTimestamp) {
-        lastKnownMessageTimestamp = viewerTimestamp;
-        console.log('[HablaPe Debug] Timestamp extraído del visor:', viewerTimestamp);
-      }
-
-      // Esperar a que cambie la imagen
-      scheduleCaptureOnce(800);
-    }
-  }, true);
-
-  // ==========================================================================
-  // NO usar MutationObserver genérico - causa demasiadas capturas falsas
-  // ==========================================================================
 
   // ===== INTERCEPTAR REPRODUCCIÓN DE AUDIO =====
   const originalAudioPlay = HTMLAudioElement.prototype.play;

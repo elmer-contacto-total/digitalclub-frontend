@@ -140,6 +140,9 @@ export interface ConversationDetail {
 
   // Close types from client settings
   closeTypes?: ConversationCloseType[];
+
+  // Captured media from Electron (images and audios)
+  capturedMedia?: CapturedMedia[];
 }
 
 /**
@@ -201,6 +204,24 @@ export interface CustomField {
 export interface ConversationCloseType {
   name: string;
   kpiName: string;
+}
+
+/**
+ * Captured media from Electron (images and audios)
+ */
+export interface CapturedMedia {
+  id: number;
+  mediaUuid: string;
+  mediaType: 'image' | 'audio';
+  mimeType: string;
+  publicUrl: string | null;
+  filePath: string | null;
+  sizeBytes: number | null;
+  durationSeconds: number | null;
+  capturedAt: string;
+  messageSentAt: string | null;
+  chatPhone: string | null;
+  chatName: string | null;
 }
 
 // ===== HELPER FUNCTIONS =====
