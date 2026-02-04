@@ -1191,59 +1191,168 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   // ==========================================================================
   // Intentar extraer timestamp de la UI del visor de WhatsApp
-  // WhatsApp a veces muestra la fecha/hora en el header del visor
+  // El timestamp está en el header del visor, debajo del nombre del usuario
+  // Formato típico: "hoy a las 17:34" o "4 feb 2026 a las 10:30"
   // ==========================================================================
   function extractTimestampFromViewer() {
     try {
+      console.log('[HablaPe Debug] extractTimestampFromViewer: buscando timestamp en visor...');
+
       const viewer = isMediaViewerOpen();
-      if (!viewer) return null;
-
-      // Buscar en el header del visor
-      const viewerHeader = document.querySelector('[data-testid="media-viewer"] header') ||
-                          document.querySelector('[data-testid="lightbox"] header') ||
-                          viewer.querySelector?.('header');
-
-      if (viewerHeader) {
-        const headerText = viewerHeader.textContent || '';
-        console.log('[HablaPe Debug] Viewer header text:', headerText);
-
-        // Buscar formato de fecha/hora
-        // Formatos posibles: "10:30", "10:30 a. m.", "04/02/2026", etc.
-        const dateTimeMatch = headerText.match(/(\\d{1,2})[:\\/](\\d{2})(?:[:\\/](\\d{2,4}))?/);
-        if (dateTimeMatch) {
-          console.log('[HablaPe Debug] Fecha/hora encontrada en viewer:', dateTimeMatch[0]);
-          // Intentar parsear...
-        }
+      if (!viewer) {
+        console.log('[HablaPe Debug] extractTimestampFromViewer: visor no abierto');
+        return null;
       }
 
-      // Buscar spans con fecha/hora en el visor
-      const spans = viewer.querySelectorAll?.('span') || document.querySelectorAll('[data-testid*="viewer"] span');
-      for (const span of spans) {
-        const text = span.textContent?.trim() || '';
-        // Formato fecha: "4 de febrero de 2026" o "04/02/2026"
-        const dateMatch = text.match(/(\\d{1,2})\\s*(?:de\\s*)?(\\w+|\\/)\\s*(?:de\\s*)?(\\d{4})/i);
-        if (dateMatch) {
-          console.log('[HablaPe Debug] Fecha encontrada en viewer span:', text);
+      // Mapa de meses en español
+      const monthMap = {
+        'ene': 1, 'enero': 1,
+        'feb': 2, 'febrero': 2,
+        'mar': 3, 'marzo': 3,
+        'abr': 4, 'abril': 4,
+        'may': 5, 'mayo': 5,
+        'jun': 6, 'junio': 6,
+        'jul': 7, 'julio': 7,
+        'ago': 8, 'agosto': 8,
+        'sep': 9, 'sept': 9, 'septiembre': 9,
+        'oct': 10, 'octubre': 10,
+        'nov': 11, 'noviembre': 11,
+        'dic': 12, 'diciembre': 12
+      };
+
+      // Función para parsear fecha/hora
+      function parseDateTime(text) {
+        console.log('[HablaPe Debug] Parseando texto:', text);
+
+        const now = new Date();
+        let year = now.getFullYear();
+        let month = now.getMonth() + 1;
+        let day = now.getDate();
+        let hours = null;
+        let minutes = null;
+
+        // Detectar "hoy" o "ayer"
+        const lowerText = text.toLowerCase();
+        if (lowerText.includes('ayer')) {
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          year = yesterday.getFullYear();
+          month = yesterday.getMonth() + 1;
+          day = yesterday.getDate();
         }
-        // Formato hora
-        const timeMatch = text.match(/^(\\d{1,2}):(\\d{2})(\\s*[ap]\\.?\\s*m\\.?)?$/i);
+
+        // Buscar hora: "17:34" o "5:30 p. m." o "a las 17:34"
+        const timeMatch = text.match(/(\\d{1,2}):(\\d{2})(?:\\s*([ap])\\.?\\s*m\\.?)?/i);
         if (timeMatch) {
-          console.log('[HablaPe Debug] Hora encontrada en viewer span:', text);
-          let hours = parseInt(timeMatch[1]);
-          const minutes = timeMatch[2];
+          hours = parseInt(timeMatch[1]);
+          minutes = timeMatch[2];
           const ampm = timeMatch[3]?.toLowerCase() || '';
 
-          if (ampm.includes('p') && hours < 12) hours += 12;
-          if (ampm.includes('a') && hours === 12) hours = 0;
+          // Convertir a 24h si es necesario
+          if (ampm === 'p' && hours < 12) hours += 12;
+          if (ampm === 'a' && hours === 12) hours = 0;
 
-          const now = new Date();
-          const dateStr = now.getFullYear() + '-' +
-                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                         String(now.getDate()).padStart(2, '0');
-          return dateStr + 'T' + String(hours).padStart(2, '0') + ':' + minutes + ':00';
+          console.log('[HablaPe Debug] Hora encontrada:', hours + ':' + minutes);
+        }
+
+        // Buscar fecha: "4 feb 2026" o "4 de febrero de 2026" o "04/02/2026"
+        // Formato con mes en texto
+        const dateTextMatch = text.match(/(\\d{1,2})\\s*(?:de\\s*)?(ene|feb|mar|abr|may|jun|jul|ago|sep|sept|oct|nov|dic|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(?:\\s*(?:de\\s*)?(\\d{4}))?/i);
+        if (dateTextMatch) {
+          day = parseInt(dateTextMatch[1]);
+          const monthName = dateTextMatch[2].toLowerCase();
+          month = monthMap[monthName] || month;
+          if (dateTextMatch[3]) {
+            year = parseInt(dateTextMatch[3]);
+          }
+          console.log('[HablaPe Debug] Fecha texto encontrada:', day + '/' + month + '/' + year);
+        }
+
+        // Formato numérico: "04/02/2026" o "4/2/2026"
+        const dateNumMatch = text.match(/(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/);
+        if (dateNumMatch) {
+          day = parseInt(dateNumMatch[1]);
+          month = parseInt(dateNumMatch[2]);
+          year = parseInt(dateNumMatch[3]);
+          console.log('[HablaPe Debug] Fecha numérica encontrada:', day + '/' + month + '/' + year);
+        }
+
+        // Si encontramos hora, construir timestamp
+        if (hours !== null && minutes !== null) {
+          const timestamp = year + '-' +
+                           String(month).padStart(2, '0') + '-' +
+                           String(day).padStart(2, '0') + 'T' +
+                           String(hours).padStart(2, '0') + ':' + minutes + ':00';
+          console.log('[HablaPe Debug] Timestamp construido:', timestamp);
+          return timestamp;
+        }
+
+        return null;
+      }
+
+      // ========== ESTRATEGIA 1: Buscar en el header del visor ==========
+      // El header típicamente tiene: [Botón atrás] [Avatar] [Nombre] [Fecha/hora]
+      const headerSelectors = [
+        '[data-testid="media-viewer"] header',
+        '[data-testid="lightbox"] header',
+        '[data-testid="image-viewer"] header',
+        'header[data-testid]',
+        // Buscar divs con position fixed/absolute que podrían ser el header
+        'div[style*="position: fixed"] header',
+        'div[style*="position:fixed"] header'
+      ];
+
+      for (const selector of headerSelectors) {
+        const header = document.querySelector(selector);
+        if (header) {
+          const headerText = header.textContent || '';
+          console.log('[HablaPe Debug] Header encontrado (' + selector + '):', headerText.substring(0, 100));
+          const timestamp = parseDateTime(headerText);
+          if (timestamp) return timestamp;
         }
       }
 
+      // ========== ESTRATEGIA 2: Buscar todos los spans en el visor ==========
+      // Buscar spans que contengan patrones de fecha/hora
+      const allSpans = document.querySelectorAll('span');
+      for (const span of allSpans) {
+        const text = span.textContent?.trim() || '';
+        if (!text || text.length > 100) continue;
+
+        // Verificar si contiene patrón de hora
+        if (/(\\d{1,2}):(\\d{2})/.test(text)) {
+          // Verificar que el span esté visible y en posición superior (header)
+          const rect = span.getBoundingClientRect();
+          if (rect.top < 150 && rect.top > 0) { // En los primeros 150px (header area)
+            console.log('[HablaPe Debug] Span con hora en header area:', text, 'top:', rect.top);
+            const timestamp = parseDateTime(text);
+            if (timestamp) return timestamp;
+          }
+        }
+      }
+
+      // ========== ESTRATEGIA 3: Buscar divs con texto de fecha en área superior ==========
+      const allDivs = document.querySelectorAll('div');
+      for (const div of allDivs) {
+        const rect = div.getBoundingClientRect();
+        // Solo divs en el área del header (primeros 150px)
+        if (rect.top > 150 || rect.top < 0) continue;
+        if (rect.height > 100) continue; // Ignorar contenedores grandes
+
+        const text = div.textContent?.trim() || '';
+        if (!text || text.length > 150) continue;
+
+        // Verificar si contiene patrón de fecha/hora
+        if (/(\\d{1,2}):(\\d{2})/.test(text) ||
+            /(hoy|ayer)/i.test(text) ||
+            /(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)/i.test(text)) {
+          console.log('[HablaPe Debug] Div con fecha/hora en header:', text.substring(0, 80), 'top:', rect.top);
+          const timestamp = parseDateTime(text);
+          if (timestamp) return timestamp;
+        }
+      }
+
+      console.log('[HablaPe Debug] extractTimestampFromViewer: no se encontró timestamp');
       return null;
     } catch (err) {
       console.log('[HablaPe Debug] extractTimestampFromViewer error:', err.message);
