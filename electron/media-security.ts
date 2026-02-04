@@ -677,26 +677,45 @@ const MEDIA_CAPTURE_SCRIPT = `
           if (target) {
             setTimeout(() => captureImage(target, 'PREVIEW'), 500);
           } else {
-            // Fallback: find the main/largest visible image (not thumbnails)
-            const allImages = node.querySelectorAll?.('img[src^="blob:"], img[src^="data:"]') || [];
-            let mainImage = null;
-            let maxSize = 0;
+            // Fallback: find the main visible image with delay for loading
+            const findAndCaptureMainImage = () => {
+              const allImages = Array.from(node.querySelectorAll?.('img[src^="blob:"], img[src^="data:"]') || []);
 
-            allImages.forEach((img) => {
-              // Skip small thumbnails (usually < 100px)
-              const size = (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0);
-              if (size > maxSize && (img.naturalWidth > 200 || img.width > 200)) {
-                maxSize = size;
-                mainImage = img;
-              }
-            });
+              if (allImages.length === 0) return;
 
-            if (mainImage) {
-              setTimeout(() => captureImage(mainImage, 'PREVIEW'), 500);
-            } else if (allImages.length === 1) {
               // If only one image, capture it
-              setTimeout(() => captureImage(allImages[0], 'PREVIEW'), 500);
-            }
+              if (allImages.length === 1) {
+                captureImage(allImages[0], 'PREVIEW');
+                return;
+              }
+
+              // Find the largest loaded image
+              let mainImage = null;
+              let maxSize = 0;
+
+              for (const img of allImages) {
+                const w = img.naturalWidth || img.width || img.offsetWidth || 0;
+                const h = img.naturalHeight || img.height || img.offsetHeight || 0;
+                const size = w * h;
+
+                // Accept images that are reasonably sized (> 100px in any dimension)
+                if (size > maxSize && (w > 100 || h > 100)) {
+                  maxSize = size;
+                  mainImage = img;
+                }
+              }
+
+              if (mainImage) {
+                captureImage(mainImage, 'PREVIEW');
+              } else {
+                // Fallback: just capture the first blob image
+                const firstBlob = allImages.find(img => img.src?.startsWith('blob:'));
+                if (firstBlob) captureImage(firstBlob, 'PREVIEW');
+              }
+            };
+
+            // Wait for images to load
+            setTimeout(findAndCaptureMainImage, 800);
           }
         }
 
@@ -726,26 +745,31 @@ const MEDIA_CAPTURE_SCRIPT = `
 
         if (isOverlay) {
           // Find the largest/main image only
-          const overlayImages = node.querySelectorAll?.('img') || [];
-          let mainImage = null;
-          let maxSize = 0;
-
           const findMainImage = () => {
-            overlayImages.forEach((img) => {
-              const size = (img.naturalWidth || 0) * (img.naturalHeight || 0);
-              if (size > maxSize && img.naturalWidth > 400) {
+            const overlayImages = Array.from(node.querySelectorAll?.('img[src^="blob:"], img[src^="data:"]') || []);
+            let mainImage = null;
+            let maxSize = 0;
+
+            for (const img of overlayImages) {
+              const w = img.naturalWidth || img.width || img.offsetWidth || 0;
+              const h = img.naturalHeight || img.height || img.offsetHeight || 0;
+              const size = w * h;
+
+              if (size > maxSize && w > 200) {
                 maxSize = size;
                 mainImage = img;
               }
-            });
+            }
 
             if (mainImage) {
               captureImage(mainImage, 'PREVIEW');
+            } else if (overlayImages.length === 1) {
+              captureImage(overlayImages[0], 'PREVIEW');
             }
           };
 
           // Wait for images to load
-          setTimeout(findMainImage, 500);
+          setTimeout(findMainImage, 800);
         }
       });
     });
@@ -790,23 +814,36 @@ const MEDIA_CAPTURE_SCRIPT = `
             return;
           }
 
-          const images = viewer.querySelectorAll?.('img[src^="blob:"], img[src^="data:"]') || [];
+          const images = Array.from(viewer.querySelectorAll?.('img[src^="blob:"], img[src^="data:"]') || []);
+
+          if (images.length === 1) {
+            captureImage(images[0], 'PREVIEW');
+            return;
+          }
+
           let mainImage = null;
           let maxSize = 0;
 
-          images.forEach((img) => {
-            const size = (img.naturalWidth || 0) * (img.naturalHeight || 0);
-            if (size > maxSize && img.naturalWidth > 300) {
+          for (const img of images) {
+            const w = img.naturalWidth || img.width || img.offsetWidth || 0;
+            const h = img.naturalHeight || img.height || img.offsetHeight || 0;
+            const size = w * h;
+
+            if (size > maxSize && w > 100) {
               maxSize = size;
               mainImage = img;
             }
-          });
+          }
 
           if (mainImage) {
             captureImage(mainImage, 'PREVIEW');
+          } else if (images.length > 0) {
+            // Fallback: capture first blob image
+            const firstBlob = images.find(img => img.src?.startsWith('blob:'));
+            if (firstBlob) captureImage(firstBlob, 'PREVIEW');
           }
         }
-      }, 800);
+      }, 1000);
     }
   }, true);
 
