@@ -3,14 +3,24 @@
  * Styled to match message-item for seamless integration
  */
 
+:host {
+  display: flex;
+  width: 100%;
+}
+
 .message-item {
   display: flex;
   align-items: flex-end;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-3);
+  max-width: 75%;
+  margin-bottom: var(--space-1);
 
+  // Captured media siempre a la IZQUIERDA (como mensajes entrantes)
   &.incoming {
-    flex-direction: row-reverse;
+    flex-direction: row;
+    margin-right: auto;
+    margin-left: 0;
   }
 }
 
@@ -20,7 +30,7 @@
   background: var(--bg-default);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  border-bottom-right-radius: var(--radius-sm);
+  border-bottom-left-radius: var(--radius-sm); // Esquina inferior izquierda (entrante)
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }

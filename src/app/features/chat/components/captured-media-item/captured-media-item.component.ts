@@ -14,6 +14,11 @@ import { CapturedMedia } from '../../../../core/models/conversation.model';
   styleUrl: './captured-media-item.component.scss',
   template: `
     <div class="message-item incoming captured-media">
+      <!-- Avatar (primero para alineación izquierda) -->
+      <div class="avatar incoming-avatar">
+        <i class="ph-fill ph-user"></i>
+      </div>
+
       <!-- Message Bubble -->
       <div class="message-bubble">
         <!-- Captured Badge -->
@@ -66,11 +71,6 @@ import { CapturedMedia } from '../../../../core/models/conversation.model';
             <i class="ph-fill ph-eye"></i>
           </span>
         </div>
-      </div>
-
-      <!-- Avatar -->
-      <div class="avatar incoming-avatar">
-        <i class="ph-fill ph-user"></i>
       </div>
     </div>
   `
