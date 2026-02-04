@@ -669,19 +669,35 @@ const MEDIA_CAPTURE_SCRIPT = `
                            node.matches?.('[data-testid="lightbox"]');
 
         if (mediaViewer || node.matches?.('[data-testid="media-viewer"]') || node.matches?.('[data-testid="lightbox"]')) {
+          // Only capture the MAIN visible image, not all images in the gallery
+          // The srcObserver will capture other images when user navigates with < >
           const target = node.querySelector?.('[data-testid="media-canvas"]') ||
-                        node.querySelector?.('img[src^="blob:"]') ||
-                        node.querySelector?.('img[src^="data:"]') ||
                         node.querySelector?.('canvas');
 
           if (target) {
             setTimeout(() => captureImage(target, 'PREVIEW'), 500);
-          }
+          } else {
+            // Fallback: find the main/largest visible image (not thumbnails)
+            const allImages = node.querySelectorAll?.('img[src^="blob:"], img[src^="data:"]') || [];
+            let mainImage = null;
+            let maxSize = 0;
 
-          const galleryImages = node.querySelectorAll?.('img[src^="blob:"]') || [];
-          galleryImages.forEach((img, index) => {
-            setTimeout(() => captureImage(img, 'PREVIEW'), 500 + (index * 200));
-          });
+            allImages.forEach((img) => {
+              // Skip small thumbnails (usually < 100px)
+              const size = (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0);
+              if (size > maxSize && (img.naturalWidth > 200 || img.width > 200)) {
+                maxSize = size;
+                mainImage = img;
+              }
+            });
+
+            if (mainImage) {
+              setTimeout(() => captureImage(mainImage, 'PREVIEW'), 500);
+            } else if (allImages.length === 1) {
+              // If only one image, capture it
+              setTimeout(() => captureImage(allImages[0], 'PREVIEW'), 500);
+            }
+          }
         }
 
         // Stickers
@@ -701,6 +717,7 @@ const MEDIA_CAPTURE_SCRIPT = `
         gifs.forEach((gif) => setTimeout(() => captureImage(gif, 'PREVIEW'), 300));
 
         // Fallback: overlay/modal con imagen grande
+        // Only capture the MAIN visible image, not all images
         const isOverlay = node.style?.position === 'fixed' ||
                          node.style?.position === 'absolute' ||
                          node.classList?.contains('overlay') ||
@@ -708,16 +725,27 @@ const MEDIA_CAPTURE_SCRIPT = `
                          node.getAttribute?.('aria-modal') === 'true';
 
         if (isOverlay) {
+          // Find the largest/main image only
           const overlayImages = node.querySelectorAll?.('img') || [];
-          overlayImages.forEach((img) => {
-            const checkSize = () => {
-              if (img.naturalWidth > 400 || img.width > 400) {
-                captureImage(img, 'PREVIEW');
+          let mainImage = null;
+          let maxSize = 0;
+
+          const findMainImage = () => {
+            overlayImages.forEach((img) => {
+              const size = (img.naturalWidth || 0) * (img.naturalHeight || 0);
+              if (size > maxSize && img.naturalWidth > 400) {
+                maxSize = size;
+                mainImage = img;
               }
-            };
-            if (img.complete) setTimeout(checkSize, 300);
-            else img.addEventListener('load', checkSize, { once: true });
-          });
+            });
+
+            if (mainImage) {
+              captureImage(mainImage, 'PREVIEW');
+            }
+          };
+
+          // Wait for images to load
+          setTimeout(findMainImage, 500);
         }
       });
     });
@@ -743,7 +771,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   srcObserver.observe(document.body, { attributes: true, attributeFilter: ['src'], subtree: true });
 
-  // Fallback: click en imágenes
+  // Fallback: click en imágenes - only capture the main visible image
   document.addEventListener('click', (e) => {
     const target = e.target;
     if (target.tagName === 'IMG' && target.src) {
@@ -751,24 +779,33 @@ const MEDIA_CAPTURE_SCRIPT = `
         const viewer = document.querySelector('[data-testid="media-viewer"]') ||
                       document.querySelector('[data-testid="image-viewer"]') ||
                       document.querySelector('[data-testid="lightbox"]') ||
-                      document.querySelector('[role="dialog"] img') ||
-                      document.querySelector('[aria-modal="true"] img');
+                      document.querySelector('[role="dialog"]') ||
+                      document.querySelector('[aria-modal="true"]');
 
         if (viewer) {
-          const bigImg = viewer.querySelector?.('img[src^="blob:"]') ||
-                        viewer.querySelector?.('img[src^="data:"]') ||
-                        viewer.querySelector?.('canvas') ||
-                        (viewer.tagName === 'IMG' ? viewer : null);
-          if (bigImg) captureImage(bigImg, 'PREVIEW');
-        }
-
-        const allBigImages = document.querySelectorAll('img');
-        allBigImages.forEach((img) => {
-          if ((img.naturalWidth > 500 || img.width > 500) &&
-              (img.src?.startsWith('blob:') || img.src?.startsWith('data:'))) {
-            captureImage(img, 'PREVIEW');
+          // Find the main/largest image in the viewer
+          const canvas = viewer.querySelector?.('canvas');
+          if (canvas) {
+            captureImage(canvas, 'PREVIEW');
+            return;
           }
-        });
+
+          const images = viewer.querySelectorAll?.('img[src^="blob:"], img[src^="data:"]') || [];
+          let mainImage = null;
+          let maxSize = 0;
+
+          images.forEach((img) => {
+            const size = (img.naturalWidth || 0) * (img.naturalHeight || 0);
+            if (size > maxSize && img.naturalWidth > 300) {
+              maxSize = size;
+              mainImage = img;
+            }
+          });
+
+          if (mainImage) {
+            captureImage(mainImage, 'PREVIEW');
+          }
+        }
       }, 800);
     }
   }, true);
