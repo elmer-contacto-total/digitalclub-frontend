@@ -21,7 +21,8 @@ import {
   ConversationListItem,
   ConversationListRequest,
   ConversationListResponse,
-  ChatViewType
+  ChatViewType,
+  CapturedMedia
 } from '../../../core/models/conversation.model';
 import { CannedMessage } from '../../../core/models/canned-message.model';
 import {
@@ -54,6 +55,10 @@ interface ConversationApiResponse {
   lastIncomingMessageAt?: string;
   canSendFreeform: boolean;
   closeTypes?: any[];
+  /**
+   * Captured media from Electron (images and audios)
+   */
+  capturedMedia?: any[];
 }
 
 interface DataTablesResponse {
@@ -357,7 +362,29 @@ export class ChatService {
       closeTypes: response.closeTypes?.map(ct => ({
         name: ct.name,
         kpiName: ct.kpi_name || ct.kpiName
-      }))
+      })),
+      // Captured media from Electron (images and audios)
+      capturedMedia: (response.capturedMedia || []).map((media: any) => this.mapCapturedMedia(media))
+    };
+  }
+
+  /**
+   * Map backend captured media to frontend CapturedMedia model
+   */
+  private mapCapturedMedia(media: any): CapturedMedia {
+    return {
+      id: media.id,
+      mediaUuid: media.mediaUuid || media.media_uuid,
+      mediaType: (media.mediaType || media.media_type || 'image').toLowerCase() as 'image' | 'audio',
+      mimeType: media.mimeType || media.mime_type || '',
+      publicUrl: media.publicUrl || media.public_url || null,
+      filePath: media.filePath || media.file_path || null,
+      sizeBytes: media.sizeBytes || media.size_bytes || null,
+      durationSeconds: media.durationSeconds || media.duration_seconds || null,
+      capturedAt: media.capturedAt || media.captured_at || '',
+      messageSentAt: media.messageSentAt || media.message_sent_at || null,
+      chatPhone: media.chatPhone || media.chat_phone || null,
+      chatName: media.chatName || media.chat_name || null
     };
   }
 
