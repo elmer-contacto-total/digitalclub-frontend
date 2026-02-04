@@ -4,6 +4,7 @@ import { Observable, tap, catchError, throwError, of, map, BehaviorSubject, filt
 import { ApiService } from './api.service';
 import { StorageService } from './storage.service';
 import { ToastService } from './toast.service';
+import { ElectronService } from './electron.service';
 import {
   LoginRequest,
   LoginResponse,
@@ -26,6 +27,7 @@ export class AuthService {
   private storage = inject(StorageService);
   private router = inject(Router);
   private toast = inject(ToastService);
+  private electronService = inject(ElectronService);
 
   // Auth state using signals
   private _currentUser = signal<CurrentUser | null>(this.loadUserFromStorage());
@@ -234,6 +236,11 @@ export class AuthService {
     this._otpSessionId.set(null);
     this._awaitingOtp.set(false);
 
+    // Clear user in Electron (for media capture)
+    if (this.electronService.isElectron) {
+      this.electronService.clearLoggedInUser();
+    }
+
     // Navigate to login with optional session expired indicator
     const queryParams = sessionExpired ? { sessionExpired: 'true' } : {};
     this.router.navigate(['/login'], { queryParams });
@@ -430,6 +437,11 @@ export class AuthService {
     this._currentUser.set(currentUser);
     this.storage.set(USER_KEY, currentUser);
 
+    // Notify Electron of logged-in user (for media capture association)
+    if (this.electronService.isElectron) {
+      this.electronService.setLoggedInUser(currentUser.id, currentUser.fullName);
+    }
+
     // Show success message
     this.toast.success(`Bienvenido, ${currentUser.firstName}`);
   }
@@ -462,6 +474,12 @@ export class AuthService {
 
       // Validate user object has required fields
       if (user && user.id && user.email && user.role !== undefined) {
+        // Notify Electron of existing logged-in user (deferred to avoid injection issues)
+        setTimeout(() => {
+          if (this.electronService.isElectron) {
+            this.electronService.setLoggedInUser(user.id, user.fullName);
+          }
+        }, 100);
         return user;
       }
 

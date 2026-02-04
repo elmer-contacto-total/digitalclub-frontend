@@ -14,7 +14,8 @@ import { BrowserView, BrowserWindow, DownloadItem } from 'electron';
 
 export interface MediaCapturePayload {
   mediaId: string;
-  userId: string;
+  userId: string; // Device fingerprint (for audit)
+  agentId?: number | null; // Logged-in user ID in Angular
   chatPhone: string;
   chatName: string | null;
   mediaType: 'IMAGE' | 'AUDIO';

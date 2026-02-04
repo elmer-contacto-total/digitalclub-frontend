@@ -33,6 +33,10 @@ interface ElectronAPI {
   isWhatsAppVisible?(): Promise<boolean>;
   setWhatsAppOverlayMode?(overlayOpen: boolean): Promise<boolean>;
 
+  // User login/logout (for media capture association)
+  setLoggedInUser?(userId: number, userName: string): void;
+  clearLoggedInUser?(): void;
+
   // Angular bounds
   getAngularBounds?(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
 }
@@ -283,6 +287,25 @@ export class ElectronService {
       }
     }
     return false;
+  }
+
+  /**
+   * Notify Electron of the logged-in user (for media capture association)
+   * Should be called after successful login
+   */
+  setLoggedInUser(userId: number, userName: string): void {
+    if (window.electronAPI?.setLoggedInUser) {
+      window.electronAPI.setLoggedInUser(userId, userName);
+    }
+  }
+
+  /**
+   * Clear logged-in user info in Electron (for logout)
+   */
+  clearLoggedInUser(): void {
+    if (window.electronAPI?.clearLoggedInUser) {
+      window.electronAPI.clearLoggedInUser();
+    }
   }
 
   /**

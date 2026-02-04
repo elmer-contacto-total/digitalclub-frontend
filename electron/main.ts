@@ -28,6 +28,10 @@ let lastScannedMessages: Set<string> = new Set();
 let whatsappVisible = false;
 let whatsappInitialized = false;
 
+// Usuario logueado en Angular (para asociar medios capturados)
+let loggedInUserId: number | null = null;
+let loggedInUserName: string | null = null;
+
 // Configuración de dimensiones (debe coincidir con CSS variables en styles.scss)
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 56;
@@ -115,6 +119,7 @@ function handleMediaCaptured(data: { data: string; type: string; size: number; c
   const payload: MediaCapturePayload = {
     mediaId: generateMediaId(),
     userId: userFingerprint.odaId,
+    agentId: loggedInUserId, // Include logged-in agent ID
     chatPhone: data.chatPhone,
     chatName: null,
     mediaType: isImage ? 'IMAGE' : 'AUDIO',
@@ -126,6 +131,7 @@ function handleMediaCaptured(data: { data: string; type: string; size: number; c
     source: data.source as 'PREVIEW' | 'PLAYBACK'
   };
 
+  console.log('[HablaPe Media] Capturando media, agentId:', loggedInUserId);
   sendMediaToServer(payload);
 }
 
@@ -1184,6 +1190,19 @@ function registerShortcuts(): void {
 
 // IPC Handlers
 function setupIPC(): void {
+  // === User Login/Logout (para asociar medios capturados) ===
+  ipcMain.on('set-logged-in-user', (_, data: { userId: number; userName: string }) => {
+    loggedInUserId = data.userId;
+    loggedInUserName = data.userName;
+    console.log('[HablaPe] Usuario logueado:', loggedInUserId, loggedInUserName);
+  });
+
+  ipcMain.on('clear-logged-in-user', () => {
+    console.log('[HablaPe] Usuario deslogueado:', loggedInUserId);
+    loggedInUserId = null;
+    loggedInUserName = null;
+  });
+
   // === Controles de ventana ===
   ipcMain.on('window-minimize', () => {
     mainWindow?.minimize();

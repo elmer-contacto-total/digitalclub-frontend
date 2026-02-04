@@ -145,6 +145,16 @@ const electronAPI = {
     ipcRenderer.on('app-closing', () => callback());
   },
 
+  // Notificar a Electron el usuario logueado
+  setLoggedInUser: (userId: number, userName: string) => {
+    ipcRenderer.send('set-logged-in-user', { userId, userName });
+  },
+
+  // Limpiar usuario al hacer logout
+  clearLoggedInUser: () => {
+    ipcRenderer.send('clear-logged-in-user');
+  },
+
   // Restablecimiento completo - limpia todos los datos y reinicia
   fullReset: (): Promise<boolean> => {
     return ipcRenderer.invoke('full-reset');
@@ -206,6 +216,8 @@ declare global {
       fullReset: () => Promise<boolean>;
       sendWhatsAppMessage: (text: string) => Promise<boolean>;
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
+      setLoggedInUser: (userId: number, userName: string) => void;
+      clearLoggedInUser: () => void;
       removeAllListeners: (channel: string) => void;
     };
   }
