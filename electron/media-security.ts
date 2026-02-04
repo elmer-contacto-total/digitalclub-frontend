@@ -658,181 +658,154 @@ const MEDIA_CAPTURE_SCRIPT = `
     }
   }
 
-  // ===== OBSERVER PARA IMÁGENES =====
-  const imageObserver = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      mutation.addedNodes.forEach((node) => {
-        if (node.nodeType !== 1) return;
+  // ==========================================================================
+  // ESTRATEGIA DE CAPTURA SIMPLIFICADA
+  // ==========================================================================
+  //
+  // REGLA PRINCIPAL: Solo capturar imágenes que el usuario EXPLÍCITAMENTE ve
+  // en el visor de pantalla completa (lightbox/gallery).
+  //
+  // NO capturar:
+  // - Miniaturas en el chat (filtradas por tamaño < 20KB)
+  // - Stickers y GIFs (no son imágenes de conversación)
+  // - Fotos de perfil
+  // - Imágenes de UI
+  //
+  // SÍ capturar:
+  // - Imagen abierta en visor fullscreen (una por vez)
+  // - Cada imagen cuando el usuario navega con < >
+  // ==========================================================================
 
-        // Detectar si el nodo contiene imágenes blob (más directo)
-        const hasBlobImages = node.querySelector?.('img[src^="blob:"]') ||
-                             node.querySelector?.('img[src^="data:"]') ||
-                             node.querySelector?.('canvas');
+  // Estado para controlar capturas
+  let lastCaptureTime = 0;
+  const CAPTURE_COOLDOWN = 1000; // Mínimo 1 segundo entre capturas
 
-        // Detectar visor de medios por data-testid
-        const mediaViewer = node.querySelector?.('[data-testid="media-viewer"]') ||
-                           node.querySelector?.('[data-testid="image-viewer"]') ||
-                           node.matches?.('[data-testid="media-viewer"]');
+  // Función para verificar si estamos en el visor de medios
+  function isMediaViewerOpen() {
+    return document.querySelector('[data-testid="media-viewer"]') ||
+           document.querySelector('[data-testid="image-viewer"]') ||
+           document.querySelector('[data-testid="lightbox"]') ||
+           document.querySelector('[data-testid="media-viewer-modal"]');
+  }
 
-        // Detectar overlay usando getComputedStyle (no solo inline styles)
-        let isOverlay = false;
-        try {
-          const computedStyle = window.getComputedStyle(node);
-          isOverlay = computedStyle.position === 'fixed' ||
-                     computedStyle.position === 'absolute' ||
-                     node.getAttribute?.('role') === 'dialog' ||
-                     node.getAttribute?.('aria-modal') === 'true';
-        } catch (e) {
-          // Fallback a estilos inline si getComputedStyle falla
-          isOverlay = node.style?.position === 'fixed' ||
-                     node.style?.position === 'absolute';
-        }
+  // Función para obtener la imagen principal del visor
+  function getMainViewerImage() {
+    const viewer = isMediaViewerOpen();
+    if (!viewer) return null;
 
-        // Log para debug
-        if (hasBlobImages || mediaViewer || isOverlay) {
-          console.log('[HablaPe Debug] Nodo detectado:', {
-            hasBlobImages: !!hasBlobImages,
-            mediaViewer: !!mediaViewer,
-            isOverlay,
-            tagName: node.tagName,
-            className: node.className?.substring?.(0, 50)
-          });
-        }
+    // Buscar canvas primero (WhatsApp a veces usa canvas)
+    const canvas = viewer.querySelector?.('canvas') ||
+                   document.querySelector('[data-testid="media-canvas"]');
+    if (canvas && canvas.width > 300 && canvas.height > 300) {
+      return canvas;
+    }
 
-        // Capturar si es visor de medios
-        if (mediaViewer) {
-          const canvas = node.querySelector?.('canvas');
-          if (canvas) {
-            console.log('[HablaPe Debug] Canvas encontrado en mediaViewer');
-            setTimeout(() => captureImage(canvas, 'PREVIEW'), 500);
-          } else {
-            let captured = false;
-            const images = node.querySelectorAll?.('img') || [];
-            console.log('[HablaPe Debug] Imágenes en mediaViewer:', images.length);
-            images.forEach((img) => {
-              const tryCapture = () => {
-                if (captured) return;
-                if (img.src?.startsWith('blob:') || img.src?.startsWith('data:')) {
-                  console.log('[HablaPe Debug] Capturando imagen de mediaViewer');
-                  captured = true;
-                  captureImage(img, 'PREVIEW');
-                }
-              };
-              if (img.complete && img.src) setTimeout(tryCapture, 300);
-              else img.addEventListener('load', tryCapture, { once: true });
-            });
-          }
-          return; // No continuar con otros checks
-        }
+    // Buscar la imagen más grande dentro del visor
+    const images = viewer.querySelectorAll?.('img') ||
+                   document.querySelectorAll('[data-testid="media-viewer"] img');
 
-        // Capturar si es overlay con imágenes
-        if (isOverlay || hasBlobImages) {
-          let captured = false;
-          const images = node.querySelectorAll?.('img') || [];
-          console.log('[HablaPe Debug] Procesando overlay/nodo con imágenes:', images.length);
+    let mainImg = null;
+    let maxSize = 0;
 
-          images.forEach((img) => {
-            const tryCapture = () => {
-              if (captured) return;
-              const hasValidSrc = img.src?.startsWith('blob:') || img.src?.startsWith('data:');
-              const isBigEnough = img.naturalWidth > 300 || img.width > 300 ||
-                                 img.naturalHeight > 300 || img.height > 300;
+    images.forEach((img) => {
+      if (!img.src?.startsWith('blob:') && !img.src?.startsWith('data:')) return;
 
-              if (hasValidSrc && isBigEnough) {
-                console.log('[HablaPe Debug] Capturando imagen:', img.naturalWidth, 'x', img.naturalHeight);
-                captured = true;
-                captureImage(img, 'PREVIEW');
-              }
-            };
-            if (img.complete) setTimeout(tryCapture, 500);
-            else img.addEventListener('load', tryCapture, { once: true });
-          });
+      const w = img.naturalWidth || img.width || 0;
+      const h = img.naturalHeight || img.height || 0;
+      const size = w * h;
 
-          // También buscar canvas
-          const canvas = node.querySelector?.('canvas');
-          if (canvas && !captured) {
-            console.log('[HablaPe Debug] Canvas encontrado en overlay');
-            setTimeout(() => {
-              if (!captured) {
-                captured = true;
-                captureImage(canvas, 'PREVIEW');
-              }
-            }, 500);
-          }
-        }
-
-        // Stickers y GIFs (mantener igual)
-        if (node.matches?.('[data-testid="sticker"]')) {
-          const stickerImg = node.querySelector('img') || node.querySelector('canvas');
-          if (stickerImg) setTimeout(() => captureImage(stickerImg, 'PREVIEW'), 300);
-        }
-        if (node.matches?.('[data-testid="gif"]')) {
-          const gifImg = node.querySelector('img') || node.querySelector('canvas');
-          if (gifImg) setTimeout(() => captureImage(gifImg, 'PREVIEW'), 300);
-        }
-      });
+      // Solo considerar imágenes grandes (no thumbnails de navegación)
+      if (size > maxSize && w > 400 && h > 300) {
+        maxSize = size;
+        mainImg = img;
+      }
     });
-  });
 
-  imageObserver.observe(document.body, { childList: true, subtree: true });
+    return mainImg;
+  }
 
-  // Observer para cambio de src (navegación en galería con < >)
+  // Función principal de captura con cooldown
+  function captureViewerImage() {
+    const now = Date.now();
+    if (now - lastCaptureTime < CAPTURE_COOLDOWN) {
+      return; // Evitar capturas muy seguidas
+    }
+
+    const mainImage = getMainViewerImage();
+    if (mainImage) {
+      lastCaptureTime = now;
+      captureImage(mainImage, 'PREVIEW');
+    }
+  }
+
+  // ==========================================================================
+  // DETECTOR 1: Click en imagen del chat (abre visor)
+  // ==========================================================================
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+
+    // Detectar click en miniatura de imagen en el chat
+    const isImageClick = target.tagName === 'IMG' ||
+                        target.closest?.('[data-testid="image-thumb"]') ||
+                        target.closest?.('[data-testid="media-thumb"]') ||
+                        target.closest?.('img[src^="blob:"]');
+
+    if (isImageClick) {
+      // Esperar a que se abra el visor
+      setTimeout(() => {
+        if (isMediaViewerOpen()) {
+          // Dar tiempo a que la imagen cargue
+          setTimeout(captureViewerImage, 500);
+        }
+      }, 300);
+    }
+  }, true);
+
+  // ==========================================================================
+  // DETECTOR 2: Navegación en galería (< > arrows)
+  // ==========================================================================
   const srcObserver = new MutationObserver((mutations) => {
+    // Solo procesar si el visor está abierto
+    if (!isMediaViewerOpen()) return;
+
     mutations.forEach((mutation) => {
       if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
         const img = mutation.target;
         if (img.tagName === 'IMG' && img.src?.startsWith('blob:')) {
-          // Más permisivo: capturar si la imagen es grande (probablemente en visor)
-          const isBig = img.naturalWidth > 300 || img.width > 300;
-          if (isBig) {
-            console.log('[HablaPe Debug] srcObserver: cambio de src detectado, capturando');
-            setTimeout(() => captureImage(img, 'PREVIEW'), 300);
+          // Verificar que sea una imagen grande (no thumbnail de navegación)
+          const w = img.naturalWidth || img.width || 0;
+          const h = img.naturalHeight || img.height || 0;
+
+          if (w > 400 && h > 300) {
+            setTimeout(captureViewerImage, 300);
           }
         }
       }
     });
   });
 
-  srcObserver.observe(document.body, { attributes: true, attributeFilter: ['src'], subtree: true });
+  srcObserver.observe(document.body, {
+    attributes: true,
+    attributeFilter: ['src'],
+    subtree: true
+  });
 
-  // Fallback: click en imágenes - buscar cualquier imagen blob grande visible
-  document.addEventListener('click', (e) => {
-    const target = e.target;
-    // Detectar click en imagen o en área que podría abrir visor
-    const clickedImg = target.tagName === 'IMG' ? target : target.closest?.('img');
-    const clickedOnMedia = clickedImg ||
-                          target.closest?.('[data-testid*="image"]') ||
-                          target.closest?.('[data-testid*="media"]');
+  // ==========================================================================
+  // DETECTOR 3: Teclas de navegación (← →) en el visor
+  // ==========================================================================
+  document.addEventListener('keydown', (e) => {
+    if (!isMediaViewerOpen()) return;
 
-    if (clickedOnMedia) {
-      console.log('[HablaPe Debug] Click detectado en media');
-
-      // Esperar a que se abra el visor
-      setTimeout(() => {
-        // Buscar la imagen blob más grande en todo el documento
-        const allImages = document.querySelectorAll('img[src^="blob:"], img[src^="data:"]');
-        let biggestImg = null;
-        let maxSize = 0;
-
-        allImages.forEach((img) => {
-          const size = (img.naturalWidth || 0) * (img.naturalHeight || 0);
-          if (size > maxSize && size > 90000) { // Mínimo ~300x300
-            maxSize = size;
-            biggestImg = img;
-          }
-        });
-
-        if (biggestImg) {
-          console.log('[HablaPe Debug] Click fallback: imagen grande encontrada', biggestImg.naturalWidth, 'x', biggestImg.naturalHeight);
-          captureImage(biggestImg, 'PREVIEW');
-        } else {
-          console.log('[HablaPe Debug] Click fallback: no se encontró imagen grande');
-        }
-
-        // ELIMINADO: forEach que capturaba todas las allBigImages
-      }, 800);
+    // Detectar flechas izquierda/derecha
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      // Esperar a que cambie la imagen
+      setTimeout(captureViewerImage, 500);
     }
   }, true);
+
+  // ==========================================================================
+  // NO usar MutationObserver genérico - causa demasiadas capturas falsas
+  // ==========================================================================
 
   // ===== INTERCEPTAR REPRODUCCIÓN DE AUDIO =====
   const originalAudioPlay = HTMLAudioElement.prototype.play;
