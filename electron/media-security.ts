@@ -502,10 +502,12 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   // =========================================================================
   // Variable global para guardar contexto del último chat/mensaje clickeado
+  // IMPORTANTE: Se resetean al detectar un nuevo click en imagen
   // =========================================================================
   let lastKnownChatPhone = 'unknown';
   let lastKnownMessageTimestamp = null;
   let lastKnownWhatsappMessageId = null;
+  let lastContextCaptureTime = 0; // Para evitar usar contexto muy antiguo
 
   function getCurrentChatPhone() {
     try {
@@ -655,7 +657,7 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // Extract message timestamp from WhatsApp DOM element
-  // También guarda el contexto para uso cuando estemos en el visor
+  // MEJORADO: Solo usa caché si es reciente (< 30 segundos)
   function extractMessageTimestamp(element) {
     try {
       // Navigate up to find the message container
@@ -675,13 +677,25 @@ const MEDIA_CAPTURE_SCRIPT = `
         }
       }
 
-      // Si no encontramos el mensaje (estamos en visor), usar cache
+      // Si no encontramos el mensaje (estamos en visor), usar cache SOLO si es reciente
       if (!messageEl) {
-        console.log('[HablaPe Debug] extractMessageTimestamp: usando cache, msgId:', lastKnownWhatsappMessageId);
-        return {
-          messageSentAt: lastKnownMessageTimestamp,
-          whatsappMessageId: lastKnownWhatsappMessageId
-        };
+        const cacheAge = Date.now() - lastContextCaptureTime;
+        const isCacheFresh = cacheAge < 30000; // 30 segundos
+        console.log('[HablaPe Debug] extractMessageTimestamp: en visor, cache age=' + cacheAge + 'ms, fresh=' + isCacheFresh);
+
+        if (isCacheFresh && lastKnownMessageTimestamp) {
+          console.log('[HablaPe Debug] extractMessageTimestamp: usando cache FRESCO:', lastKnownMessageTimestamp);
+          return {
+            messageSentAt: lastKnownMessageTimestamp,
+            whatsappMessageId: lastKnownWhatsappMessageId
+          };
+        } else {
+          console.log('[HablaPe Debug] extractMessageTimestamp: cache VIEJO o vacío, retornando null');
+          return {
+            messageSentAt: null,
+            whatsappMessageId: lastKnownWhatsappMessageId
+          };
+        }
       }
 
       // Get WhatsApp message ID
@@ -702,27 +716,40 @@ const MEDIA_CAPTURE_SCRIPT = `
           // Guardar en cache para cuando estemos en el visor
           lastKnownMessageTimestamp = messageSentAt;
           lastKnownWhatsappMessageId = whatsappMessageId;
-          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado', messageSentAt, whatsappMessageId);
+          lastContextCaptureTime = Date.now();
+          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado via data-pre-plain-text:', messageSentAt);
 
           return { messageSentAt, whatsappMessageId };
         }
       }
 
       // Fallback: look for time in metadata spans
-      const timeSpans = messageEl.querySelectorAll('span[dir="auto"]');
+      const timeSpans = messageEl.querySelectorAll('span[dir="auto"], span');
       for (const span of timeSpans) {
         const text = span.textContent?.trim() || '';
         // Match time format like "10:30" or "10:30 a. m."
-        if (/^\\d{1,2}:\\d{2}(\\s*(a\\.?\\s*m\\.?|p\\.?\\s*m\\.?))?$/i.test(text)) {
-          // We have time but not date - use today
-          const today = new Date();
-          const [hours, minutes] = text.split(':');
-          const messageSentAt = today.toISOString().split('T')[0] + 'T' + hours.padStart(2, '0') + ':' + minutes.substring(0, 2) + ':00';
+        const hourMatch = text.match(/^(\\d{1,2}):(\\d{2})(\\s*[ap]\\.?\\s*m\\.?)?$/i);
+        if (hourMatch) {
+          let hours = parseInt(hourMatch[1]);
+          const minutes = hourMatch[2];
+          const ampm = hourMatch[3]?.toLowerCase() || '';
+
+          // Convertir a 24h si es necesario
+          if (ampm.includes('p') && hours < 12) hours += 12;
+          if (ampm.includes('a') && hours === 12) hours = 0;
+
+          // Usar fecha de hoy (en zona horaria local)
+          const now = new Date();
+          const dateStr = now.getFullYear() + '-' +
+                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                         String(now.getDate()).padStart(2, '0');
+          const messageSentAt = dateStr + 'T' + String(hours).padStart(2, '0') + ':' + minutes + ':00';
 
           // Guardar en cache
           lastKnownMessageTimestamp = messageSentAt;
           lastKnownWhatsappMessageId = whatsappMessageId;
-          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado via span', messageSentAt);
+          lastContextCaptureTime = Date.now();
+          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado via span:', messageSentAt, '(from:', text, ')');
 
           return { messageSentAt, whatsappMessageId };
         }
@@ -733,15 +760,15 @@ const MEDIA_CAPTURE_SCRIPT = `
         lastKnownWhatsappMessageId = whatsappMessageId;
       }
 
-      console.log('[HablaPe Debug] extractMessageTimestamp: no encontrado, usando cache');
+      console.log('[HablaPe Debug] extractMessageTimestamp: no encontrado en DOM, timestamp será null');
       return {
-        messageSentAt: lastKnownMessageTimestamp,
+        messageSentAt: null,
         whatsappMessageId: whatsappMessageId || lastKnownWhatsappMessageId
       };
     } catch (err) {
       console.log('[HablaPe Debug] extractMessageTimestamp error:', err.message);
       return {
-        messageSentAt: lastKnownMessageTimestamp,
+        messageSentAt: null,
         whatsappMessageId: lastKnownWhatsappMessageId
       };
     }
@@ -749,9 +776,16 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   // =========================================================================
   // Capturar contexto del mensaje ANTES de que se abra el visor
+  // MEJORADO: Múltiples métodos de extracción de timestamp
   // =========================================================================
   function captureMessageContext(clickTarget) {
     try {
+      // IMPORTANTE: Resetear timestamp al inicio para evitar usar datos antiguos
+      lastKnownMessageTimestamp = null;
+      lastContextCaptureTime = Date.now();
+
+      console.log('[HablaPe Debug] captureMessageContext: iniciando captura...');
+
       // Buscar el contenedor del mensaje
       let messageEl = clickTarget.closest('[data-id]') ||
                       clickTarget.closest('[data-testid="msg-container"]');
@@ -768,38 +802,98 @@ const MEDIA_CAPTURE_SCRIPT = `
         }
       }
 
-      if (messageEl) {
-        // Guardar ID del mensaje
-        const dataId = messageEl.getAttribute('data-id');
-        if (dataId) {
-          lastKnownWhatsappMessageId = dataId;
-
-          // Extraer teléfono del data-id si tiene formato @c.us
-          if (dataId.includes('@c.us')) {
-            let phone = dataId.split('@')[0];
-            phone = phone.replace(/^(true|false)_/, '');
-            if (/^\\d{9,15}$/.test(phone)) {
-              lastKnownChatPhone = phone;
-            }
-          }
-        }
-
-        // Extraer timestamp
-        const timeEl = messageEl.querySelector('[data-pre-plain-text]');
-        if (timeEl) {
-          const prePlainText = timeEl.getAttribute('data-pre-plain-text') || '';
-          const timeMatch = prePlainText.match(/\\[(\\d{1,2}:\\d{2}),\\s*(\\d{1,2}\\/\\d{1,2}\\/\\d{4})\\]/);
-          if (timeMatch) {
-            const [, time, date] = timeMatch;
-            const [day, month, year] = date.split('/');
-            lastKnownMessageTimestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + time + ':00';
-          }
-        }
-
-        console.log('[HablaPe Debug] captureMessageContext: phone=' + lastKnownChatPhone +
-                    ', msgId=' + lastKnownWhatsappMessageId +
-                    ', timestamp=' + lastKnownMessageTimestamp);
+      if (!messageEl) {
+        console.log('[HablaPe Debug] captureMessageContext: NO se encontró contenedor de mensaje');
+        return;
       }
+
+      // Guardar ID del mensaje
+      const dataId = messageEl.getAttribute('data-id');
+      if (dataId) {
+        lastKnownWhatsappMessageId = dataId;
+        console.log('[HablaPe Debug] captureMessageContext: data-id=' + dataId);
+
+        // Extraer teléfono del data-id si tiene formato @c.us
+        if (dataId.includes('@c.us')) {
+          let phone = dataId.split('@')[0];
+          phone = phone.replace(/^(true|false)_/, '');
+          if (/^\\d{9,15}$/.test(phone)) {
+            lastKnownChatPhone = phone;
+          }
+        }
+      }
+
+      // ========== MÉTODO 1: data-pre-plain-text ==========
+      // Formato: "[HH:mm, DD/MM/YYYY] Nombre: "
+      const timeEl = messageEl.querySelector('[data-pre-plain-text]');
+      if (timeEl) {
+        const prePlainText = timeEl.getAttribute('data-pre-plain-text') || '';
+        console.log('[HablaPe Debug] data-pre-plain-text:', prePlainText);
+
+        const timeMatch = prePlainText.match(/\\[(\\d{1,2}:\\d{2}),\\s*(\\d{1,2}\\/\\d{1,2}\\/\\d{4})\\]/);
+        if (timeMatch) {
+          const [, time, date] = timeMatch;
+          const [day, month, year] = date.split('/');
+          lastKnownMessageTimestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + time + ':00';
+          console.log('[HablaPe Debug] MÉTODO 1 OK: timestamp=' + lastKnownMessageTimestamp);
+          return;
+        }
+      }
+
+      // ========== MÉTODO 2: Buscar span con hora visible ==========
+      // WhatsApp muestra la hora en un span pequeño
+      const allSpans = messageEl.querySelectorAll('span');
+      for (const span of allSpans) {
+        const text = span.textContent?.trim() || '';
+        // Formato: "10:30" o "10:30 a. m." o "10:30 p. m."
+        const hourMatch = text.match(/^(\\d{1,2}):(\\d{2})(\\s*[ap]\\.?\\s*m\\.?)?$/i);
+        if (hourMatch) {
+          let hours = parseInt(hourMatch[1]);
+          const minutes = hourMatch[2];
+          const ampm = hourMatch[3]?.toLowerCase() || '';
+
+          // Convertir a 24h si es necesario
+          if (ampm.includes('p') && hours < 12) hours += 12;
+          if (ampm.includes('a') && hours === 12) hours = 0;
+
+          // Usar fecha de hoy (en zona horaria local)
+          const now = new Date();
+          const dateStr = now.getFullYear() + '-' +
+                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                         String(now.getDate()).padStart(2, '0');
+          lastKnownMessageTimestamp = dateStr + 'T' + String(hours).padStart(2, '0') + ':' + minutes + ':00';
+          console.log('[HablaPe Debug] MÉTODO 2 OK: timestamp=' + lastKnownMessageTimestamp + ' (from span: ' + text + ')');
+          return;
+        }
+      }
+
+      // ========== MÉTODO 3: Buscar en atributos data-* ==========
+      const elementsWithData = messageEl.querySelectorAll('[data-testid*="msg"], [data-testid*="time"]');
+      for (const el of elementsWithData) {
+        const testId = el.getAttribute('data-testid') || '';
+        console.log('[HablaPe Debug] Elemento con data-testid:', testId);
+      }
+
+      // ========== MÉTODO 4: Buscar en el footer del mensaje ==========
+      const msgMeta = messageEl.querySelector('[data-testid="msg-meta"], .message-meta, ._amk6');
+      if (msgMeta) {
+        const metaText = msgMeta.textContent?.trim() || '';
+        console.log('[HablaPe Debug] msg-meta text:', metaText);
+        const metaMatch = metaText.match(/(\\d{1,2}):(\\d{2})/);
+        if (metaMatch) {
+          const now = new Date();
+          const dateStr = now.getFullYear() + '-' +
+                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                         String(now.getDate()).padStart(2, '0');
+          lastKnownMessageTimestamp = dateStr + 'T' + metaMatch[1].padStart(2, '0') + ':' + metaMatch[2] + ':00';
+          console.log('[HablaPe Debug] MÉTODO 4 OK: timestamp=' + lastKnownMessageTimestamp);
+          return;
+        }
+      }
+
+      console.log('[HablaPe Debug] captureMessageContext: NO se pudo extraer timestamp');
+      console.log('[HablaPe Debug] phone=' + lastKnownChatPhone + ', msgId=' + lastKnownWhatsappMessageId);
+
     } catch (err) {
       console.log('[HablaPe Debug] captureMessageContext error:', err.message);
     }
