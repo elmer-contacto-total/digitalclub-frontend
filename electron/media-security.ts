@@ -31,7 +31,7 @@ export interface MediaCapturePayload {
 }
 
 export interface AuditLogPayload {
-  action: 'DOWNLOAD_BLOCKED' | 'MEDIA_CAPTURED' | 'BLOCKED_FILE_ATTEMPT';
+  action: 'DOWNLOAD_BLOCKED' | 'MEDIA_CAPTURED' | 'BLOCKED_FILE_ATTEMPT' | 'VIDEO_BLOCKED';
   userId: string;
   agentId?: number | null; // Logged-in user ID in Angular
   filename?: string;
@@ -41,6 +41,7 @@ export interface AuditLogPayload {
   chatPhone?: string;
   timestamp: string;
   description?: string;
+  metadata?: Record<string, unknown>; // Additional metadata as JSON
 }
 
 export interface DownloadBlockedEvent {
@@ -312,6 +313,10 @@ const BLOCK_DOWNLOAD_SCRIPT = `
   if (window.__hablapeSecurityInjected) return;
   window.__hablapeSecurityInjected = true;
 
+  // Cola para eventos de audit (VIDEO_BLOCKED, etc.) - será procesada por media-capture
+  window.__hablapeAuditQueue = window.__hablapeAuditQueue || [];
+  const auditedVideoIds = new Set(); // Para evitar auditar el mismo video múltiples veces
+
   // ===== BLOQUEAR MENÚ CONTEXTUAL EN MEDIOS =====
   document.addEventListener('contextmenu', (e) => {
     const target = e.target;
@@ -466,9 +471,16 @@ const BLOCK_DOWNLOAD_SCRIPT = `
     if (!video || video.__hablapeBlocked) return;
     video.__hablapeBlocked = true;
 
+    // Generar ID único para este video (para evitar duplicados en audit)
+    const videoId = video.src || video.currentSrc || ('video_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
+
     video.pause();
     video.muted = true;
     video.volume = 0;
+
+    // Capturar info antes de limpiar src
+    const originalSrc = video.src || video.currentSrc || 'unknown';
+
     video.src = '';
     video.removeAttribute('src');
     video.querySelectorAll('source').forEach(s => s.remove());
@@ -492,6 +504,45 @@ const BLOCK_DOWNLOAD_SCRIPT = `
       overlay.innerHTML = '<div>🚫<br>Video bloqueado<br><small>Política de seguridad corporativa</small></div>';
       parent.style.position = 'relative';
       parent.appendChild(overlay);
+    }
+
+    // Registrar en cola de audit (solo si no se ha auditado ya)
+    if (!auditedVideoIds.has(videoId)) {
+      auditedVideoIds.add(videoId);
+
+      // Intentar obtener el teléfono del chat actual
+      const chatPhone = window.__hablapeCurrentChatPhone || 'unknown';
+      const chatName = window.__hablapeCurrentChatName || null;
+
+      // Buscar mensaje padre para obtener más contexto
+      let messageId = null;
+      try {
+        const messageEl = video.closest?.('[data-id]');
+        if (messageEl) {
+          messageId = messageEl.getAttribute('data-id');
+        }
+      } catch (e) {
+        // Ignorar errores al buscar mensaje padre
+      }
+
+      try {
+        window.__hablapeAuditQueue.push({
+          action: 'VIDEO_BLOCKED',
+          chatPhone: chatPhone,
+          chatName: chatName,
+          url: originalSrc,
+          timestamp: new Date().toISOString(),
+          description: 'Intento de reproducción de video bloqueado',
+          metadata: {
+            whatsappMessageId: messageId,
+            videoWidth: video.videoWidth || null,
+            videoHeight: video.videoHeight || null
+          }
+        });
+        console.log('[HablaPe] Video bloqueado y auditado:', String(originalSrc || '').substring(0, 50));
+      } catch (auditErr) {
+        console.log('[HablaPe] Error al auditar video:', auditErr);
+      }
     }
   };
 
@@ -624,9 +675,11 @@ const MEDIA_CAPTURE_SCRIPT = `
   window.__hablapeMediaCaptureInjected = true;
 
   window.__hablapeMediaQueue = window.__hablapeMediaQueue || [];
+  window.__hablapeAuditQueue = window.__hablapeAuditQueue || []; // Queue for audit events (video blocked, etc.)
   const capturedHashes = new Set();      // Para deduplicación por hash
   const capturedBlobUrls = new Set();    // Para deduplicación por URL
   const processedMessageIds = new Set(); // Mensajes ya procesados
+  const auditedVideoUrls = new Set();    // Para evitar auditar el mismo video múltiples veces
 
   // Configuración
   const MIN_IMAGE_SIZE = 10000;          // Mínimo 10KB para evitar thumbnails
@@ -2196,10 +2249,50 @@ export function setupMediaCapture(
     }
   }
 
+  // Recolectar eventos de audit (VIDEO_BLOCKED, etc.)
+  async function collectAuditEvents(): Promise<void> {
+    try {
+      const result = await view.webContents.executeJavaScript(`
+        (function() {
+          if (!window.__hablapeAuditQueue || window.__hablapeAuditQueue.length === 0) {
+            return [];
+          }
+          const items = window.__hablapeAuditQueue.slice();
+          window.__hablapeAuditQueue = [];
+          return items;
+        })()
+      `, true);
+
+      if (result && Array.isArray(result) && result.length > 0) {
+        for (const item of result) {
+          // Construir payload de audit
+          const auditPayload: AuditLogPayload = {
+            action: item.action as AuditLogPayload['action'],
+            userId: userId,
+            chatPhone: item.chatPhone,
+            timestamp: item.timestamp,
+            description: item.description,
+            url: item.url,
+            metadata: item.metadata
+          };
+          onAuditLog(auditPayload);
+        }
+      }
+    } catch (err) {
+      // Silently ignore polling errors
+    }
+  }
+
+  // Función combinada de polling
+  async function pollAll(): Promise<void> {
+    await collectCapturedMedia();
+    await collectAuditEvents();
+  }
+
   view.webContents.on('did-finish-load', () => {
     setTimeout(() => {
       if (pollingInterval) clearInterval(pollingInterval);
-      pollingInterval = setInterval(collectCapturedMedia, 2000);
+      pollingInterval = setInterval(pollAll, 2000);
     }, 5000);
   });
 
