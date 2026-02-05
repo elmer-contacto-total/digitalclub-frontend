@@ -1127,6 +1127,16 @@ const MEDIA_CAPTURE_SCRIPT = `
     return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
+  // Helper: Convert local datetime to UTC ISO string
+  // WhatsApp shows times in local timezone, but we store in UTC
+  function localToUtcIso(year, month, day, hours, minutes) {
+    // Create Date object with local time (month is 0-indexed)
+    const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes), 0);
+    // toISOString() converts to UTC and returns format: 2025-01-15T14:30:00.000Z
+    // Remove the 'Z' and milliseconds to match expected format: 2025-01-15T14:30:00
+    return localDate.toISOString().replace(/\\.\\d{3}Z$/, '');
+  }
+
   // Extract message timestamp from WhatsApp DOM element
   // MEJORADO: Solo usa caché si es reciente (< 30 segundos)
   function extractMessageTimestamp(element) {
@@ -1181,15 +1191,15 @@ const MEDIA_CAPTURE_SCRIPT = `
         if (timeMatch) {
           const [, time, date] = timeMatch;
           const [day, month, year] = date.split('/');
-          // Format as ISO timestamp - ensure hour has 2 digits
           const [hours, mins] = time.split(':');
-          const messageSentAt = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + hours.padStart(2, '0') + ':' + mins + ':00';
+          // Convert local time to UTC
+          const messageSentAt = localToUtcIso(year, month, day, hours, mins);
 
           // Guardar en cache para cuando estemos en el visor
           lastKnownMessageTimestamp = messageSentAt;
           lastKnownWhatsappMessageId = whatsappMessageId;
           lastContextCaptureTime = Date.now();
-          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado via data-pre-plain-text:', messageSentAt);
+          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado via data-pre-plain-text (UTC):', messageSentAt);
 
           return { messageSentAt, whatsappMessageId };
         }
@@ -1210,18 +1220,21 @@ const MEDIA_CAPTURE_SCRIPT = `
           if (ampm.includes('p') && hours < 12) hours += 12;
           if (ampm.includes('a') && hours === 12) hours = 0;
 
-          // Usar fecha de hoy (en zona horaria local)
+          // Usar fecha de hoy y convertir a UTC
           const now = new Date();
-          const dateStr = now.getFullYear() + '-' +
-                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                         String(now.getDate()).padStart(2, '0');
-          const messageSentAt = dateStr + 'T' + String(hours).padStart(2, '0') + ':' + minutes + ':00';
+          const messageSentAt = localToUtcIso(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            now.getDate(),
+            hours,
+            minutes
+          );
 
           // Guardar en cache
           lastKnownMessageTimestamp = messageSentAt;
           lastKnownWhatsappMessageId = whatsappMessageId;
           lastContextCaptureTime = Date.now();
-          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado via span:', messageSentAt, '(from:', text, ')');
+          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado via span (UTC):', messageSentAt, '(from:', text, ')');
 
           return { messageSentAt, whatsappMessageId };
         }
@@ -1306,10 +1319,10 @@ const MEDIA_CAPTURE_SCRIPT = `
         if (timeMatch) {
           const [, time, date] = timeMatch;
           const [day, month, year] = date.split('/');
-          // Ensure hour has 2 digits for ISO format
           const [hours, mins] = time.split(':');
-          lastKnownMessageTimestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + hours.padStart(2, '0') + ':' + mins + ':00';
-          console.log('[HablaPe Debug] MÉTODO 1 OK: timestamp=' + lastKnownMessageTimestamp);
+          // Convert local time to UTC
+          lastKnownMessageTimestamp = localToUtcIso(year, month, day, hours, mins);
+          console.log('[HablaPe Debug] MÉTODO 1 OK: timestamp (UTC)=' + lastKnownMessageTimestamp);
           return;
         }
       }
@@ -1330,13 +1343,16 @@ const MEDIA_CAPTURE_SCRIPT = `
           if (ampm.includes('p') && hours < 12) hours += 12;
           if (ampm.includes('a') && hours === 12) hours = 0;
 
-          // Usar fecha de hoy (en zona horaria local)
+          // Usar fecha de hoy y convertir a UTC
           const now = new Date();
-          const dateStr = now.getFullYear() + '-' +
-                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                         String(now.getDate()).padStart(2, '0');
-          lastKnownMessageTimestamp = dateStr + 'T' + String(hours).padStart(2, '0') + ':' + minutes + ':00';
-          console.log('[HablaPe Debug] MÉTODO 2 OK: timestamp=' + lastKnownMessageTimestamp + ' (from span: ' + text + ')');
+          lastKnownMessageTimestamp = localToUtcIso(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            now.getDate(),
+            hours,
+            minutes
+          );
+          console.log('[HablaPe Debug] MÉTODO 2 OK: timestamp (UTC)=' + lastKnownMessageTimestamp + ' (from span: ' + text + ')');
           return;
         }
       }
@@ -1356,11 +1372,14 @@ const MEDIA_CAPTURE_SCRIPT = `
         const metaMatch = metaText.match(/(\\d{1,2}):(\\d{2})/);
         if (metaMatch) {
           const now = new Date();
-          const dateStr = now.getFullYear() + '-' +
-                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                         String(now.getDate()).padStart(2, '0');
-          lastKnownMessageTimestamp = dateStr + 'T' + metaMatch[1].padStart(2, '0') + ':' + metaMatch[2] + ':00';
-          console.log('[HablaPe Debug] MÉTODO 4 OK: timestamp=' + lastKnownMessageTimestamp);
+          lastKnownMessageTimestamp = localToUtcIso(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            now.getDate(),
+            metaMatch[1],
+            metaMatch[2]
+          );
+          console.log('[HablaPe Debug] MÉTODO 4 OK: timestamp (UTC)=' + lastKnownMessageTimestamp);
           return;
         }
       }
@@ -1476,10 +1495,10 @@ const MEDIA_CAPTURE_SCRIPT = `
           const fullDate = prePlainText.match(/(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/);
           if (fullDate) {
             const [, day, month, year] = fullDate;
-            // Ensure hour has 2 digits for ISO format
             const [hours, mins] = time.split(':');
-            const timestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + hours.padStart(2, '0') + ':' + mins + ':00';
-            console.log('[HablaPe Auto] Timestamp extraído (método 1):', timestamp);
+            // Convert local time to UTC
+            const timestamp = localToUtcIso(year, month, day, hours, mins);
+            console.log('[HablaPe Auto] Timestamp extraído (método 1, UTC):', timestamp);
             return timestamp;
           }
         }
@@ -1498,12 +1517,16 @@ const MEDIA_CAPTURE_SCRIPT = `
           if (ampm.includes('p') && hours < 12) hours += 12;
           if (ampm.includes('a') && hours === 12) hours = 0;
 
+          // Usar fecha de hoy y convertir a UTC
           const now = new Date();
-          const dateStr = now.getFullYear() + '-' +
-                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                         String(now.getDate()).padStart(2, '0');
-          const timestamp = dateStr + 'T' + String(hours).padStart(2, '0') + ':' + minutes + ':00';
-          console.log('[HablaPe Auto] Timestamp extraído (método 2):', timestamp, 'from:', text);
+          const timestamp = localToUtcIso(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            now.getDate(),
+            hours,
+            minutes
+          );
+          console.log('[HablaPe Auto] Timestamp extraído (método 2, UTC):', timestamp, 'from:', text);
           return timestamp;
         }
       }
@@ -1515,11 +1538,14 @@ const MEDIA_CAPTURE_SCRIPT = `
         const metaMatch = metaText.match(/(\\d{1,2}):(\\d{2})/);
         if (metaMatch) {
           const now = new Date();
-          const dateStr = now.getFullYear() + '-' +
-                         String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                         String(now.getDate()).padStart(2, '0');
-          const timestamp = dateStr + 'T' + metaMatch[1].padStart(2, '0') + ':' + metaMatch[2] + ':00';
-          console.log('[HablaPe Auto] Timestamp extraído (método 3):', timestamp);
+          const timestamp = localToUtcIso(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            now.getDate(),
+            metaMatch[1],
+            metaMatch[2]
+          );
+          console.log('[HablaPe Auto] Timestamp extraído (método 3, UTC):', timestamp);
           return timestamp;
         }
       }
