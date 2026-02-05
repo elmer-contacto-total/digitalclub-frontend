@@ -1110,9 +1110,65 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // ==========================================================================
-  // Función para capturar una imagen de un mensaje
+  // Función para obtener el teléfono ACTUAL del chat (lectura fresca del DOM)
   // ==========================================================================
-  async function captureImageFromMessage(img, messageEl) {
+  function getFreshChatPhone() {
+    try {
+      // MÉTODO 1: Sidebar - buscar chat activo (MÁS CONFIABLE)
+      const sidebar = document.querySelector('#pane-side');
+      if (sidebar) {
+        const activeChat = sidebar.querySelector('[aria-selected="true"]') ||
+                          sidebar.querySelector('[data-testid="cell-frame-container"]:focus-within');
+        if (activeChat) {
+          let el = activeChat;
+          for (let i = 0; i < 10 && el; i++) {
+            const dataId = el.getAttribute?.('data-id');
+            if (dataId && dataId.includes('@c.us')) {
+              let phone = dataId.split('@')[0];
+              phone = phone.replace(/^(true|false)_/, '');
+              if (/^\\d{9,15}$/.test(phone)) {
+                console.log('[HablaPe Fresh] Teléfono del sidebar:', phone);
+                return phone;
+              }
+            }
+            el = el.parentElement;
+          }
+        }
+      }
+
+      // MÉTODO 2: Header de conversación
+      const chatHeader = document.querySelector('[data-testid="conversation-header"]');
+      if (chatHeader) {
+        const phoneSpan = chatHeader.querySelector('span[title]');
+        if (phoneSpan) {
+          const title = phoneSpan.getAttribute('title');
+          const phoneMatch = title?.match(/\\+?[0-9\\s-]{10,}/);
+          if (phoneMatch) {
+            const phone = phoneMatch[0].replace(/[\\s-]/g, '');
+            console.log('[HablaPe Fresh] Teléfono del header:', phone);
+            return phone;
+          }
+        }
+      }
+
+      // MÉTODO 3: Variable de Electron (puede estar desactualizada)
+      if (window.__hablapeCurrentChatPhone && window.__hablapeCurrentChatPhone !== 'unknown') {
+        console.log('[HablaPe Fresh] Usando variable Electron:', window.__hablapeCurrentChatPhone);
+        return window.__hablapeCurrentChatPhone;
+      }
+
+      return 'unknown';
+    } catch (err) {
+      console.log('[HablaPe Fresh] Error:', err.message);
+      return window.__hablapeCurrentChatPhone || 'unknown';
+    }
+  }
+
+  // ==========================================================================
+  // Función para capturar una imagen de un mensaje
+  // IMPORTANTE: chatPhoneOverride permite pasar el teléfono capturado al momento del click
+  // ==========================================================================
+  async function captureImageFromMessage(img, messageEl, chatPhoneOverride = null) {
     try {
       const blobUrl = img.src;
       if (!blobUrl || !blobUrl.startsWith('blob:')) {
@@ -1160,9 +1216,14 @@ const MEDIA_CAPTURE_SCRIPT = `
       // Extraer timestamp del mensaje
       const messageSentAt = extractTimestampFromMessage(messageEl);
 
-      // Extraer teléfono del data-id
-      let chatPhone = window.__hablapeCurrentChatPhone || 'unknown';
-      if (messageId && messageId.includes('@c.us')) {
+      // PRIORIDAD para teléfono:
+      // 1. chatPhoneOverride (capturado al momento del click - MÁS CONFIABLE)
+      // 2. data-id del mensaje (si tiene formato @c.us)
+      // 3. Variable global (puede estar desactualizada)
+      let chatPhone = chatPhoneOverride || 'unknown';
+
+      // Intentar extraer del data-id si no tenemos override
+      if (chatPhone === 'unknown' && messageId && messageId.includes('@c.us')) {
         let phone = messageId.split('@')[0];
         phone = phone.replace(/^(true|false)_/, '');
         if (/^\\d{9,15}$/.test(phone)) {
@@ -1170,11 +1231,16 @@ const MEDIA_CAPTURE_SCRIPT = `
         }
       }
 
+      // Fallback a variable global
+      if (chatPhone === 'unknown') {
+        chatPhone = window.__hablapeCurrentChatPhone || 'unknown';
+      }
+
       const chatName = window.__hablapeCurrentChatName || null;
 
       console.log('[HablaPe Auto] ✓ Capturando imagen:');
       console.log('[HablaPe Auto]   size:', size, 'bytes');
-      console.log('[HablaPe Auto]   chatPhone:', chatPhone);
+      console.log('[HablaPe Auto]   chatPhone:', chatPhone, chatPhoneOverride ? '(from click)' : '(from fallback)');
       console.log('[HablaPe Auto]   messageSentAt:', messageSentAt);
       console.log('[HablaPe Auto]   messageId:', messageId);
 
@@ -1241,14 +1307,17 @@ const MEDIA_CAPTURE_SCRIPT = `
       e.preventDefault();
       e.stopPropagation();
 
-      console.log('[HablaPe Protect] ✓ Click - Revelando, capturando y abriendo visor');
+      // IMPORTANTE: Capturar el teléfono AHORA, antes de cualquier operación async
+      // Esto evita race conditions si el usuario cambia de chat mientras se procesa
+      const clickTimeChatPhone = getFreshChatPhone();
+      console.log('[HablaPe Protect] ✓ Click - Teléfono capturado al momento del click:', clickTimeChatPhone);
 
       // Revelar imagen
       img.classList.add('revealed');
       overlay.classList.add('hidden');
 
-      // Capturar la imagen
-      await captureImageFromMessage(img, messageEl);
+      // Capturar la imagen CON el teléfono capturado al momento del click
+      await captureImageFromMessage(img, messageEl, clickTimeChatPhone);
 
       // Remover overlay después de la animación
       setTimeout(() => {
