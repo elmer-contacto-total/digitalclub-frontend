@@ -904,6 +904,40 @@ async function updateChatPhoneInWhatsApp(phone: string, name: string): Promise<v
 }
 
 /**
+ * Limpia el número extraído del panel de contacto anterior
+ * IMPORTANTE: Llamar cuando cambia el chat para evitar usar teléfonos antiguos
+ */
+async function clearExtractedPhoneInWhatsApp(): Promise<void> {
+  if (!whatsappView) return;
+  try {
+    await whatsappView.webContents.executeJavaScript(`
+      if (window.__hablapeClearExtractedPhone) {
+        window.__hablapeClearExtractedPhone();
+      }
+    `, true);
+    console.log('[HablaPe] Número extraído limpiado');
+  } catch (err) {
+    // Ignorar errores silenciosamente
+  }
+}
+
+/**
+ * Establece el nombre del chat actual para verificar panel de contacto
+ */
+async function setCurrentChatNameInWhatsApp(name: string): Promise<void> {
+  if (!whatsappView) return;
+  try {
+    await whatsappView.webContents.executeJavaScript(`
+      if (window.__hablapeSetCurrentChatName) {
+        window.__hablapeSetCurrentChatName('${name.replace(/'/g, "\\'")}');
+      }
+    `, true);
+  } catch (err) {
+    // Ignorar errores silenciosamente
+  }
+}
+
+/**
  * Bloquea el chat completo en WhatsApp Web
  * @param expectedPhone - El teléfono que esperamos que Angular cargue
  *
@@ -1114,11 +1148,38 @@ async function scanChat(): Promise<void> {
         const header = document.querySelector('[data-testid="conversation-header"]') ||
                       document.querySelector('#main header');
 
+        // Función para validar que un nombre de chat es válido (no es placeholder/status)
+        function isValidChatName(name) {
+          if (!name || name.length === 0 || name.length > 50) return false;
+          const lower = name.toLowerCase();
+          // Lista de placeholders y textos de estado a ignorar
+          const invalidPatterns = [
+            'escribiendo', 'typing', 'en línea', 'online',
+            'últ.', 'última', 'last seen', 'click here', 'click para',
+            'contact info', 'info del contacto', 'tap here', 'toca aquí',
+            'business info', 'info de empresa', 'see more', 'ver más'
+          ];
+          for (const pattern of invalidPatterns) {
+            if (lower.includes(pattern)) return false;
+          }
+          // Ignorar textos que empiezan con hora o número
+          if (/^\\d{1,2}:\\d{2}/.test(name)) return false;
+          if (/^\\d/.test(name) && name.length < 5) return false;
+          // Ignorar "hoy", "ayer" solos
+          if (lower === 'hoy' || lower === 'ayer' || lower === 'today' || lower === 'yesterday') return false;
+          // Ignorar AM/PM times
+          if (/a\\.?\\s?m\\.?|p\\.?\\s?m\\.?/i.test(name) && name.length < 15) return false;
+          return true;
+        }
+
         if (header) {
           // Buscar el span con el título (generalmente tiene atributo title)
           const titleSpan = header.querySelector('span[title]');
           if (titleSpan) {
-            chatName = titleSpan.getAttribute('title') || titleSpan.textContent?.trim();
+            const rawName = titleSpan.getAttribute('title') || titleSpan.textContent?.trim();
+            if (isValidChatName(rawName)) {
+              chatName = rawName;
+            }
           }
 
           // Fallback: buscar el primer span con texto válido
@@ -1126,19 +1187,10 @@ async function scanChat(): Promise<void> {
             const spans = header.querySelectorAll('span');
             for (const span of spans) {
               const text = span.textContent?.trim();
-              if (!text || text.length === 0 || text.length > 50) continue;
-
-              const lower = text.toLowerCase();
-              // Ignorar textos de estado
-              if (lower.includes('escribiendo') || lower.includes('typing') ||
-                  lower.includes('en línea') || lower.includes('online') ||
-                  lower.includes('últ.') || lower.includes('última') ||
-                  lower.includes('last seen') || lower === 'hoy' || lower === 'ayer' ||
-                  /^\\d/.test(text) || /a\\.\\s?m\\.|p\\.\\s?m\\./i.test(text)) {
-                continue;
+              if (isValidChatName(text)) {
+                chatName = text;
+                break;
               }
-              chatName = text;
-              break;
             }
           }
         }
@@ -1259,6 +1311,8 @@ async function scanChat(): Promise<void> {
         if (lastDetectedPhone || lastDetectedName) {
           lastDetectedPhone = '';
           lastDetectedName = '';
+          // Limpiar número extraído del panel anterior
+          await clearExtractedPhoneInWhatsApp();
         }
       } else if (result.debug === 'no_phone_found' && result.chatName) {
         // Hay un chat abierto pero no se encontró el número
@@ -1268,6 +1322,10 @@ async function scanChat(): Promise<void> {
           console.log('[HablaPe] Chat sin número detectado:', result.chatName);
           lastDetectedName = result.chatName;
           lastDetectedPhone = ''; // Limpiar teléfono anterior
+
+          // Limpiar número extraído del panel anterior y establecer nombre actual
+          await clearExtractedPhoneInWhatsApp();
+          await setCurrentChatNameInWhatsApp(result.chatName);
 
           // Mostrar blocker con instrucciones
           showPhoneNeededInWhatsApp();
@@ -1291,6 +1349,10 @@ async function scanChat(): Promise<void> {
 
       if (phoneChanged || nameChanged) {
         console.log(`[HolaPe] Chat detectado via ${source}:`, phone, name);
+
+        // Limpiar número extraído del panel anterior (antes de actualizar el estado)
+        await clearExtractedPhoneInWhatsApp();
+        await setCurrentChatNameInWhatsApp(name || '');
 
         lastDetectedPhone = phone;
         lastDetectedName = name || '';

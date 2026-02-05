@@ -758,6 +758,13 @@ const MEDIA_CAPTURE_SCRIPT = `
       if (chatId && chatId !== lastClickedChatId) {
         lastClickedChatId = chatId;
 
+        // LIMPIAR número extraído del chat anterior para evitar contaminar el nuevo chat
+        if (window.__hablapeClearExtractedPhone) {
+          window.__hablapeClearExtractedPhone();
+        }
+        // Limpiar también el nombre actual (se establecerá cuando scanChat detecte el nuevo chat)
+        currentChatNameForExtraction = null;
+
         // Mostrar blocker INMEDIATAMENTE
         console.log('[HablaPe] Click en sidebar detectado - Bloqueando inmediatamente');
         window.__hablapeShowChatBlocker();
@@ -814,6 +821,21 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   let contactPanelObserver = null;
   let lastExtractedPhone = null;
+  let currentChatNameForExtraction = null; // Para verificar que el panel corresponde al chat actual
+
+  // Limpiar el número extraído cuando cambia el chat
+  window.__hablapeClearExtractedPhone = function() {
+    lastExtractedPhone = null;
+    window.__hablapeExtractedPhone = null;
+    window.__hablapePhoneExtractedAt = null;
+    console.log('[HablaPe] 🧹 Número extraído limpiado');
+  };
+
+  // Establecer el nombre del chat actual (para verificar el panel)
+  window.__hablapeSetCurrentChatName = function(name) {
+    currentChatNameForExtraction = name;
+    console.log('[HablaPe] Chat actual para extracción:', name);
+  };
 
   function extractPhoneFromContactPanel() {
     console.log('[HablaPe] 🔍 Buscando número en panel de contacto...');
@@ -841,12 +863,44 @@ const MEDIA_CAPTURE_SCRIPT = `
       }
     }
 
+    // Si no hay panel abierto, no extraer nada
+    if (!contactPanel) {
+      console.log('[HablaPe] ❌ No hay panel de contacto abierto');
+      return null;
+    }
+
+    // VERIFICACIÓN: Si tenemos nombre del chat actual, verificar que el panel corresponde
+    // Esto evita extraer el teléfono del panel de un chat anterior
+    if (currentChatNameForExtraction) {
+      // Buscar el nombre en el panel (generalmente está en un span con title o en un h2)
+      const panelName = contactPanel.querySelector('span[title]')?.getAttribute('title') ||
+                       contactPanel.querySelector('h2')?.textContent?.trim() ||
+                       contactPanel.querySelector('header span')?.textContent?.trim();
+
+      if (panelName) {
+        // Comparar nombres (permitir match parcial para variaciones)
+        const normalize = (s) => (s || '').toLowerCase().trim().substring(0, 20);
+        const normalizedPanelName = normalize(panelName);
+        const normalizedChatName = normalize(currentChatNameForExtraction);
+
+        if (normalizedPanelName !== normalizedChatName &&
+            !normalizedPanelName.includes(normalizedChatName) &&
+            !normalizedChatName.includes(normalizedPanelName)) {
+          console.log('[HablaPe] ⚠️ Panel NO coincide con chat actual:');
+          console.log('[HablaPe]   Panel:', panelName);
+          console.log('[HablaPe]   Chat actual:', currentChatNameForExtraction);
+          return null; // No extraer - es de otro chat
+        }
+        console.log('[HablaPe] ✓ Panel coincide con chat actual:', panelName);
+      }
+    }
+
     // MÉTODO 3: Buscar cualquier elemento que tenga el patrón de teléfono con +
     // El número en WhatsApp aparece como "+51 935 374 672"
     const phoneRegex = /\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/;
 
-    // Buscar en todo el documento si no encontramos panel específico
-    const searchRoot = contactPanel || document.body;
+    // Buscar en el panel encontrado
+    const searchRoot = contactPanel;
 
     // Buscar en spans
     const allSpans = searchRoot.querySelectorAll('span');
