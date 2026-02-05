@@ -694,6 +694,7 @@ function createWhatsAppView(): void {
     setTimeout(() => {
       if (whatsappVisible) {
         startChatScanner();
+        startSessionMonitor(); // Iniciar monitor de sesión
       }
     }, 5000); // Esperar 5 segundos para que WhatsApp cargue
   });
@@ -728,6 +729,7 @@ function showWhatsAppView(): void {
   // Iniciar scanner si WhatsApp ya cargó
   if (whatsappInitialized) {
     startChatScanner();
+    startSessionMonitor(); // Monitorear estado de sesión
   }
 
   // Notificar a Angular
@@ -747,8 +749,9 @@ function hideWhatsAppView(): void {
 
   whatsappVisible = false;
 
-  // Detener scanner
+  // Detener scanner y monitor de sesión
   stopChatScanner();
+  stopSessionMonitor();
 
   // Notificar a Angular
   mainWindow.webContents.send('whatsapp-visibility-changed', { visible: false });
@@ -865,6 +868,10 @@ let lastDetectedPhone = '';
 let lastDetectedName = '';
 let chatScannerInterval: NodeJS.Timeout | null = null;
 let chatScannerRunning = false;
+
+// Estado de sesión de WhatsApp (para detectar login/logout)
+let whatsappLoggedIn = false;
+let sessionCheckInterval: NodeJS.Timeout | null = null;
 
 /**
  * Actualiza el teléfono del chat en el BrowserView de WhatsApp
@@ -1101,6 +1108,111 @@ function stopChatScanner(): void {
     chatScannerInterval = null;
   }
   console.log('[HablaPe] Chat scanner detenido');
+}
+
+// ============================================================================
+// DETECTOR DE SESIÓN DE WHATSAPP
+// Detecta cuando el usuario hace login o logout de WhatsApp Web
+// ============================================================================
+
+/**
+ * Verifica si WhatsApp Web está mostrando la pantalla de QR code (no logueado)
+ * o si tiene una sesión activa (logueado)
+ */
+async function checkWhatsAppSessionState(): Promise<void> {
+  if (!whatsappView || !mainWindow || !whatsappVisible) return;
+
+  try {
+    const sessionState = await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        // Indicadores de que está LOGUEADO
+        const hasConversations = !!document.querySelector('#pane-side');
+        const hasMainPanel = !!document.querySelector('#main');
+        const hasSearchBox = !!document.querySelector('[data-testid="chat-list-search"]');
+
+        // Indicadores de que NO está logueado (QR code visible)
+        const hasQRCode = !!document.querySelector('[data-testid="qrcode"]') ||
+                         !!document.querySelector('canvas[aria-label*="QR"]') ||
+                         !!document.querySelector('div[data-ref]'); // QR canvas
+        const hasLinkingScreen = !!document.querySelector('[data-testid="intro-md-beta-message"]') ||
+                                !!document.querySelector('div._al_b'); // Pantalla de "Usa WhatsApp en tu teléfono"
+        const hasPhoneLink = document.body.innerText?.includes('Escanea el código') ||
+                            document.body.innerText?.includes('Link with phone number');
+
+        // Determinar estado
+        const isLoggedIn = (hasConversations || hasMainPanel || hasSearchBox) &&
+                          !hasQRCode && !hasLinkingScreen && !hasPhoneLink;
+
+        return {
+          isLoggedIn,
+          indicators: {
+            hasConversations,
+            hasMainPanel,
+            hasSearchBox,
+            hasQRCode,
+            hasLinkingScreen,
+            hasPhoneLink
+          }
+        };
+      })()
+    `, true);
+
+    const wasLoggedIn = whatsappLoggedIn;
+    const isNowLoggedIn = sessionState.isLoggedIn;
+
+    // Solo notificar si cambió el estado
+    if (wasLoggedIn !== isNowLoggedIn) {
+      console.log('[HablaPe] *** CAMBIO DE SESIÓN DETECTADO ***');
+      console.log('[HablaPe] Estado anterior:', wasLoggedIn ? 'Logueado' : 'No logueado');
+      console.log('[HablaPe] Estado nuevo:', isNowLoggedIn ? 'Logueado' : 'No logueado');
+      console.log('[HablaPe] Indicadores:', sessionState.indicators);
+
+      whatsappLoggedIn = isNowLoggedIn;
+
+      // Notificar a Angular del cambio de sesión
+      mainWindow.webContents.send('whatsapp-session-change', { loggedIn: isNowLoggedIn });
+
+      // Si cerró sesión, limpiar estado del chat scanner
+      if (!isNowLoggedIn) {
+        lastDetectedPhone = '';
+        lastDetectedName = '';
+        // Notificar que no hay chat seleccionado
+        mainWindow.webContents.send('chat-selected', {
+          phone: null,
+          name: null,
+          isPhone: false
+        });
+      }
+    }
+  } catch (err) {
+    // Ignorar errores silenciosamente
+  }
+}
+
+/**
+ * Inicia el monitoreo periódico del estado de sesión de WhatsApp
+ */
+function startSessionMonitor(): void {
+  if (sessionCheckInterval) return;
+
+  console.log('[HablaPe] Iniciando monitor de sesión de WhatsApp');
+
+  // Verificar cada 3 segundos
+  sessionCheckInterval = setInterval(checkWhatsAppSessionState, 3000);
+
+  // Verificar inmediatamente
+  checkWhatsAppSessionState();
+}
+
+/**
+ * Detiene el monitoreo de sesión
+ */
+function stopSessionMonitor(): void {
+  if (sessionCheckInterval) {
+    clearInterval(sessionCheckInterval);
+    sessionCheckInterval = null;
+  }
+  console.log('[HablaPe] Monitor de sesión detenido');
 }
 
 // Sistema de escaneo de mensajes del chat activo

@@ -236,9 +236,10 @@ export class AuthService {
     this._otpSessionId.set(null);
     this._awaitingOtp.set(false);
 
-    // Clear user in Electron (for media capture)
+    // Clear user in Electron (for media capture) and trigger CRM reset
     if (this.electronService.isElectron) {
       this.electronService.clearLoggedInUser();
+      this.electronService.triggerCrmReset();
     }
 
     // Navigate to login with optional session expired indicator

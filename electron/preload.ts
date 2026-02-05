@@ -145,6 +145,11 @@ const electronAPI = {
     ipcRenderer.on('app-closing', () => callback());
   },
 
+  // Evento cuando cambia la sesión de WhatsApp (login/logout)
+  onWhatsAppSessionChange: (callback: (data: { loggedIn: boolean }) => void) => {
+    ipcRenderer.on('whatsapp-session-change', (_, data) => callback(data));
+  },
+
   // Notificar a Electron el usuario logueado
   setLoggedInUser: (userId: number, userName: string) => {
     ipcRenderer.send('set-logged-in-user', { userId, userName });
@@ -223,6 +228,7 @@ declare global {
       onWhatsAppBoundsChanged: (callback: (data: { angularWidth: number; whatsappWidth: number }) => void) => void;
       onWhatsAppVisibilityChanged: (callback: (data: { visible: boolean }) => void) => void;
       onAppClosing: (callback: () => void) => void;
+      onWhatsAppSessionChange: (callback: (data: { loggedIn: boolean }) => void) => void;
       fullReset: () => Promise<boolean>;
       sendWhatsAppMessage: (text: string) => Promise<boolean>;
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;

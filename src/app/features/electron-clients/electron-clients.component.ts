@@ -89,6 +89,14 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       this.electronService.showWhatsApp();
     }
 
+    // Listen for CRM reset events (logout, WhatsApp logout, etc.)
+    this.electronService.crmReset$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      console.log('[CRM] Reset triggered - clearing all state');
+      this.fullReset();
+    });
+
     // Listen for chat selection from Electron
     // Solo busca por teléfono - el teléfono debe extraerse del DOM o del nombre del contacto
     this.electronService.chatSelected$.pipe(
@@ -275,7 +283,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Reset component state
+   * Reset component state (partial - keeps some UI state)
    */
   private resetState(): void {
     this.viewState.set('empty');
@@ -287,6 +295,40 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
 
     // Clear active client in Electron
     this.electronService.clearActiveClient();
+  }
+
+  /**
+   * Full reset - clears ALL state including history and UI
+   * Used when logging out or WhatsApp session ends
+   */
+  private fullReset(): void {
+    // Reset basic state
+    this.viewState.set('empty');
+    this.currentPhone.set(null);
+    this.currentName.set(null);
+    this.contact.set(null);
+    this.selectedLabel.set(undefined);
+    this.notesField.set('');
+    this.isSavingNotes.set(false);
+
+    // Reset ticket state
+    this.isClosingTicket.set(false);
+    this.showTicketConfirmation.set(null);
+
+    // Reset canned messages
+    this.showCannedMessages.set(false);
+    this.cannedMessages.set([]);
+    this.loadingCannedMessages.set(false);
+
+    // Reset action history
+    this.actionHistory.set([]);
+    this.loadingHistory.set(false);
+    this.showHistoryPanel.set(false);
+
+    // Clear active client in Electron
+    this.electronService.clearActiveClient();
+
+    console.log('[CRM] Full reset completed - all state cleared');
   }
 
   /**

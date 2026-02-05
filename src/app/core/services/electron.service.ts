@@ -19,6 +19,7 @@ interface ElectronAPI {
   onPhoneDetected(callback: (data: PhoneDetectedEvent) => void): void;
   onWhatsAppBoundsChanged(callback: (data: WhatsAppBounds) => void): void;
   onWhatsAppVisibilityChanged(callback: (data: { visible: boolean }) => void): void;
+  onWhatsAppSessionChange?(callback: (data: { loggedIn: boolean }) => void): void;
   onAppClosing?(callback: () => void): void;
   removeAllListeners(channel: string): void;
 
@@ -69,7 +70,9 @@ export class ElectronService {
   private isElectronSubject = new BehaviorSubject<boolean>(false);
   private whatsappVisibleSubject = new BehaviorSubject<boolean>(false);
   private whatsappBoundsSubject = new BehaviorSubject<WhatsAppBounds | null>(null);
+  private whatsappSessionSubject = new BehaviorSubject<boolean>(false); // WhatsApp logged in state
   private appClosingSubject = new BehaviorSubject<boolean>(false);
+  private crmResetSubject = new BehaviorSubject<void>(undefined); // CRM reset trigger
 
   // Public observables
   readonly chatSelected$: Observable<ChatSelectedEvent | null> = this.chatSelectedSubject.asObservable();
@@ -77,7 +80,9 @@ export class ElectronService {
   readonly isElectron$: Observable<boolean> = this.isElectronSubject.asObservable();
   readonly whatsappVisible$: Observable<boolean> = this.whatsappVisibleSubject.asObservable();
   readonly whatsappBounds$: Observable<WhatsAppBounds | null> = this.whatsappBoundsSubject.asObservable();
+  readonly whatsappSession$: Observable<boolean> = this.whatsappSessionSubject.asObservable();
   readonly appClosing$: Observable<boolean> = this.appClosingSubject.asObservable();
+  readonly crmReset$: Observable<void> = this.crmResetSubject.asObservable();
 
   constructor() {
     this.detectElectron();
@@ -149,6 +154,23 @@ export class ElectronService {
       });
     });
 
+    // Listen for WhatsApp session changes (login/logout)
+    if (window.electronAPI.onWhatsAppSessionChange) {
+      window.electronAPI.onWhatsAppSessionChange((data: { loggedIn: boolean }) => {
+        this.ngZone.run(() => {
+          console.log('[ElectronService] WhatsApp session change:', data.loggedIn ? 'logged in' : 'logged out');
+          const wasLoggedIn = this.whatsappSessionSubject.value;
+          this.whatsappSessionSubject.next(data.loggedIn);
+
+          // If WhatsApp logged out, trigger CRM reset
+          if (wasLoggedIn && !data.loggedIn) {
+            console.log('[ElectronService] WhatsApp logged out - triggering CRM reset');
+            this.triggerCrmReset();
+          }
+        });
+      });
+    }
+
     // Listen for app closing event
     if (window.electronAPI.onAppClosing) {
       window.electronAPI.onAppClosing(() => {
@@ -194,6 +216,23 @@ export class ElectronService {
    */
   clearChat(): void {
     this.chatSelectedSubject.next(null);
+  }
+
+  /**
+   * Trigger CRM reset (clears all CRM state)
+   * Called when WhatsApp logs out or user logs out of Angular
+   */
+  triggerCrmReset(): void {
+    console.log('[ElectronService] Triggering CRM reset');
+    this.chatSelectedSubject.next(null);
+    this.crmResetSubject.next();
+  }
+
+  /**
+   * Get WhatsApp session state
+   */
+  get whatsappLoggedIn(): boolean {
+    return this.whatsappSessionSubject.value;
   }
 
   /**
