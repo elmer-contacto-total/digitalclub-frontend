@@ -890,6 +890,46 @@ async function updateChatPhoneInWhatsApp(phone: string, name: string): Promise<v
   }
 }
 
+/**
+ * Deshabilita las imágenes en WhatsApp Web
+ * Se llama cuando cambia el chat, hasta que el CRM cargue la info del nuevo cliente
+ */
+async function disableImagesInWhatsApp(): Promise<void> {
+  if (!whatsappView) return;
+  try {
+    await whatsappView.webContents.executeJavaScript(`
+      if (window.__hablapeDisableImages) {
+        window.__hablapeDisableImages();
+      } else {
+        window.__hablapeImagesEnabled = false;
+      }
+    `, true);
+    console.log('[HablaPe] Imágenes DESHABILITADAS - Esperando CRM...');
+  } catch (err) {
+    // Ignorar errores silenciosamente
+  }
+}
+
+/**
+ * Habilita las imágenes en WhatsApp Web
+ * Se llama cuando el CRM confirma que cargó la info del cliente
+ */
+async function enableImagesInWhatsApp(): Promise<void> {
+  if (!whatsappView) return;
+  try {
+    await whatsappView.webContents.executeJavaScript(`
+      if (window.__hablapeEnableImages) {
+        window.__hablapeEnableImages();
+      } else {
+        window.__hablapeImagesEnabled = true;
+      }
+    `, true);
+    console.log('[HablaPe] Imágenes HABILITADAS - CRM listo');
+  } catch (err) {
+    // Ignorar errores silenciosamente
+  }
+}
+
 // Intervalo de escaneo: 1.5-2.5 segundos
 function getRandomScanInterval(): number {
   return 1500 + Math.random() * 1000;
@@ -1069,6 +1109,9 @@ async function scanChat(): Promise<void> {
 
         lastDetectedPhone = phone;
         lastDetectedName = name || '';
+
+        // DESHABILITAR imágenes hasta que el CRM cargue la info del nuevo cliente
+        disableImagesInWhatsApp();
 
         // Actualizar el teléfono en el BrowserView para el script de captura
         updateChatPhoneInWhatsApp(phone, name || '');
@@ -1460,6 +1503,14 @@ function setupIPC(): void {
     activeClientUserId = null;
     activeClientPhone = null;
     activeClientName = null;
+    // Deshabilitar imágenes cuando no hay cliente
+    disableImagesInWhatsApp();
+  });
+
+  // === CRM Ready - Habilita las imágenes cuando el CRM cargó la info del cliente ===
+  ipcMain.on('crm-client-ready', () => {
+    console.log('[HablaPe] *** CRM LISTO - Habilitando imágenes ***');
+    enableImagesInWhatsApp();
   });
 
   // === Controles de ventana ===

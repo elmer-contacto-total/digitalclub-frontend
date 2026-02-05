@@ -41,6 +41,7 @@ interface ElectronAPI {
   // Active client (for media capture association with CRM contact)
   setActiveClient?(data: { clientUserId: number | null; chatPhone: string; chatName: string }): void;
   clearActiveClient?(): void;
+  crmClientReady?(): void;
 
   // Angular bounds
   getAngularBounds?(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
@@ -367,6 +368,17 @@ export class ElectronService {
   clearActiveClient(): void {
     if ((window as any).electronAPI?.clearActiveClient) {
       (window as any).electronAPI.clearActiveClient();
+    }
+  }
+
+  /**
+   * Notify Electron that CRM has loaded the client info
+   * This enables image clicks in WhatsApp Web
+   */
+  notifyCrmClientReady(): void {
+    if ((window as any).electronAPI?.crmClientReady) {
+      (window as any).electronAPI.crmClientReady();
+      console.log('[ElectronService] CRM client ready - Images enabled');
     }
   }
 

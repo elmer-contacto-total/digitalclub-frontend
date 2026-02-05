@@ -180,6 +180,21 @@ canvas,
   text-shadow: 0 1px 3px rgba(0,0,0,0.5) !important;
 }
 
+/* Estado de carga - cuando el CRM aún no tiene la info del cliente */
+.hablape-image-overlay.loading {
+  background: rgba(0, 0, 0, 0.8) !important;
+  cursor: wait !important;
+}
+
+.hablape-image-overlay.loading .hablape-overlay-icon {
+  animation: hablape-spin 1s linear infinite;
+}
+
+@keyframes hablape-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* ========== DESHABILITAR SELECCIÓN EN VISORES ========== */
 [data-testid="media-viewer"],
 [data-testid="image-viewer"],
@@ -555,6 +570,45 @@ const MEDIA_CAPTURE_SCRIPT = `
   // Configuración
   const MIN_IMAGE_SIZE = 10000;          // Mínimo 10KB para evitar thumbnails
   const CAPTURE_DELAY = 500;             // Delay antes de capturar (para que cargue)
+
+  // =========================================================================
+  // CONTROL DE HABILITACIÓN DE IMÁGENES
+  // Las imágenes están bloqueadas hasta que el CRM confirme que cargó el cliente
+  // =========================================================================
+  window.__hablapeImagesEnabled = false;  // Inicia deshabilitado
+  window.__hablapeCurrentClientReady = false;
+
+  // Función para habilitar imágenes (llamada desde Electron cuando CRM carga)
+  window.__hablapeEnableImages = function() {
+    console.log('[HablaPe] ✓ Imágenes HABILITADAS - CRM listo');
+    window.__hablapeImagesEnabled = true;
+    window.__hablapeCurrentClientReady = true;
+    // Actualizar todos los overlays existentes
+    document.querySelectorAll('.hablape-image-overlay.loading').forEach(overlay => {
+      overlay.classList.remove('loading');
+      const icon = overlay.querySelector('.hablape-overlay-icon');
+      const text = overlay.querySelector('.hablape-overlay-text');
+      if (icon) icon.textContent = '🔒';
+      if (text) text.textContent = 'Presionar para ver';
+    });
+  };
+
+  // Función para deshabilitar imágenes (llamada desde Electron cuando cambia el chat)
+  window.__hablapeDisableImages = function() {
+    console.log('[HablaPe] ⏳ Imágenes DESHABILITADAS - Esperando CRM...');
+    window.__hablapeImagesEnabled = false;
+    window.__hablapeCurrentClientReady = false;
+    // Actualizar todos los overlays existentes
+    document.querySelectorAll('.hablape-image-overlay:not(.loading)').forEach(overlay => {
+      if (!overlay.classList.contains('hidden')) {
+        overlay.classList.add('loading');
+        const icon = overlay.querySelector('.hablape-overlay-icon');
+        const text = overlay.querySelector('.hablape-overlay-text');
+        if (icon) icon.textContent = '⏳';
+        if (text) text.textContent = 'Cargando...';
+      }
+    });
+  };
 
   // Variables de estado para contexto del mensaje
   let lastKnownChatPhone = 'unknown';
@@ -1337,28 +1391,50 @@ const MEDIA_CAPTURE_SCRIPT = `
       container.style.position = 'relative';
     }
 
-    // Crear overlay
+    // Crear overlay con estado según si las imágenes están habilitadas
     const overlay = document.createElement('div');
-    overlay.className = 'hablape-image-overlay';
-    overlay.innerHTML = '<span class="hablape-overlay-icon">🔒</span><span class="hablape-overlay-text">Presionar para ver</span>';
+    const isEnabled = window.__hablapeImagesEnabled;
+    overlay.className = 'hablape-image-overlay' + (isEnabled ? '' : ' loading');
+    overlay.innerHTML = isEnabled
+      ? '<span class="hablape-overlay-icon">🔒</span><span class="hablape-overlay-text">Presionar para ver</span>'
+      : '<span class="hablape-overlay-icon">⏳</span><span class="hablape-overlay-text">Cargando...</span>';
 
     // Handler para revelar, capturar y abrir visor
     overlay.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
 
-      // IMPORTANTE: Capturar el teléfono del CONTEXTO del mensaje
-      // Busca en los mensajes del área de chat (#main), no en el sidebar
-      // Esto evita errores cuando el usuario cambia de chat rápidamente
-      const clickTimeChatPhone = getPhoneFromChatContext(messageEl);
-      console.log('[HablaPe Protect] ✓ Click - Teléfono del contexto del mensaje:', clickTimeChatPhone);
+      // VERIFICAR si las imágenes están habilitadas (CRM cargó el cliente)
+      if (!window.__hablapeImagesEnabled) {
+        console.log('[HablaPe Protect] ✗ Click BLOQUEADO - Esperando que CRM cargue...');
+        // Mostrar feedback visual
+        const text = overlay.querySelector('.hablape-overlay-text');
+        if (text) {
+          const originalText = text.textContent;
+          text.textContent = '⏳ Espere...';
+          setTimeout(() => {
+            if (!window.__hablapeImagesEnabled) {
+              text.textContent = 'Cargando...';
+            }
+          }, 1000);
+        }
+        return; // NO procesar el click
+      }
+
+      // Usar el teléfono y datos del cliente desde las variables de Electron
+      // Estos valores fueron establecidos por el CRM cuando cargó
+      const chatPhone = window.__hablapeCurrentChatPhone || 'unknown';
+      const chatName = window.__hablapeCurrentChatName || null;
+      console.log('[HablaPe Protect] ✓ Click - Usando datos del CRM:');
+      console.log('[HablaPe Protect]   chatPhone:', chatPhone);
+      console.log('[HablaPe Protect]   chatName:', chatName);
 
       // Revelar imagen
       img.classList.add('revealed');
       overlay.classList.add('hidden');
 
-      // Capturar la imagen CON el teléfono del contexto
-      await captureImageFromMessage(img, messageEl, clickTimeChatPhone);
+      // Capturar la imagen CON el teléfono del CRM (ya verificado)
+      await captureImageFromMessage(img, messageEl, chatPhone);
 
       // Remover overlay después de la animación
       setTimeout(() => {

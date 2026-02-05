@@ -170,6 +170,11 @@ const electronAPI = {
     ipcRenderer.send('clear-active-client');
   },
 
+  // Notificar que el CRM cargó la info del cliente (habilita las imágenes)
+  crmClientReady: () => {
+    ipcRenderer.send('crm-client-ready');
+  },
+
   // Restablecimiento completo - limpia todos los datos y reinicia
   fullReset: (): Promise<boolean> => {
     return ipcRenderer.invoke('full-reset');
@@ -236,6 +241,7 @@ declare global {
       clearLoggedInUser: () => void;
       setActiveClient: (data: { clientUserId: number | null; chatPhone: string; chatName: string }) => void;
       clearActiveClient: () => void;
+      crmClientReady: () => void;
       removeAllListeners: (channel: string) => void;
     };
   }

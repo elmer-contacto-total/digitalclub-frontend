@@ -137,6 +137,9 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         // Notificar a Electron del cliente activo (para captura de medios)
         this.notifyElectronOfActiveClient(result);
 
+        // Notificar que el CRM está listo (habilita las imágenes en WhatsApp)
+        this.electronService.notifyCrmClientReady();
+
         // Auto-load action history for registered contacts
         if (result.type === 'registered' && result.registered?.id) {
           this.loadActionHistoryAuto(result.registered.id);
@@ -154,6 +157,9 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           this.currentPhone() || '',
           this.currentName() || ''
         );
+
+        // Notificar que el CRM está listo (habilita las imágenes)
+        this.electronService.notifyCrmClientReady();
       } else {
         // No phone - show empty state
         this.viewState.set('empty');
