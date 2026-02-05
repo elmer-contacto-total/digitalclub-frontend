@@ -372,13 +372,16 @@ export class ElectronService {
   }
 
   /**
-   * Notify Electron that CRM has loaded the client info
-   * This enables image clicks in WhatsApp Web
+   * Notify Electron that CRM finished processing a chat
+   * @param phone - The phone number that was processed (for verification)
+   *
+   * Electron will only unblock the chat if this phone matches
+   * the one it's waiting for (prevents race conditions)
    */
-  notifyCrmClientReady(): void {
+  notifyCrmClientReady(phone: string): void {
     if ((window as any).electronAPI?.crmClientReady) {
-      (window as any).electronAPI.crmClientReady();
-      console.log('[ElectronService] CRM client ready - Images enabled');
+      (window as any).electronAPI.crmClientReady(phone);
+      console.log('[ElectronService] CRM ready notified for:', phone || '(no phone)');
     }
   }
 

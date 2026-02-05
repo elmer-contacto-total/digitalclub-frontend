@@ -170,9 +170,10 @@ const electronAPI = {
     ipcRenderer.send('clear-active-client');
   },
 
-  // Notificar que el CRM cargó la info del cliente (habilita las imágenes)
-  crmClientReady: () => {
-    ipcRenderer.send('crm-client-ready');
+  // Notificar que el CRM terminó de procesar (desbloquea el chat)
+  // @param phone - El teléfono que se procesó (para verificar que coincide)
+  crmClientReady: (phone: string) => {
+    ipcRenderer.send('crm-client-ready', { phone });
   },
 
   // Restablecimiento completo - limpia todos los datos y reinicia
@@ -193,6 +194,11 @@ const electronAPI = {
   // Limpiar listeners
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel);
+  },
+
+  // Enviar número extraído del panel de contacto (usado por media-security.ts)
+  sendExtractedPhone: (phone: string) => {
+    ipcRenderer.send('phone-extracted-from-panel', { phone });
   }
 };
 
@@ -241,7 +247,7 @@ declare global {
       clearLoggedInUser: () => void;
       setActiveClient: (data: { clientUserId: number | null; chatPhone: string; chatName: string }) => void;
       clearActiveClient: () => void;
-      crmClientReady: () => void;
+      crmClientReady: (phone: string) => void;
       removeAllListeners: (channel: string) => void;
     };
   }

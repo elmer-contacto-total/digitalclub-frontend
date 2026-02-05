@@ -38,6 +38,19 @@ let activeClientUserId: number | null = null;
 let activeClientPhone: string | null = null;
 let activeClientName: string | null = null;
 
+// Estado del bloqueo de chat (sistema robusto con verificación)
+interface ChatBlockState {
+  isBlocked: boolean;
+  expectedPhone: string | null;  // Teléfono que esperamos que Angular cargue
+  timeoutHandle: NodeJS.Timeout | null;
+}
+const chatBlockState: ChatBlockState = {
+  isBlocked: false,
+  expectedPhone: null,
+  timeoutHandle: null
+};
+const CHAT_BLOCK_TIMEOUT = 10000; // 10 segundos máximo de bloqueo
+
 // Configuración de dimensiones (debe coincidir con CSS variables en styles.scss)
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 56;
@@ -891,43 +904,196 @@ async function updateChatPhoneInWhatsApp(phone: string, name: string): Promise<v
 }
 
 /**
- * Deshabilita las imágenes en WhatsApp Web
- * Se llama cuando cambia el chat, hasta que el CRM cargue la info del nuevo cliente
+ * Bloquea el chat completo en WhatsApp Web
+ * @param expectedPhone - El teléfono que esperamos que Angular cargue
+ *
+ * SISTEMA ROBUSTO:
+ * - Guarda qué teléfono esperamos
+ * - Inicia timeout de seguridad
+ * - Solo se desbloquea si Angular confirma el mismo teléfono
  */
-async function disableImagesInWhatsApp(): Promise<void> {
+async function blockWhatsAppChat(expectedPhone: string): Promise<void> {
   if (!whatsappView) return;
+
+  // Cancelar timeout anterior si existe
+  if (chatBlockState.timeoutHandle) {
+    clearTimeout(chatBlockState.timeoutHandle);
+  }
+
+  // Actualizar estado
+  chatBlockState.isBlocked = true;
+  chatBlockState.expectedPhone = expectedPhone;
+
+  console.log('[HablaPe] ⏳ BLOQUEANDO chat - esperando CRM para:', expectedPhone);
+
   try {
     await whatsappView.webContents.executeJavaScript(`
-      if (window.__hablapeDisableImages) {
-        window.__hablapeDisableImages();
-      } else {
-        window.__hablapeImagesEnabled = false;
+      if (window.__hablapeShowChatBlocker) {
+        window.__hablapeShowChatBlocker();
       }
     `, true);
-    console.log('[HablaPe] Imágenes DESHABILITADAS - Esperando CRM...');
   } catch (err) {
-    // Ignorar errores silenciosamente
+    // Ignorar errores
+  }
+
+  // Timeout de seguridad: desbloquear automáticamente si Angular no responde
+  chatBlockState.timeoutHandle = setTimeout(() => {
+    if (chatBlockState.isBlocked) {
+      console.log('[HablaPe] ⚠️ TIMEOUT - Desbloqueando automáticamente (CRM no respondió)');
+      forceUnblockWhatsAppChat();
+    }
+  }, CHAT_BLOCK_TIMEOUT);
+}
+
+/**
+ * Intenta desbloquear el chat - solo si el teléfono coincide
+ * @param processedPhone - El teléfono que Angular procesó
+ * @returns true si se desbloqueó, false si se ignoró
+ */
+async function tryUnblockWhatsAppChat(processedPhone: string): Promise<boolean> {
+  if (!chatBlockState.isBlocked) {
+    console.log('[HablaPe] tryUnblock: No hay bloqueo activo, ignorando');
+    return false;
+  }
+
+  // Normalizar teléfonos para comparación (últimos 9 dígitos)
+  const normalizePhone = (p: string | null) => p ? p.replace(/\D/g, '').slice(-9) : '';
+  const expectedNorm = normalizePhone(chatBlockState.expectedPhone);
+  const processedNorm = normalizePhone(processedPhone);
+
+  console.log('[HablaPe] tryUnblock: expected=' + expectedNorm + ', processed=' + processedNorm);
+
+  if (expectedNorm && processedNorm && expectedNorm === processedNorm) {
+    // ✓ El teléfono coincide - desbloquear
+    forceUnblockWhatsAppChat();
+    console.log('[HablaPe] ✓ DESBLOQUEADO - CRM cargó el cliente correcto');
+    return true;
+  } else {
+    // El teléfono no coincide - ignorar (es de un chat anterior)
+    console.log('[HablaPe] ⚠️ Ignorando desbloqueo - teléfono no coincide');
+    return false;
   }
 }
 
 /**
- * Habilita las imágenes en WhatsApp Web
- * Se llama cuando el CRM confirma que cargó la info del cliente
+ * Fuerza el desbloqueo del chat (sin verificar teléfono)
+ * Usado por timeout y casos especiales
  */
-async function enableImagesInWhatsApp(): Promise<void> {
+async function forceUnblockWhatsAppChat(): Promise<void> {
+  // Cancelar timeout si existe
+  if (chatBlockState.timeoutHandle) {
+    clearTimeout(chatBlockState.timeoutHandle);
+    chatBlockState.timeoutHandle = null;
+  }
+
+  // Actualizar estado
+  chatBlockState.isBlocked = false;
+  chatBlockState.expectedPhone = null;
+
   if (!whatsappView) return;
+
   try {
     await whatsappView.webContents.executeJavaScript(`
-      if (window.__hablapeEnableImages) {
-        window.__hablapeEnableImages();
-      } else {
-        window.__hablapeImagesEnabled = true;
+      if (window.__hablapeHideChatBlocker) {
+        window.__hablapeHideChatBlocker();
       }
     `, true);
-    console.log('[HablaPe] Imágenes HABILITADAS - CRM listo');
   } catch (err) {
-    // Ignorar errores silenciosamente
+    // Ignorar errores
   }
+}
+
+/**
+ * Muestra el blocker con instrucciones para que el usuario revele el número
+ * Se llama cuando el scanner no puede detectar el número automáticamente
+ */
+async function showPhoneNeededInWhatsApp(): Promise<void> {
+  if (!whatsappView) return;
+
+  // Actualizar estado de bloqueo
+  chatBlockState.isBlocked = true;
+  chatBlockState.expectedPhone = null; // No sabemos qué teléfono esperar aún
+
+  // Cancelar timeout anterior si existe
+  if (chatBlockState.timeoutHandle) {
+    clearTimeout(chatBlockState.timeoutHandle);
+  }
+
+  try {
+    await whatsappView.webContents.executeJavaScript(`
+      if (window.__hablapeShowPhoneNeeded) {
+        window.__hablapeShowPhoneNeeded();
+      }
+    `, true);
+    console.log('[HablaPe] 📱 Mostrando instrucciones para revelar número');
+  } catch (err) {
+    // Ignorar errores
+  }
+
+  // Timeout más largo para este caso (30 segundos) ya que requiere acción del usuario
+  chatBlockState.timeoutHandle = setTimeout(() => {
+    if (chatBlockState.isBlocked) {
+      console.log('[HablaPe] ⚠️ TIMEOUT largo - desbloqueando (usuario no reveló número)');
+      forceUnblockWhatsAppChat();
+    }
+  }, 30000);
+}
+
+/**
+ * Verifica si el usuario extrajo un número del panel de contacto
+ * Se llama periódicamente desde el scanner
+ */
+async function checkForExtractedPhone(): Promise<void> {
+  if (!whatsappView || !mainWindow || !chatBlockState.isBlocked) return;
+
+  try {
+    const result = await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        if (window.__hablapeExtractedPhone && window.__hablapePhoneExtractedAt) {
+          const phone = window.__hablapeExtractedPhone;
+          const extractedAt = window.__hablapePhoneExtractedAt;
+          // Limpiar para no procesar dos veces
+          window.__hablapeExtractedPhone = null;
+          window.__hablapePhoneExtractedAt = null;
+          return { phone, extractedAt };
+        }
+        return null;
+      })()
+    `, true);
+
+    if (result && result.phone) {
+      handlePhoneExtracted(result.phone);
+    }
+  } catch (err) {
+    // Ignorar errores
+  }
+}
+
+/**
+ * Maneja cuando se extrae un número del panel de contacto en WhatsApp
+ */
+function handlePhoneExtracted(phone: string): void {
+  if (!phone || !mainWindow) return;
+
+  console.log('[HablaPe] ✓ Número extraído por usuario:', phone);
+
+  // Actualizar estado
+  lastDetectedPhone = phone;
+  chatBlockState.expectedPhone = phone;
+
+  // Actualizar el teléfono en el BrowserView para el script de captura
+  updateChatPhoneInWhatsApp(phone, lastDetectedName || '');
+
+  // El chat ya está bloqueado con el mensaje "necesita número"
+  // Ahora lo actualizamos al estado normal de "cargando"
+  blockWhatsAppChat(phone);
+
+  // Enviar evento a Angular con el número encontrado
+  mainWindow.webContents.send('chat-selected', {
+    phone,
+    name: lastDetectedName || null,
+    isPhone: true
+  });
 }
 
 // Intervalo de escaneo: 1.5-2.5 segundos
@@ -1094,6 +1260,25 @@ async function scanChat(): Promise<void> {
           lastDetectedPhone = '';
           lastDetectedName = '';
         }
+      } else if (result.debug === 'no_phone_found' && result.chatName) {
+        // Hay un chat abierto pero no se encontró el número
+        // Mostrar instrucciones al usuario para que revele el número
+        const nameChanged = result.chatName !== lastDetectedName;
+        if (nameChanged) {
+          console.log('[HablaPe] Chat sin número detectado:', result.chatName);
+          lastDetectedName = result.chatName;
+          lastDetectedPhone = ''; // Limpiar teléfono anterior
+
+          // Mostrar blocker con instrucciones
+          showPhoneNeededInWhatsApp();
+
+          // Enviar evento a Angular con solo el nombre (sin teléfono)
+          mainWindow.webContents.send('chat-selected', {
+            phone: null,
+            name: result.chatName,
+            isPhone: false
+          });
+        }
       }
       // NO hacer return aquí - continuar para programar siguiente scan
     } else {
@@ -1110,8 +1295,8 @@ async function scanChat(): Promise<void> {
         lastDetectedPhone = phone;
         lastDetectedName = name || '';
 
-        // DESHABILITAR imágenes hasta que el CRM cargue la info del nuevo cliente
-        disableImagesInWhatsApp();
+        // BLOQUEAR el chat - pasamos el teléfono esperado para verificación posterior
+        blockWhatsAppChat(phone);
 
         // Actualizar el teléfono en el BrowserView para el script de captura
         updateChatPhoneInWhatsApp(phone, name || '');
@@ -1127,6 +1312,9 @@ async function scanChat(): Promise<void> {
   } catch (err) {
     console.error('[HolaPe] Error en scanChat:', err);
   }
+
+  // Verificar si el usuario extrajo un número del panel de contacto
+  await checkForExtractedPhone();
 
   // SIEMPRE programar siguiente escaneo (movido fuera del try-catch)
   if (chatScannerRunning && whatsappVisible) {
@@ -1503,14 +1691,14 @@ function setupIPC(): void {
     activeClientUserId = null;
     activeClientPhone = null;
     activeClientName = null;
-    // Deshabilitar imágenes cuando no hay cliente
-    disableImagesInWhatsApp();
+    // NO bloquear aquí - el bloqueo solo ocurre cuando se detecta un NUEVO chat
   });
 
-  // === CRM Ready - Habilita las imágenes cuando el CRM cargó la info del cliente ===
-  ipcMain.on('crm-client-ready', () => {
-    console.log('[HablaPe] *** CRM LISTO - Habilitando imágenes ***');
-    enableImagesInWhatsApp();
+  // === CRM Ready - Intenta desbloquear el chat si el teléfono coincide ===
+  ipcMain.on('crm-client-ready', (_, data: { phone: string }) => {
+    const phone = data?.phone || '';
+    console.log('[HablaPe] *** CRM terminó de procesar:', phone || '(sin teléfono)');
+    tryUnblockWhatsAppChat(phone);
   });
 
   // === Controles de ventana ===

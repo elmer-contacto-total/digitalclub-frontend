@@ -98,29 +98,38 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     });
 
     // Listen for chat selection from Electron
-    // Solo busca por teléfono - el teléfono debe extraerse del DOM o del nombre del contacto
+    // FLUJO ROBUSTO:
+    // 1. Electron bloquea el chat y envía el teléfono esperado
+    // 2. Angular procesa (busca cliente, etc.)
+    // 3. Angular SIEMPRE notifica al terminar con el teléfono procesado
+    // 4. Electron solo desbloquea si el teléfono coincide
     this.electronService.chatSelected$.pipe(
       takeUntil(this.destroy$),
       switchMap((event: ChatSelectedEvent | null) => {
         if (!event) {
           this.resetState();
-          return of(null);
+          return of({ event: null, result: null });
         }
 
         this.currentName.set(event.name);
 
-        // Sin teléfono = estado vacío (el teléfono debe venir de Electron)
+        // Sin teléfono = estado vacío, pero guardamos el evento para notificar
         if (!event.phone) {
           this.currentPhone.set(null);
           this.viewState.set('empty');
-          return of(null);
+          return of({ event, result: null });
         }
 
         this.viewState.set('loading');
         this.currentPhone.set(event.phone);
-        return this.contactsService.searchByPhone(event.phone);
+        return this.contactsService.searchByPhone(event.phone).pipe(
+          switchMap(result => of({ event, result }))
+        );
       })
-    ).subscribe(result => {
+    ).subscribe(({ event, result }) => {
+      // Determinar el teléfono que procesamos
+      const processedPhone = event?.phone || '';
+
       if (result) {
         this.contact.set(result);
         this.viewState.set('contact');
@@ -137,14 +146,11 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         // Notificar a Electron del cliente activo (para captura de medios)
         this.notifyElectronOfActiveClient(result);
 
-        // Notificar que el CRM está listo (habilita las imágenes en WhatsApp)
-        this.electronService.notifyCrmClientReady();
-
         // Auto-load action history for registered contacts
         if (result.type === 'registered' && result.registered?.id) {
           this.loadActionHistoryAuto(result.registered.id);
         }
-      } else if (this.currentPhone()) {
+      } else if (processedPhone) {
         // No contact found in backend, but we have a phone - show local contact state
         this.contact.set(null);
         this.viewState.set('contact');
@@ -154,19 +160,18 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         // Notificar a Electron con solo el teléfono (sin clientUserId)
         this.electronService.setActiveClient(
           null,
-          this.currentPhone() || '',
+          processedPhone,
           this.currentName() || ''
         );
-
-        // Notificar que el CRM está listo (habilita las imágenes)
-        this.electronService.notifyCrmClientReady();
       } else {
         // No phone - show empty state
         this.viewState.set('empty');
-
-        // Limpiar cliente activo en Electron
         this.electronService.clearActiveClient();
       }
+
+      // SIEMPRE notificar al terminar de procesar (con el teléfono que procesamos)
+      // Electron verificará si coincide con el chat que está esperando
+      this.electronService.notifyCrmClientReady(processedPhone);
     });
   }
 

@@ -180,19 +180,80 @@ canvas,
   text-shadow: 0 1px 3px rgba(0,0,0,0.5) !important;
 }
 
-/* Estado de carga - cuando el CRM aún no tiene la info del cliente */
-.hablape-image-overlay.loading {
-  background: rgba(0, 0, 0, 0.8) !important;
-  cursor: wait !important;
+/* ========== OVERLAY DE BLOQUEO DEL CHAT COMPLETO ========== */
+/* Cubre toda el área de chat hasta que el CRM cargue */
+#hablape-chat-blocker {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.75) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 99999 !important;
+  backdrop-filter: blur(4px) !important;
+  transition: opacity 0.3s ease !important;
 }
 
-.hablape-image-overlay.loading .hablape-overlay-icon {
-  animation: hablape-spin 1s linear infinite;
+#hablape-chat-blocker.hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+#hablape-chat-blocker .blocker-content {
+  background: rgba(30, 30, 30, 0.95) !important;
+  padding: 24px 32px !important;
+  border-radius: 12px !important;
+  text-align: center !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+}
+
+#hablape-chat-blocker .blocker-icon {
+  font-size: 40px !important;
+  margin-bottom: 12px !important;
+  animation: hablape-spin 1.5s linear infinite;
+}
+
+#hablape-chat-blocker .blocker-text {
+  color: white !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  margin-bottom: 8px !important;
+}
+
+#hablape-chat-blocker .blocker-subtext {
+  color: #a0a0a0 !important;
+  font-size: 13px !important;
+}
+
+#hablape-chat-blocker .blocker-instruction {
+  color: #fbbf24 !important;
+  font-size: 14px !important;
+  margin-top: 12px !important;
+  padding: 10px 16px !important;
+  background: rgba(251, 191, 36, 0.1) !important;
+  border: 1px solid rgba(251, 191, 36, 0.3) !important;
+  border-radius: 8px !important;
+  max-width: 280px !important;
+}
+
+#hablape-chat-blocker .blocker-arrow {
+  font-size: 24px !important;
+  margin-top: 8px !important;
+  animation: hablape-bounce 1s ease-in-out infinite;
 }
 
 @keyframes hablape-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes hablape-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
 }
 
 /* ========== DESHABILITAR SELECCIÓN EN VISORES ========== */
@@ -572,43 +633,262 @@ const MEDIA_CAPTURE_SCRIPT = `
   const CAPTURE_DELAY = 500;             // Delay antes de capturar (para que cargue)
 
   // =========================================================================
-  // CONTROL DE HABILITACIÓN DE IMÁGENES
-  // Las imágenes están bloqueadas hasta que el CRM confirme que cargó el cliente
+  // BLOQUEO DEL CHAT COMPLETO
+  // Bloquea TODA interacción con el chat hasta que el CRM cargue el cliente
+  //
+  // ESTRATEGIA SIMPLE Y ROBUSTA:
+  // - Usar un contador de sesión de bloqueo para evitar condiciones de carrera
+  // - Siempre recrear el blocker desde cero al mostrar
+  // - Sin MutationObserver (causa problemas de timing)
   // =========================================================================
-  window.__hablapeImagesEnabled = false;  // Inicia deshabilitado
-  window.__hablapeCurrentClientReady = false;
 
-  // Función para habilitar imágenes (llamada desde Electron cuando CRM carga)
-  window.__hablapeEnableImages = function() {
-    console.log('[HablaPe] ✓ Imágenes HABILITADAS - CRM listo');
-    window.__hablapeImagesEnabled = true;
-    window.__hablapeCurrentClientReady = true;
-    // Actualizar todos los overlays existentes
-    document.querySelectorAll('.hablape-image-overlay.loading').forEach(overlay => {
-      overlay.classList.remove('loading');
-      const icon = overlay.querySelector('.hablape-overlay-icon');
-      const text = overlay.querySelector('.hablape-overlay-text');
-      if (icon) icon.textContent = '🔒';
-      if (text) text.textContent = 'Presionar para ver';
-    });
+  // Contador de sesión de bloqueo - solo se desbloquea si coincide
+  let blockSessionId = 0;
+  let isBlockerVisible = false;
+
+  // Mostrar el blocker (cuando cambia el chat)
+  window.__hablapeShowChatBlocker = function() {
+    // Incrementar sesión - invalida cualquier desbloqueo pendiente de sesiones anteriores
+    blockSessionId++;
+    const currentSession = blockSessionId;
+    isBlockerVisible = true;
+
+    console.log('[HablaPe] ⏳ CHAT BLOQUEADO - Sesión #' + currentSession);
+
+    function tryShowBlocker(attempt) {
+      // Verificar que esta sesión siga siendo válida
+      if (blockSessionId !== currentSession) {
+        console.log('[HablaPe] Sesión #' + currentSession + ' invalidada, abortando');
+        return;
+      }
+
+      const mainPane = document.querySelector('#main');
+      if (!mainPane) {
+        if (attempt < 15) {
+          setTimeout(() => tryShowBlocker(attempt + 1), 150);
+        }
+        return;
+      }
+
+      // Eliminar cualquier blocker existente
+      const existingBlocker = document.getElementById('hablape-chat-blocker');
+      if (existingBlocker) {
+        existingBlocker.remove();
+      }
+
+      // Crear nuevo blocker
+      const blocker = document.createElement('div');
+      blocker.id = 'hablape-chat-blocker';
+      blocker.setAttribute('data-session', String(currentSession));
+      blocker.innerHTML = \`
+        <div class="blocker-content">
+          <div class="blocker-icon">⏳</div>
+          <div class="blocker-text">Cargando información del cliente...</div>
+          <div class="blocker-subtext">Por favor espere</div>
+        </div>
+      \`;
+
+      mainPane.style.position = 'relative';
+      mainPane.appendChild(blocker);
+      console.log('[HablaPe] Blocker MOSTRADO - Sesión #' + currentSession);
+    }
+
+    // Pequeño delay para dar tiempo a WhatsApp de actualizar el DOM
+    setTimeout(() => tryShowBlocker(1), 50);
   };
 
-  // Función para deshabilitar imágenes (llamada desde Electron cuando cambia el chat)
-  window.__hablapeDisableImages = function() {
-    console.log('[HablaPe] ⏳ Imágenes DESHABILITADAS - Esperando CRM...');
-    window.__hablapeImagesEnabled = false;
-    window.__hablapeCurrentClientReady = false;
-    // Actualizar todos los overlays existentes
-    document.querySelectorAll('.hablape-image-overlay:not(.loading)').forEach(overlay => {
-      if (!overlay.classList.contains('hidden')) {
-        overlay.classList.add('loading');
-        const icon = overlay.querySelector('.hablape-overlay-icon');
-        const text = overlay.querySelector('.hablape-overlay-text');
-        if (icon) icon.textContent = '⏳';
-        if (text) text.textContent = 'Cargando...';
+  // Ocultar el blocker (cuando el CRM carga)
+  window.__hablapeHideChatBlocker = function() {
+    const currentSession = blockSessionId;
+    isBlockerVisible = false;
+
+    console.log('[HablaPe] ✓ CHAT DESBLOQUEADO - Sesión #' + currentSession);
+
+    // Eliminar el blocker inmediatamente
+    const blocker = document.getElementById('hablape-chat-blocker');
+    if (blocker) {
+      blocker.remove();
+      console.log('[HablaPe] Blocker ELIMINADO');
+    }
+  };
+
+  // Verificar estado del blocker (para debugging)
+  window.__hablapeBlockerStatus = function() {
+    return {
+      sessionId: blockSessionId,
+      isVisible: isBlockerVisible,
+      blockerExists: !!document.getElementById('hablape-chat-blocker'),
+      mainExists: !!document.querySelector('#main')
+    };
+  };
+
+  // =========================================================================
+  // INTERCEPTAR CLICKS EN EL SIDEBAR
+  // Muestra el blocker INMEDIATAMENTE cuando el usuario hace click en un chat
+  // Esto evita el delay del scanner (1.5-2.5 segundos)
+  // =========================================================================
+
+  let lastClickedChatId = null;
+
+  document.addEventListener('click', (e) => {
+    // Buscar si el click fue en un elemento del sidebar (lista de chats)
+    const target = e.target;
+
+    // El sidebar tiene id="pane-side" y contiene los chats
+    const sidePane = document.querySelector('#pane-side');
+    if (!sidePane || !sidePane.contains(target)) return;
+
+    // Buscar el elemento del chat clickeado (tiene data-id o está dentro de uno)
+    let chatElement = target.closest('[data-id]');
+    if (!chatElement) {
+      // Buscar en ancestros hasta 10 niveles
+      let el = target;
+      for (let i = 0; i < 10 && el; i++) {
+        if (el.getAttribute && el.getAttribute('data-id')) {
+          chatElement = el;
+          break;
+        }
+        el = el.parentElement;
+      }
+    }
+
+    // Si encontramos un chat y es diferente al último clickeado
+    if (chatElement) {
+      const chatId = chatElement.getAttribute('data-id');
+      if (chatId && chatId !== lastClickedChatId) {
+        lastClickedChatId = chatId;
+
+        // Mostrar blocker INMEDIATAMENTE
+        console.log('[HablaPe] Click en sidebar detectado - Bloqueando inmediatamente');
+        window.__hablapeShowChatBlocker();
+      }
+    }
+  }, true); // Captura en fase de captura para ser más rápido
+
+  console.log('[HablaPe] Interceptor de clicks en sidebar activo');
+
+  // =========================================================================
+  // SOLICITAR AL USUARIO QUE HAGA CLICK EN EL NOMBRE DEL CHAT
+  // Cuando no se puede detectar el número automáticamente
+  // =========================================================================
+
+  // Mostrar blocker con instrucciones para obtener el número
+  window.__hablapeShowPhoneNeeded = function() {
+    isBlockerVisible = true;
+    console.log('[HablaPe] 📱 Solicitando al usuario que revele el número...');
+
+    const mainPane = document.querySelector('#main');
+    if (!mainPane) return;
+
+    // Eliminar blocker existente
+    const existingBlocker = document.getElementById('hablape-chat-blocker');
+    if (existingBlocker) {
+      existingBlocker.remove();
+    }
+
+    // Crear blocker con instrucciones
+    const blocker = document.createElement('div');
+    blocker.id = 'hablape-chat-blocker';
+    blocker.setAttribute('data-needs-phone', 'true');
+    blocker.innerHTML = \`
+      <div class="blocker-content">
+        <div class="blocker-icon">📱</div>
+        <div class="blocker-text">No se detectó el número de teléfono</div>
+        <div class="blocker-subtext">Para continuar:</div>
+        <div class="blocker-instruction">
+          👆 Haga click en el <strong>nombre del contacto</strong> en la parte superior del chat
+        </div>
+        <div class="blocker-arrow">⬆️</div>
+      </div>
+    \`;
+
+    mainPane.style.position = 'relative';
+    mainPane.appendChild(blocker);
+  };
+
+  // =========================================================================
+  // DETECTAR PANEL DE DETALLES DEL CONTACTO
+  // Cuando el usuario hace click en el header, WhatsApp abre este panel
+  // El número SIEMPRE está visible ahí
+  // =========================================================================
+
+  let contactPanelObserver = null;
+  let lastExtractedPhone = null;
+
+  function extractPhoneFromContactPanel() {
+    // El panel de detalles del contacto tiene varios selectores posibles
+    // Buscar el panel que se abre a la derecha
+    const contactPanel = document.querySelector('[data-testid="contact-info-drawer"]') ||
+                        document.querySelector('[data-testid="drawer_right"]') ||
+                        document.querySelector('span[data-testid="drawer-right"]')?.closest('div[tabindex]');
+
+    if (!contactPanel) return null;
+
+    // El número de teléfono aparece en un span con formato de teléfono
+    // Generalmente está debajo del nombre
+    const allSpans = contactPanel.querySelectorAll('span');
+
+    for (const span of allSpans) {
+      const text = span.textContent?.trim() || '';
+
+      // Buscar patrón de teléfono: +XX XXX XXX XXX o similar
+      // Debe tener al menos 9 dígitos
+      const cleanNumber = text.replace(/[\\s\\-\\(\\)]/g, '');
+      if (/^\\+?\\d{9,15}$/.test(cleanNumber)) {
+        console.log('[HablaPe] 📱 Número encontrado en panel de detalles:', cleanNumber);
+        return cleanNumber.replace(/^\\+/, ''); // Quitar + inicial
+      }
+    }
+
+    // Buscar también en elementos con copyable-text (WhatsApp marca los números como copiables)
+    const copyableElements = contactPanel.querySelectorAll('[data-testid="copyable-text"], .copyable-text, [class*="copyable"]');
+    for (const el of copyableElements) {
+      const text = el.textContent?.trim() || '';
+      const cleanNumber = text.replace(/[\\s\\-\\(\\)]/g, '');
+      if (/^\\+?\\d{9,15}$/.test(cleanNumber)) {
+        console.log('[HablaPe] 📱 Número encontrado (copyable):', cleanNumber);
+        return cleanNumber.replace(/^\\+/, '');
+      }
+    }
+
+    return null;
+  }
+
+  function startContactPanelObserver() {
+    if (contactPanelObserver) return;
+
+    contactPanelObserver = new MutationObserver((mutations) => {
+      // Verificar si el blocker está esperando el número
+      const blocker = document.getElementById('hablape-chat-blocker');
+      if (!blocker || !blocker.getAttribute('data-needs-phone')) return;
+
+      // Intentar extraer el número
+      const phone = extractPhoneFromContactPanel();
+
+      if (phone && phone !== lastExtractedPhone) {
+        lastExtractedPhone = phone;
+        console.log('[HablaPe] ✓ Número extraído del panel de contacto:', phone);
+
+        // Guardar en variable global para que Electron lo lea
+        window.__hablapeExtractedPhone = phone;
+        window.__hablapePhoneExtractedAt = Date.now();
+
+        // También ocultar el blocker ya que encontramos el número
+        // (Electron lo volverá a mostrar con "Cargando..." cuando procese)
       }
     });
-  };
+
+    // Observar cambios en todo el documento para detectar cuando se abre el panel
+    contactPanelObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    console.log('[HablaPe] Observer de panel de contacto iniciado');
+  }
+
+  // Iniciar el observer después de que WhatsApp cargue
+  setTimeout(startContactPanelObserver, 5000);
 
   // Variables de estado para contexto del mensaje
   let lastKnownChatPhone = 'unknown';
@@ -1391,38 +1671,18 @@ const MEDIA_CAPTURE_SCRIPT = `
       container.style.position = 'relative';
     }
 
-    // Crear overlay con estado según si las imágenes están habilitadas
+    // Crear overlay
     const overlay = document.createElement('div');
-    const isEnabled = window.__hablapeImagesEnabled;
-    overlay.className = 'hablape-image-overlay' + (isEnabled ? '' : ' loading');
-    overlay.innerHTML = isEnabled
-      ? '<span class="hablape-overlay-icon">🔒</span><span class="hablape-overlay-text">Presionar para ver</span>'
-      : '<span class="hablape-overlay-icon">⏳</span><span class="hablape-overlay-text">Cargando...</span>';
+    overlay.className = 'hablape-image-overlay';
+    overlay.innerHTML = '<span class="hablape-overlay-icon">🔒</span><span class="hablape-overlay-text">Presionar para ver</span>';
 
     // Handler para revelar, capturar y abrir visor
     overlay.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
 
-      // VERIFICAR si las imágenes están habilitadas (CRM cargó el cliente)
-      if (!window.__hablapeImagesEnabled) {
-        console.log('[HablaPe Protect] ✗ Click BLOQUEADO - Esperando que CRM cargue...');
-        // Mostrar feedback visual
-        const text = overlay.querySelector('.hablape-overlay-text');
-        if (text) {
-          const originalText = text.textContent;
-          text.textContent = '⏳ Espere...';
-          setTimeout(() => {
-            if (!window.__hablapeImagesEnabled) {
-              text.textContent = 'Cargando...';
-            }
-          }, 1000);
-        }
-        return; // NO procesar el click
-      }
-
       // Usar el teléfono y datos del cliente desde las variables de Electron
-      // Estos valores fueron establecidos por el CRM cuando cargó
+      // El chat blocker garantiza que estos valores ya están establecidos
       const chatPhone = window.__hablapeCurrentChatPhone || 'unknown';
       const chatName = window.__hablapeCurrentChatName || null;
       console.log('[HablaPe Protect] ✓ Click - Usando datos del CRM:');
@@ -1433,7 +1693,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       img.classList.add('revealed');
       overlay.classList.add('hidden');
 
-      // Capturar la imagen CON el teléfono del CRM (ya verificado)
+      // Capturar la imagen CON el teléfono del CRM
       await captureImageFromMessage(img, messageEl, chatPhone);
 
       // Remover overlay después de la animación
@@ -1442,16 +1702,13 @@ const MEDIA_CAPTURE_SCRIPT = `
       }, 300);
 
       // Simular click en la imagen para abrir el visor de WhatsApp
-      // Pequeño delay para que la captura termine primero
       setTimeout(() => {
-        // Buscar el elemento clickeable (puede ser la imagen o un contenedor)
         const clickTarget = img.closest('[data-testid="image-thumb"]') ||
                            img.closest('[role="button"]') ||
                            img;
 
         if (clickTarget) {
           console.log('[HablaPe Protect] Abriendo visor de WhatsApp...');
-          // Crear y disparar evento de click nativo
           const clickEvent = new MouseEvent('click', {
             bubbles: true,
             cancelable: true,
