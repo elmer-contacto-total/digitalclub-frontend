@@ -816,41 +816,74 @@ const MEDIA_CAPTURE_SCRIPT = `
   let lastExtractedPhone = null;
 
   function extractPhoneFromContactPanel() {
-    // El panel de detalles del contacto tiene varios selectores posibles
-    // Buscar el panel que se abre a la derecha
-    const contactPanel = document.querySelector('[data-testid="contact-info-drawer"]') ||
-                        document.querySelector('[data-testid="drawer_right"]') ||
-                        document.querySelector('span[data-testid="drawer-right"]')?.closest('div[tabindex]');
+    console.log('[HablaPe] 🔍 Buscando número en panel de contacto...');
 
-    if (!contactPanel) return null;
+    // MÉTODO 1: Buscar panel por data-testid conocidos
+    let contactPanel = document.querySelector('[data-testid="contact-info-drawer"]') ||
+                       document.querySelector('[data-testid="drawer_right"]') ||
+                       document.querySelector('[data-testid="chat-info-drawer"]');
 
-    // El número de teléfono aparece en un span con formato de teléfono
-    // Generalmente está debajo del nombre
-    const allSpans = contactPanel.querySelectorAll('span');
-
-    for (const span of allSpans) {
-      const text = span.textContent?.trim() || '';
-
-      // Buscar patrón de teléfono: +XX XXX XXX XXX o similar
-      // Debe tener al menos 9 dígitos
-      const cleanNumber = text.replace(/[\\s\\-\\(\\)]/g, '');
-      if (/^\\+?\\d{9,15}$/.test(cleanNumber)) {
-        console.log('[HablaPe] 📱 Número encontrado en panel de detalles:', cleanNumber);
-        return cleanNumber.replace(/^\\+/, ''); // Quitar + inicial
+    // MÉTODO 2: Buscar panel por estructura (div que contiene "Contact info" o "Info del contacto")
+    if (!contactPanel) {
+      const allDivs = document.querySelectorAll('div');
+      for (const div of allDivs) {
+        const text = div.textContent || '';
+        // Panel de info tiene "Contact info" o similar y un número de teléfono
+        if ((text.includes('Contact info') || text.includes('Info') || text.includes('About')) &&
+            /\\+\\d{1,3}\\s*\\d/.test(text)) {
+          // Verificar que no sea el chat principal
+          if (!div.querySelector('#main') && div.offsetWidth > 200) {
+            contactPanel = div;
+            console.log('[HablaPe] Panel encontrado por contenido');
+            break;
+          }
+        }
       }
     }
 
-    // Buscar también en elementos con copyable-text (WhatsApp marca los números como copiables)
-    const copyableElements = contactPanel.querySelectorAll('[data-testid="copyable-text"], .copyable-text, [class*="copyable"]');
-    for (const el of copyableElements) {
-      const text = el.textContent?.trim() || '';
+    // MÉTODO 3: Buscar cualquier elemento que tenga el patrón de teléfono con +
+    // El número en WhatsApp aparece como "+51 935 374 672"
+    const phoneRegex = /\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/;
+
+    // Buscar en todo el documento si no encontramos panel específico
+    const searchRoot = contactPanel || document.body;
+
+    // Buscar en spans
+    const allSpans = searchRoot.querySelectorAll('span');
+    for (const span of allSpans) {
+      const text = span.textContent?.trim() || '';
+
+      // Buscar patrón exacto de teléfono con código de país
+      if (phoneRegex.test(text)) {
+        const cleanNumber = text.replace(/[\\s\\-\\(\\)\\+]/g, '');
+        if (cleanNumber.length >= 9 && cleanNumber.length <= 15) {
+          console.log('[HablaPe] 📱 Número encontrado en span:', text, '→', cleanNumber);
+          return cleanNumber;
+        }
+      }
+
+      // También buscar patrón más genérico
       const cleanNumber = text.replace(/[\\s\\-\\(\\)]/g, '');
-      if (/^\\+?\\d{9,15}$/.test(cleanNumber)) {
-        console.log('[HablaPe] 📱 Número encontrado (copyable):', cleanNumber);
+      if (/^\\+?\\d{9,15}$/.test(cleanNumber) && cleanNumber.length >= 9) {
+        console.log('[HablaPe] 📱 Número encontrado (genérico):', cleanNumber);
         return cleanNumber.replace(/^\\+/, '');
       }
     }
 
+    // Buscar en elementos con role="button" que contengan teléfono (a veces es clickeable)
+    const buttons = searchRoot.querySelectorAll('[role="button"], button');
+    for (const btn of buttons) {
+      const text = btn.textContent?.trim() || '';
+      if (phoneRegex.test(text)) {
+        const cleanNumber = text.replace(/[\\s\\-\\(\\)\\+]/g, '');
+        if (cleanNumber.length >= 9 && cleanNumber.length <= 15) {
+          console.log('[HablaPe] 📱 Número encontrado en botón:', cleanNumber);
+          return cleanNumber;
+        }
+      }
+    }
+
+    console.log('[HablaPe] ❌ No se encontró número en el panel');
     return null;
   }
 
@@ -860,9 +893,9 @@ const MEDIA_CAPTURE_SCRIPT = `
     contactPanelObserver = new MutationObserver((mutations) => {
       // Verificar si el blocker está esperando el número
       const blocker = document.getElementById('hablape-chat-blocker');
-      if (!blocker || !blocker.getAttribute('data-needs-phone')) return;
+      const needsPhone = blocker && blocker.getAttribute('data-needs-phone');
 
-      // Intentar extraer el número
+      // También intentar extraer aunque no haya blocker (por si se abre el panel manualmente)
       const phone = extractPhoneFromContactPanel();
 
       if (phone && phone !== lastExtractedPhone) {
@@ -872,9 +905,6 @@ const MEDIA_CAPTURE_SCRIPT = `
         // Guardar en variable global para que Electron lo lea
         window.__hablapeExtractedPhone = phone;
         window.__hablapePhoneExtractedAt = Date.now();
-
-        // También ocultar el blocker ya que encontramos el número
-        // (Electron lo volverá a mostrar con "Cargando..." cuando procese)
       }
     });
 
