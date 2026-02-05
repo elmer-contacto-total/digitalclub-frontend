@@ -181,10 +181,10 @@ canvas,
 }
 
 /* ========== OVERLAY DE BLOQUEO DEL CHAT COMPLETO ========== */
-/* Cubre toda el área de chat hasta que el CRM cargue */
+/* Cubre el área de chat DEBAJO del header para permitir click en el nombre */
 #hablape-chat-blocker {
   position: absolute !important;
-  top: 0 !important;
+  top: 60px !important;  /* Deja visible el header del chat */
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
