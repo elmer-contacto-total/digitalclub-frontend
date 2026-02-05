@@ -1004,14 +1004,14 @@ const MEDIA_CAPTURE_SCRIPT = `
     for (const span of allSpans) {
       const text = span.textContent?.trim() || '';
       if (phoneRegex.test(text)) {
-        const cleanNumber = text.replace(/[\\s\\-\\(\\)\\+]/g, '');
-        if (cleanNumber.length >= 9 && cleanNumber.length <= 15) {
-          return cleanNumber;
+        // Extraer solo el número usando el regex, luego limpiar a solo dígitos
+        const match = text.match(phoneRegex);
+        if (match) {
+          const cleanNumber = match[0].replace(/[^\\d]/g, '');
+          if (cleanNumber.length >= 9 && cleanNumber.length <= 15) {
+            return cleanNumber;
+          }
         }
-      }
-      const cleanNumber = text.replace(/[\\s\\-\\(\\)]/g, '');
-      if (/^\\+?\\d{9,15}$/.test(cleanNumber) && cleanNumber.length >= 9) {
-        return cleanNumber.replace(/^\\+/, '');
       }
     }
 
@@ -1020,9 +1020,13 @@ const MEDIA_CAPTURE_SCRIPT = `
     for (const btn of buttons) {
       const text = btn.textContent?.trim() || '';
       if (phoneRegex.test(text)) {
-        const cleanNumber = text.replace(/[\\s\\-\\(\\)\\+]/g, '');
-        if (cleanNumber.length >= 9 && cleanNumber.length <= 15) {
-          return cleanNumber;
+        // Extraer solo el número usando el regex, luego limpiar a solo dígitos
+        const match = text.match(phoneRegex);
+        if (match) {
+          const cleanNumber = match[0].replace(/[^\\d]/g, '');
+          if (cleanNumber.length >= 9 && cleanNumber.length <= 15) {
+            return cleanNumber;
+          }
         }
       }
     }
@@ -1135,6 +1139,11 @@ const MEDIA_CAPTURE_SCRIPT = `
   let lastKnownMessageTimestamp = null;
   let lastKnownWhatsappMessageId = null;
   let lastContextCaptureTime = 0;
+
+  // Variables específicas para contexto de audio
+  let lastAudioMessageTimestamp = null;
+  let lastAudioWhatsappMessageId = null;
+  let lastAudioContextTime = 0;
 
   function getCurrentChatPhone() {
     try {
@@ -2114,6 +2123,88 @@ const MEDIA_CAPTURE_SCRIPT = `
     subtree: true
   });
 
+  // ===== CAPTURAR CONTEXTO DE AUDIO AL HACER CLICK =====
+  // El HTMLAudioElement no está en el DOM del mensaje, así que capturamos el contexto
+  // cuando el usuario hace click en el botón de play
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+
+    // Buscar si el click fue en un elemento de audio/voz
+    const audioContainer = target.closest('[data-testid*="audio"]') ||
+                          target.closest('[data-testid*="ptt"]') ||
+                          target.closest('[data-testid*="voice"]') ||
+                          target.closest('[data-icon*="audio"]') ||
+                          target.closest('[data-icon*="ptt"]');
+
+    if (audioContainer) {
+      // Buscar el contenedor del mensaje
+      let messageEl = audioContainer.closest('[data-id]') ||
+                      audioContainer.closest('[data-testid="msg-container"]');
+
+      if (!messageEl) {
+        // Buscar hacia arriba
+        let parent = audioContainer.parentElement;
+        for (let i = 0; i < 15 && parent; i++) {
+          if (parent.getAttribute && (parent.getAttribute('data-id') ||
+              parent.getAttribute('data-testid') === 'msg-container')) {
+            messageEl = parent;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+      }
+
+      if (messageEl) {
+        // Extraer ID del mensaje
+        lastAudioWhatsappMessageId = messageEl.getAttribute('data-id') || null;
+
+        // Buscar timestamp
+        const timeEl = messageEl.querySelector('[data-pre-plain-text]');
+        if (timeEl) {
+          const prePlainText = timeEl.getAttribute('data-pre-plain-text') || '';
+          const timeMatch = prePlainText.match(/\\[(\\d{1,2}:\\d{2}),\\s*(\\d{1,2}\\/\\d{1,2}\\/\\d{4})\\]/);
+          if (timeMatch) {
+            const [, time, date] = timeMatch;
+            const [day, month, year] = date.split('/');
+            const [hours, mins] = time.split(':');
+            lastAudioMessageTimestamp = localToUtcIso(year, month, day, hours, mins);
+            lastAudioContextTime = Date.now();
+            console.log('[HablaPe Debug] Audio click: capturado timestamp:', lastAudioMessageTimestamp);
+          }
+        }
+
+        // Fallback: buscar en spans
+        if (!lastAudioMessageTimestamp || (Date.now() - lastAudioContextTime > 5000)) {
+          const timeSpans = messageEl.querySelectorAll('span[dir="auto"], span');
+          for (const span of timeSpans) {
+            const text = span.textContent?.trim() || '';
+            const hourMatch = text.match(/^(\\d{1,2}):(\\d{2})(\\s*[ap]\\.?\\s*m\\.?)?$/i);
+            if (hourMatch) {
+              let hours = parseInt(hourMatch[1]);
+              const minutes = hourMatch[2];
+              const ampm = hourMatch[3]?.toLowerCase() || '';
+
+              if (ampm.includes('p') && hours < 12) hours += 12;
+              if (ampm.includes('a') && hours === 12) hours = 0;
+
+              const now = new Date();
+              lastAudioMessageTimestamp = localToUtcIso(
+                now.getFullYear(),
+                now.getMonth() + 1,
+                now.getDate(),
+                hours,
+                minutes
+              );
+              lastAudioContextTime = Date.now();
+              console.log('[HablaPe Debug] Audio click: capturado timestamp via span:', lastAudioMessageTimestamp);
+              break;
+            }
+          }
+        }
+      }
+    }
+  }, true);
+
   // ===== INTERCEPTAR REPRODUCCIÓN DE AUDIO =====
   const originalAudioPlay = HTMLAudioElement.prototype.play;
 
@@ -2130,8 +2221,22 @@ const MEDIA_CAPTURE_SCRIPT = `
           const response = await fetch(audioSrc);
           const blob = await response.blob();
 
-          // Extract message timestamp from the audio element's parent
-          const { messageSentAt, whatsappMessageId } = extractMessageTimestamp(audioElement);
+          // Usar el contexto capturado por el click listener si es reciente (< 5 segundos)
+          let messageSentAt = null;
+          let whatsappMessageId = null;
+
+          const audioContextAge = Date.now() - lastAudioContextTime;
+          if (audioContextAge < 5000 && lastAudioMessageTimestamp) {
+            messageSentAt = lastAudioMessageTimestamp;
+            whatsappMessageId = lastAudioWhatsappMessageId;
+            console.log('[HablaPe Debug] Audio play: usando contexto del click:', messageSentAt);
+          } else {
+            // Fallback al método original
+            const extracted = extractMessageTimestamp(audioElement);
+            messageSentAt = extracted.messageSentAt;
+            whatsappMessageId = extracted.whatsappMessageId;
+            console.log('[HablaPe Debug] Audio play: usando extractMessageTimestamp:', messageSentAt);
+          }
 
           const reader = new FileReader();
           reader.onloadend = () => {

@@ -206,9 +206,11 @@ export class MessageItemComponent {
 
   formatTime(): string {
     const date = new Date(this.message().createdAt);
+    // Mostrar hora en UTC
     return date.toLocaleTimeString('es-PE', {
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'UTC'
     });
   }
 

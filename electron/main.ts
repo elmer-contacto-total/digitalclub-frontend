@@ -727,10 +727,14 @@ function createWhatsAppView(): void {
   whatsappView.webContents.on('console-message', (event, level, message) => {
     // Teléfono extraído del panel de contacto
     if (message.startsWith('[HABLAPE_PHONE_EXTRACTED]')) {
-      const phone = message.replace('[HABLAPE_PHONE_EXTRACTED]', '').trim();
-      if (phone && chatBlockState.isBlocked) {
+      const rawPhone = message.replace('[HABLAPE_PHONE_EXTRACTED]', '').trim();
+      // Sanitizar: solo mantener dígitos (9-15 caracteres)
+      const phone = rawPhone.replace(/[^\d]/g, '');
+      if (phone && phone.length >= 9 && phone.length <= 15 && chatBlockState.isBlocked) {
         console.log('[HablaPe] ✓ Teléfono extraído via console-message:', phone);
         handlePhoneExtracted(phone);
+      } else if (rawPhone && rawPhone !== phone) {
+        console.log('[HablaPe] Teléfono rechazado (inválido):', rawPhone, '->', phone);
       }
     }
     // Chat bloqueado por click en sidebar - sincronizar estado
