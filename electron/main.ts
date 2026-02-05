@@ -115,7 +115,16 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
         size: payload.size,
         chatPhone: payload.chatPhone,
         timestamp: payload.capturedAt,
-        description: `${payload.mediaType} capturado del chat ${payload.chatPhone}`
+        description: `${payload.mediaType} capturado del chat ${payload.chatPhone}`,
+        filename: `${payload.mediaId}.${payload.mimeType?.split('/')[1] || 'bin'}`,
+        metadata: {
+          mediaId: payload.mediaId,
+          source: payload.source,
+          chatName: payload.chatName,
+          whatsappMessageId: payload.whatsappMessageId,
+          messageSentAt: payload.messageSentAt,
+          duration: payload.duration
+        }
       });
     }
   } catch (err) {
