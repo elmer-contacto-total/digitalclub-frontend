@@ -79,8 +79,15 @@ export class CapturedMediaItemComponent {
   media = input.required<CapturedMedia>();
 
   formatTime(): string {
-    const dateStr = this.media().messageSentAt || this.media().capturedAt;
+    let dateStr = this.media().messageSentAt || this.media().capturedAt;
     if (!dateStr) return '';
+
+    // Si el string no tiene Z ni offset, asumir que es UTC y agregar Z
+    if (!dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:\d{2}$/)) {
+      // Reemplazar espacio por T si es necesario para formato ISO
+      dateStr = dateStr.replace(' ', 'T') + 'Z';
+    }
+
     const date = new Date(dateStr);
     // Mostrar hora en UTC
     return date.toLocaleTimeString('es-PE', {
