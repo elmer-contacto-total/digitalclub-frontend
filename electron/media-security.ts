@@ -1110,33 +1110,67 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // ==========================================================================
-  // Función para obtener el teléfono ACTUAL del chat (lectura fresca del DOM)
+  // Función para obtener el teléfono del CONTEXTO del mensaje
+  // IMPORTANTE: Busca en el área de chat (#main) donde está la imagen,
+  // NO en el sidebar que puede haber cambiado
   // ==========================================================================
-  function getFreshChatPhone() {
+  function getPhoneFromChatContext(messageEl) {
     try {
-      // MÉTODO 1: Sidebar - buscar chat activo (MÁS CONFIABLE)
-      const sidebar = document.querySelector('#pane-side');
-      if (sidebar) {
-        const activeChat = sidebar.querySelector('[aria-selected="true"]') ||
-                          sidebar.querySelector('[data-testid="cell-frame-container"]:focus-within');
-        if (activeChat) {
-          let el = activeChat;
-          for (let i = 0; i < 10 && el; i++) {
-            const dataId = el.getAttribute?.('data-id');
-            if (dataId && dataId.includes('@c.us')) {
-              let phone = dataId.split('@')[0];
-              phone = phone.replace(/^(true|false)_/, '');
-              if (/^\\d{9,15}$/.test(phone)) {
-                console.log('[HablaPe Fresh] Teléfono del sidebar:', phone);
-                return phone;
-              }
+      console.log('[HablaPe Context] ===== Buscando teléfono del contexto del mensaje =====');
+
+      // MÉTODO 1: Buscar en los mensajes del mismo chat (#main)
+      // Los mensajes con formato @c.us contienen el teléfono real
+      const mainPane = document.querySelector('#main');
+      if (mainPane) {
+        // Buscar TODOS los mensajes con data-id que contengan @c.us
+        const messagesWithPhone = mainPane.querySelectorAll('[data-id*="@c.us"]');
+        console.log('[HablaPe Context] Mensajes con @c.us en #main:', messagesWithPhone.length);
+
+        for (const msg of messagesWithPhone) {
+          const dataId = msg.getAttribute('data-id');
+          if (dataId && dataId.includes('@c.us')) {
+            // Formato: true_PHONE@c.us_XXX o false_PHONE@c.us_XXX
+            let phone = dataId.split('@')[0];
+            phone = phone.replace(/^(true|false)_/, '');
+            if (/^\\d{9,15}$/.test(phone)) {
+              console.log('[HablaPe Context] ✓ Teléfono encontrado en mensajes del chat:', phone);
+              return phone;
             }
-            el = el.parentElement;
           }
         }
       }
 
-      // MÉTODO 2: Header de conversación
+      // MÉTODO 2: Extraer del data-id del mensaje mismo si tiene @c.us
+      if (messageEl) {
+        const msgDataId = messageEl.getAttribute('data-id');
+        if (msgDataId && msgDataId.includes('@c.us')) {
+          let phone = msgDataId.split('@')[0];
+          phone = phone.replace(/^(true|false)_/, '');
+          if (/^\\d{9,15}$/.test(phone)) {
+            console.log('[HablaPe Context] ✓ Teléfono extraído del mensaje:', phone);
+            return phone;
+          }
+        }
+      }
+
+      // MÉTODO 3: Buscar en TODO el documento mensajes con @c.us
+      // (por si el #main no está accesible)
+      const allMessages = document.querySelectorAll('[data-id*="@c.us"]');
+      console.log('[HablaPe Context] Mensajes con @c.us en todo el DOM:', allMessages.length);
+
+      for (const msg of allMessages) {
+        const dataId = msg.getAttribute('data-id');
+        if (dataId && dataId.includes('@c.us')) {
+          let phone = dataId.split('@')[0];
+          phone = phone.replace(/^(true|false)_/, '');
+          if (/^\\d{9,15}$/.test(phone)) {
+            console.log('[HablaPe Context] ✓ Teléfono encontrado en DOM:', phone);
+            return phone;
+          }
+        }
+      }
+
+      // MÉTODO 4 (FALLBACK): Header de conversación
       const chatHeader = document.querySelector('[data-testid="conversation-header"]');
       if (chatHeader) {
         const phoneSpan = chatHeader.querySelector('span[title]');
@@ -1145,23 +1179,29 @@ const MEDIA_CAPTURE_SCRIPT = `
           const phoneMatch = title?.match(/\\+?[0-9\\s-]{10,}/);
           if (phoneMatch) {
             const phone = phoneMatch[0].replace(/[\\s-]/g, '');
-            console.log('[HablaPe Fresh] Teléfono del header:', phone);
+            console.log('[HablaPe Context] Teléfono del header:', phone);
             return phone;
           }
         }
       }
 
-      // MÉTODO 3: Variable de Electron (puede estar desactualizada)
+      // MÉTODO 5 (ÚLTIMO FALLBACK): Variable de Electron
       if (window.__hablapeCurrentChatPhone && window.__hablapeCurrentChatPhone !== 'unknown') {
-        console.log('[HablaPe Fresh] Usando variable Electron:', window.__hablapeCurrentChatPhone);
+        console.log('[HablaPe Context] ⚠ Usando variable Electron (fallback):', window.__hablapeCurrentChatPhone);
         return window.__hablapeCurrentChatPhone;
       }
 
+      console.log('[HablaPe Context] ✗ No se encontró teléfono');
       return 'unknown';
     } catch (err) {
-      console.log('[HablaPe Fresh] Error:', err.message);
+      console.log('[HablaPe Context] Error:', err.message);
       return window.__hablapeCurrentChatPhone || 'unknown';
     }
+  }
+
+  // Alias para compatibilidad
+  function getFreshChatPhone() {
+    return getPhoneFromChatContext(null);
   }
 
   // ==========================================================================
@@ -1307,16 +1347,17 @@ const MEDIA_CAPTURE_SCRIPT = `
       e.preventDefault();
       e.stopPropagation();
 
-      // IMPORTANTE: Capturar el teléfono AHORA, antes de cualquier operación async
-      // Esto evita race conditions si el usuario cambia de chat mientras se procesa
-      const clickTimeChatPhone = getFreshChatPhone();
-      console.log('[HablaPe Protect] ✓ Click - Teléfono capturado al momento del click:', clickTimeChatPhone);
+      // IMPORTANTE: Capturar el teléfono del CONTEXTO del mensaje
+      // Busca en los mensajes del área de chat (#main), no en el sidebar
+      // Esto evita errores cuando el usuario cambia de chat rápidamente
+      const clickTimeChatPhone = getPhoneFromChatContext(messageEl);
+      console.log('[HablaPe Protect] ✓ Click - Teléfono del contexto del mensaje:', clickTimeChatPhone);
 
       // Revelar imagen
       img.classList.add('revealed');
       overlay.classList.add('hidden');
 
-      // Capturar la imagen CON el teléfono capturado al momento del click
+      // Capturar la imagen CON el teléfono del contexto
       await captureImageFromMessage(img, messageEl, clickTimeChatPhone);
 
       // Remover overlay después de la animación
