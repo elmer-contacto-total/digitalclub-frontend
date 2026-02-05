@@ -516,25 +516,33 @@ const BLOCK_DOWNLOAD_SCRIPT = `
 
       // Buscar mensaje padre para obtener más contexto
       let messageId = null;
-      let messageEl = video.closest('[data-id]');
-      if (messageEl) {
-        messageId = messageEl.getAttribute('data-id');
+      try {
+        const messageEl = video.closest?.('[data-id]');
+        if (messageEl) {
+          messageId = messageEl.getAttribute('data-id');
+        }
+      } catch (e) {
+        // Ignorar errores al buscar mensaje padre
       }
 
-      window.__hablapeAuditQueue.push({
-        action: 'VIDEO_BLOCKED',
-        chatPhone: chatPhone,
-        chatName: chatName,
-        url: originalSrc,
-        timestamp: new Date().toISOString(),
-        description: 'Intento de reproducción de video bloqueado',
-        metadata: {
-          whatsappMessageId: messageId,
-          videoWidth: video.videoWidth || null,
-          videoHeight: video.videoHeight || null
-        }
-      });
-      console.log('[HablaPe] Video bloqueado y auditado:', originalSrc.substring(0, 50));
+      try {
+        window.__hablapeAuditQueue.push({
+          action: 'VIDEO_BLOCKED',
+          chatPhone: chatPhone,
+          chatName: chatName,
+          url: originalSrc,
+          timestamp: new Date().toISOString(),
+          description: 'Intento de reproducción de video bloqueado',
+          metadata: {
+            whatsappMessageId: messageId,
+            videoWidth: video.videoWidth || null,
+            videoHeight: video.videoHeight || null
+          }
+        });
+        console.log('[HablaPe] Video bloqueado y auditado:', String(originalSrc || '').substring(0, 50));
+      } catch (auditErr) {
+        console.log('[HablaPe] Error al auditar video:', auditErr);
+      }
     }
   };
 
