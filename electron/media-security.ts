@@ -1181,8 +1181,9 @@ const MEDIA_CAPTURE_SCRIPT = `
         if (timeMatch) {
           const [, time, date] = timeMatch;
           const [day, month, year] = date.split('/');
-          // Format as ISO timestamp
-          const messageSentAt = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + time + ':00';
+          // Format as ISO timestamp - ensure hour has 2 digits
+          const [hours, mins] = time.split(':');
+          const messageSentAt = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + hours.padStart(2, '0') + ':' + mins + ':00';
 
           // Guardar en cache para cuando estemos en el visor
           lastKnownMessageTimestamp = messageSentAt;
@@ -1305,7 +1306,9 @@ const MEDIA_CAPTURE_SCRIPT = `
         if (timeMatch) {
           const [, time, date] = timeMatch;
           const [day, month, year] = date.split('/');
-          lastKnownMessageTimestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + time + ':00';
+          // Ensure hour has 2 digits for ISO format
+          const [hours, mins] = time.split(':');
+          lastKnownMessageTimestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + hours.padStart(2, '0') + ':' + mins + ':00';
           console.log('[HablaPe Debug] MÉTODO 1 OK: timestamp=' + lastKnownMessageTimestamp);
           return;
         }
@@ -1473,7 +1476,9 @@ const MEDIA_CAPTURE_SCRIPT = `
           const fullDate = prePlainText.match(/(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/);
           if (fullDate) {
             const [, day, month, year] = fullDate;
-            const timestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + time + ':00';
+            // Ensure hour has 2 digits for ISO format
+            const [hours, mins] = time.split(':');
+            const timestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + 'T' + hours.padStart(2, '0') + ':' + mins + ':00';
             console.log('[HablaPe Auto] Timestamp extraído (método 1):', timestamp);
             return timestamp;
           }
