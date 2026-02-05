@@ -838,47 +838,88 @@ const MEDIA_CAPTURE_SCRIPT = `
   };
 
   function extractPhoneFromContactPanel() {
-    console.log('[HablaPe] 🔍 Buscando número en panel de contacto...');
-
     // MÉTODO 1: Buscar panel por data-testid conocidos
     let contactPanel = document.querySelector('[data-testid="contact-info-drawer"]') ||
                        document.querySelector('[data-testid="drawer_right"]') ||
-                       document.querySelector('[data-testid="chat-info-drawer"]');
+                       document.querySelector('[data-testid="chat-info-drawer"]') ||
+                       document.querySelector('[data-testid="side-drawer"]') ||
+                       document.querySelector('[data-testid="contact-drawer"]') ||
+                       document.querySelector('[data-testid="chat-drawer"]') ||
+                       document.querySelector('[data-testid="drawer"]') ||
+                       document.querySelector('[data-testid="info-drawer-body"]') ||
+                       document.querySelector('[data-testid="drawer-body"]');
 
-    // MÉTODO 2: Buscar panel por estructura (div que contiene "Contact info" o "Info del contacto")
+    // MÉTODO 1.5: Buscar por cualquier drawer que contenga teléfono
+    if (!contactPanel) {
+      const allDrawers = document.querySelectorAll('[data-testid*="drawer"]');
+      for (const drawer of allDrawers) {
+        const text = drawer.textContent || '';
+        if (/\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/.test(text)) {
+          contactPanel = drawer;
+          break;
+        }
+      }
+    }
+
+    // MÉTODO 2: Buscar panel lateral por estructura y posición
     if (!contactPanel) {
       const allDivs = document.querySelectorAll('div');
+      let bestCandidate = null;
+      let bestScore = 0;
+
       for (const div of allDivs) {
+        const rect = div.getBoundingClientRect();
         const text = div.textContent || '';
-        // Panel de info tiene "Contact info" o similar y un número de teléfono
-        if ((text.includes('Contact info') || text.includes('Info') || text.includes('About')) &&
-            /\\+\\d{1,3}\\s*\\d/.test(text)) {
-          // Verificar que no sea el chat principal
-          if (!div.querySelector('#main') && div.offsetWidth > 200) {
-            contactPanel = div;
-            console.log('[HablaPe] Panel encontrado por contenido');
-            break;
-          }
+
+        // Requisito obligatorio: debe contener un teléfono
+        const hasPhone = /\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/.test(text);
+        if (!hasPhone) continue;
+
+        const isVisible = rect.width > 0 && rect.height > 0;
+        if (!isVisible) continue;
+
+        // Condiciones flexibles para diferentes tamaños de ventana
+        const isRightAligned = rect.right > window.innerWidth - 100;
+        const isRightHalf = rect.left > window.innerWidth * 0.4;
+        const hasReasonableWidth = rect.width >= 200 && rect.width <= 700;
+        const isNotTooLarge = rect.height < window.innerHeight * 0.98;
+        const isNotTooSmall = rect.height > 200;
+        const isNotFullWidth = rect.width < window.innerWidth * 0.6;
+
+        // Sistema de puntuación
+        let score = 0;
+        if (isRightAligned) score += 4;
+        else if (isRightHalf) score += 2;
+        if (hasReasonableWidth) score += 3;
+        if (rect.width >= 280 && rect.width <= 450) score += 2;
+        if (isNotTooLarge && isNotTooSmall) score += 2;
+        if (isNotFullWidth) score += 2;
+        if (rect.width > 600) score -= 2;
+        if (rect.height > window.innerHeight * 0.9) score -= 1;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestCandidate = div;
         }
+      }
+
+      if (bestCandidate) {
+        contactPanel = bestCandidate;
       }
     }
 
     // Si no hay panel abierto, no extraer nada
     if (!contactPanel) {
-      console.log('[HablaPe] ❌ No hay panel de contacto abierto');
       return null;
     }
 
-    // VERIFICACIÓN: Si tenemos nombre del chat actual, verificar que el panel corresponde
-    // Esto evita extraer el teléfono del panel de un chat anterior
+    // Verificar que el panel corresponde al chat actual
     if (currentChatNameForExtraction) {
-      // Buscar el nombre en el panel (generalmente está en un span con title o en un h2)
       const panelName = contactPanel.querySelector('span[title]')?.getAttribute('title') ||
                        contactPanel.querySelector('h2')?.textContent?.trim() ||
                        contactPanel.querySelector('header span')?.textContent?.trim();
 
       if (panelName) {
-        // Comparar nombres (permitir match parcial para variaciones)
         const normalize = (s) => (s || '').toLowerCase().trim().substring(0, 20);
         const normalizedPanelName = normalize(panelName);
         const normalizedChatName = normalize(currentChatNameForExtraction);
@@ -886,58 +927,43 @@ const MEDIA_CAPTURE_SCRIPT = `
         if (normalizedPanelName !== normalizedChatName &&
             !normalizedPanelName.includes(normalizedChatName) &&
             !normalizedChatName.includes(normalizedPanelName)) {
-          console.log('[HablaPe] ⚠️ Panel NO coincide con chat actual:');
-          console.log('[HablaPe]   Panel:', panelName);
-          console.log('[HablaPe]   Chat actual:', currentChatNameForExtraction);
-          return null; // No extraer - es de otro chat
+          return null; // Panel no coincide con chat actual
         }
-        console.log('[HablaPe] ✓ Panel coincide con chat actual:', panelName);
       }
     }
 
-    // MÉTODO 3: Buscar cualquier elemento que tenga el patrón de teléfono con +
-    // El número en WhatsApp aparece como "+51 935 374 672"
+    // Buscar teléfono en el panel
     const phoneRegex = /\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/;
-
-    // Buscar en el panel encontrado
     const searchRoot = contactPanel;
 
     // Buscar en spans
     const allSpans = searchRoot.querySelectorAll('span');
     for (const span of allSpans) {
       const text = span.textContent?.trim() || '';
-
-      // Buscar patrón exacto de teléfono con código de país
       if (phoneRegex.test(text)) {
         const cleanNumber = text.replace(/[\\s\\-\\(\\)\\+]/g, '');
         if (cleanNumber.length >= 9 && cleanNumber.length <= 15) {
-          console.log('[HablaPe] 📱 Número encontrado en span:', text, '→', cleanNumber);
           return cleanNumber;
         }
       }
-
-      // También buscar patrón más genérico
       const cleanNumber = text.replace(/[\\s\\-\\(\\)]/g, '');
       if (/^\\+?\\d{9,15}$/.test(cleanNumber) && cleanNumber.length >= 9) {
-        console.log('[HablaPe] 📱 Número encontrado (genérico):', cleanNumber);
         return cleanNumber.replace(/^\\+/, '');
       }
     }
 
-    // Buscar en elementos con role="button" que contengan teléfono (a veces es clickeable)
+    // Buscar en botones
     const buttons = searchRoot.querySelectorAll('[role="button"], button');
     for (const btn of buttons) {
       const text = btn.textContent?.trim() || '';
       if (phoneRegex.test(text)) {
         const cleanNumber = text.replace(/[\\s\\-\\(\\)\\+]/g, '');
         if (cleanNumber.length >= 9 && cleanNumber.length <= 15) {
-          console.log('[HablaPe] 📱 Número encontrado en botón:', cleanNumber);
           return cleanNumber;
         }
       }
     }
 
-    console.log('[HablaPe] ❌ No se encontró número en el panel');
     return null;
   }
 
@@ -945,34 +971,101 @@ const MEDIA_CAPTURE_SCRIPT = `
     if (contactPanelObserver) return;
 
     contactPanelObserver = new MutationObserver((mutations) => {
-      // Verificar si el blocker está esperando el número
       const blocker = document.getElementById('hablape-chat-blocker');
-      const needsPhone = blocker && blocker.getAttribute('data-needs-phone');
+      if (!blocker) return;
 
-      // También intentar extraer aunque no haya blocker (por si se abre el panel manualmente)
       const phone = extractPhoneFromContactPanel();
-
-      if (phone && phone !== lastExtractedPhone) {
-        lastExtractedPhone = phone;
-        console.log('[HablaPe] ✓ Número extraído del panel de contacto:', phone);
-
-        // Guardar en variable global para que Electron lo lea
-        window.__hablapeExtractedPhone = phone;
-        window.__hablapePhoneExtractedAt = Date.now();
+      if (phone) {
+        const shouldUpdate = phone !== lastExtractedPhone || !window.__hablapeExtractedPhone;
+        if (shouldUpdate) {
+          lastExtractedPhone = phone;
+          window.__hablapeExtractedPhone = phone;
+          window.__hablapePhoneExtractedAt = Date.now();
+          console.log('[HablaPe] ✓ Número extraído del panel:', phone);
+          console.log('[HABLAPE_PHONE_EXTRACTED]' + phone);
+        }
       }
     });
 
-    // Observar cambios en todo el documento para detectar cuando se abre el panel
     contactPanelObserver.observe(document.body, {
       childList: true,
       subtree: true
     });
-
-    console.log('[HablaPe] Observer de panel de contacto iniciado');
   }
 
   // Iniciar el observer después de que WhatsApp cargue
-  setTimeout(startContactPanelObserver, 5000);
+  setTimeout(() => {
+    startContactPanelObserver();
+
+    // Click listener para detectar clicks en el header del chat
+    document.addEventListener('click', (e) => {
+      const blocker = document.getElementById('hablape-chat-blocker');
+      if (!blocker) return;
+
+      const clickPath = e.composedPath ? e.composedPath() : [];
+      let isHeaderClick = false;
+
+      for (const el of clickPath) {
+        if (el.getAttribute) {
+          const testId = el.getAttribute('data-testid');
+          if (testId && (testId.includes('conversation-header') ||
+                         testId.includes('contact') ||
+                         testId.includes('avatar') ||
+                         testId.includes('chat-title'))) {
+            isHeaderClick = true;
+            break;
+          }
+          if (el.classList && el.classList.contains('_amie')) {
+            isHeaderClick = true;
+            break;
+          }
+        }
+      }
+
+      if (isHeaderClick) {
+        // Función helper para intentar extracción
+        const tryExtract = () => {
+          const phone = extractPhoneFromContactPanel();
+          if (phone && (phone !== lastExtractedPhone || !window.__hablapeExtractedPhone)) {
+            lastExtractedPhone = phone;
+            window.__hablapeExtractedPhone = phone;
+            window.__hablapePhoneExtractedAt = Date.now();
+            console.log('[HablaPe] ✓ Número extraído:', phone);
+            console.log('[HABLAPE_PHONE_EXTRACTED]' + phone);
+            return true;
+          }
+          return false;
+        };
+
+        // Intentar extracción con reintentos (500ms, 1000ms, 2000ms)
+        setTimeout(() => {
+          if (!tryExtract()) setTimeout(() => {
+            if (!tryExtract()) setTimeout(tryExtract, 1000);
+          }, 500);
+        }, 500);
+      }
+    }, true);
+
+    // Listener de resize - cuando cambia el tamaño de ventana, re-evaluar
+    let resizeTimeout = null;
+    window.addEventListener('resize', () => {
+      const blocker = document.getElementById('hablape-chat-blocker');
+      if (!blocker || window.__hablapeExtractedPhone) return;
+
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        const phone = extractPhoneFromContactPanel();
+        if (phone) {
+          lastExtractedPhone = phone;
+          window.__hablapeExtractedPhone = phone;
+          window.__hablapePhoneExtractedAt = Date.now();
+          console.log('[HablaPe] ✓ Número extraído:', phone);
+          console.log('[HABLAPE_PHONE_EXTRACTED]' + phone);
+        }
+      }, 300);
+    });
+
+  }, 5000);
 
   // Variables de estado para contexto del mensaje
   let lastKnownChatPhone = 'unknown';

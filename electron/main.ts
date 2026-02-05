@@ -712,10 +712,19 @@ function createWhatsAppView(): void {
     }, 5000); // Esperar 5 segundos para que WhatsApp cargue
   });
 
-  // Abrir DevTools para debug (quitar en producción)
-  // TEMPORAL: Habilitado para debug de captura de medios
-  whatsappView.webContents.openDevTools({ mode: 'detach' });
-  // mainWindow.webContents.openDevTools({ mode: 'detach' });
+  // Escuchar mensajes de consola de WhatsApp para detectar teléfonos extraídos
+  // Esto es más confiable que las variables globales
+  whatsappView.webContents.on('console-message', (event, level, message) => {
+    // Buscar mensaje especial de teléfono extraído
+    if (message.startsWith('[HABLAPE_PHONE_EXTRACTED]')) {
+      const phone = message.replace('[HABLAPE_PHONE_EXTRACTED]', '').trim();
+      if (phone && chatBlockState.isBlocked) {
+        console.log('[HablaPe] ✓ Teléfono extraído via console-message:', phone);
+        handlePhoneExtracted(phone);
+      }
+    }
+  });
+
 }
 
 /**
@@ -1075,7 +1084,7 @@ async function showPhoneNeededInWhatsApp(): Promise<void> {
 
 /**
  * Verifica si el usuario extrajo un número del panel de contacto
- * Se llama periódicamente desde el scanner
+ * Método de fallback - el método principal es via console-message
  */
 async function checkForExtractedPhone(): Promise<void> {
   if (!whatsappView || !mainWindow || !chatBlockState.isBlocked) return;
@@ -1085,21 +1094,20 @@ async function checkForExtractedPhone(): Promise<void> {
       (function() {
         if (window.__hablapeExtractedPhone && window.__hablapePhoneExtractedAt) {
           const phone = window.__hablapeExtractedPhone;
-          const extractedAt = window.__hablapePhoneExtractedAt;
-          // Limpiar para no procesar dos veces
           window.__hablapeExtractedPhone = null;
           window.__hablapePhoneExtractedAt = null;
-          return { phone, extractedAt };
+          return { phone };
         }
-        return null;
+        return { phone: null };
       })()
     `, true);
 
     if (result && result.phone) {
+      console.log('[HablaPe] ✓ Teléfono extraído (fallback):', result.phone);
       handlePhoneExtracted(result.phone);
     }
   } catch (err) {
-    // Ignorar errores
+    // Silenciar errores - el método principal es console-message
   }
 }
 
@@ -1318,6 +1326,7 @@ async function scanChat(): Promise<void> {
         // Hay un chat abierto pero no se encontró el número
         // Mostrar instrucciones al usuario para que revele el número
         const nameChanged = result.chatName !== lastDetectedName;
+        console.log('[HablaPe Debug] no_phone_found - chatName:', result.chatName, 'nameChanged:', nameChanged, 'isBlocked:', chatBlockState.isBlocked);
         if (nameChanged) {
           console.log('[HablaPe] Chat sin número detectado:', result.chatName);
           lastDetectedName = result.chatName;
