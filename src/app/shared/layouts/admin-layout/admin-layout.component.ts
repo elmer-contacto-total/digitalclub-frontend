@@ -5,13 +5,14 @@ import { Subject, takeUntil } from 'rxjs';
 import { HeaderComponent } from '../../components/header/header.component';
 import { SidebarComponent } from '../../components/sidebar/sidebar.component';
 import { ImpersonationToolbarComponent } from '../../components/impersonation-toolbar/impersonation-toolbar.component';
+import { UpdateBannerComponent } from '../../components/update-banner/update-banner.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { ElectronService } from '../../../core/services/electron.service';
 
 @Component({
   selector: 'app-admin-layout',
   standalone: true,
-  imports: [CommonModule, RouterModule, HeaderComponent, SidebarComponent, ImpersonationToolbarComponent],
+  imports: [CommonModule, RouterModule, HeaderComponent, SidebarComponent, ImpersonationToolbarComponent, UpdateBannerComponent],
   templateUrl: './admin-layout.component.html',
   styleUrl: './admin-layout.component.scss'
 })

@@ -29,6 +29,16 @@ interface MediaCapturedEvent {
   timestamp: string;
 }
 
+// Update available event from main process
+interface UpdateAvailableInfo {
+  version: string;
+  downloadUrl: string;
+  releaseNotes: string | null;
+  fileSize: number | null;
+  mandatory: boolean;
+  publishedAt: string;
+}
+
 // API expuesta al renderer (sin contextBridge para contextIsolation: false)
 const electronAPI = {
   // === Controles de ventana ===
@@ -199,6 +209,22 @@ const electronAPI = {
   // Enviar número extraído del panel de contacto (usado por media-security.ts)
   sendExtractedPhone: (phone: string) => {
     ipcRenderer.send('phone-extracted-from-panel', { phone });
+  },
+
+  // === Update Checker ===
+  // Listen for update available notifications from main process
+  onUpdateAvailable: (callback: (info: UpdateAvailableInfo) => void) => {
+    ipcRenderer.on('update-available', (_, info) => callback(info));
+  },
+
+  // Open download URL in browser
+  openDownloadUrl: (url: string): Promise<boolean> => {
+    return ipcRenderer.invoke('open-download-url', url);
+  },
+
+  // Get current app version
+  getAppVersion: (): Promise<string> => {
+    return ipcRenderer.invoke('get-app-version');
   }
 };
 
@@ -249,6 +275,10 @@ declare global {
       clearActiveClient: () => void;
       crmClientReady: (phone: string) => void;
       removeAllListeners: (channel: string) => void;
+      // Update Checker
+      onUpdateAvailable: (callback: (info: { version: string; downloadUrl: string; releaseNotes: string | null; fileSize: number | null; mandatory: boolean; publishedAt: string }) => void) => void;
+      openDownloadUrl: (url: string) => Promise<boolean>;
+      getAppVersion: () => Promise<string>;
     };
   }
 }

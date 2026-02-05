@@ -16,6 +16,10 @@ import {
   RawMediaCaptureData,
   generateMediaId
 } from './media-security';
+import { checkForUpdates, notifyUpdateAvailable, openDownloadUrl } from './update-checker';
+
+// App version - IMPORTANT: Keep in sync with package.json
+const APP_VERSION = '1.0.0';
 
 // Fingerprint único para esta instalación
 let userFingerprint: UserFingerprint;
@@ -424,6 +428,24 @@ function createWindow(): void {
   mainWindow.once('ready-to-show', () => {
     mainWindow?.maximize();
     mainWindow?.show();
+
+    // Check for updates after 5 seconds
+    setTimeout(async () => {
+      try {
+        console.log('[HablaPe] Checking for updates... Current version:', APP_VERSION);
+        const updateInfo = await checkForUpdates(APP_VERSION);
+
+        if (updateInfo?.updateAvailable && mainWindow && !mainWindow.isDestroyed()) {
+          console.log('[HablaPe] Update available:', updateInfo.latestVersion?.version);
+          notifyUpdateAvailable(mainWindow, updateInfo);
+        } else {
+          console.log('[HablaPe] No update available or app is up to date');
+        }
+      } catch (error) {
+        console.error('[HablaPe] Error checking for updates:', error);
+        // Silently fail - update check is not critical
+      }
+    }, 5000);
   });
 
   // Manejar resize - solo actualizar si WhatsApp está visible
@@ -2099,6 +2121,19 @@ function setupIPC(): void {
       mainWindow?.webContents.reload();
       return false;
     }
+  });
+
+  // === Update Checker ===
+  ipcMain.handle('open-download-url', (_, url: string) => {
+    if (url && url.startsWith('http')) {
+      openDownloadUrl(url);
+      return true;
+    }
+    return false;
+  });
+
+  ipcMain.handle('get-app-version', () => {
+    return APP_VERSION;
   });
 }
 

@@ -45,6 +45,18 @@ interface ElectronAPI {
 
   // Angular bounds
   getAngularBounds?(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
+
+  // Update checker
+  onUpdateAvailable?(callback: (info: {
+    version: string;
+    downloadUrl: string;
+    releaseNotes: string | null;
+    fileSize: number | null;
+    mandatory: boolean;
+    publishedAt: string;
+  }) => void): void;
+  openDownloadUrl?(url: string): Promise<boolean>;
+  getAppVersion?(): Promise<string>;
 }
 
 declare global {
