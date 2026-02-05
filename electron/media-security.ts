@@ -709,9 +709,9 @@ const MEDIA_CAPTURE_SCRIPT = `
     console.log('[HablaPe] ⏳ CHAT BLOQUEADO - Sesión #' + currentSession);
 
     function tryShowBlocker(attempt) {
-      // Verificar que esta sesión siga siendo válida
-      if (blockSessionId !== currentSession) {
-        console.log('[HablaPe] Sesión #' + currentSession + ' invalidada, abortando');
+      // Verificar que esta sesión siga siendo válida Y que el blocker deba mostrarse
+      if (blockSessionId !== currentSession || !isBlockerVisible) {
+        console.log('[HablaPe] Sesión #' + currentSession + ' invalidada o blocker oculto, abortando');
         return;
       }
 
@@ -720,6 +720,11 @@ const MEDIA_CAPTURE_SCRIPT = `
         if (attempt < 15) {
           setTimeout(() => tryShowBlocker(attempt + 1), 150);
         }
+        return;
+      }
+
+      // Verificar de nuevo antes de crear (por si cambió durante el timeout)
+      if (!isBlockerVisible) {
         return;
       }
 
@@ -752,6 +757,8 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   // Ocultar el blocker (cuando el CRM carga)
   window.__hablapeHideChatBlocker = function() {
+    // Incrementar sesión para invalidar cualquier tryShowBlocker pendiente
+    blockSessionId++;
     const currentSession = blockSessionId;
     isBlockerVisible = false;
 
@@ -818,8 +825,11 @@ const MEDIA_CAPTURE_SCRIPT = `
         // Limpiar también el nombre actual (se establecerá cuando scanChat detecte el nuevo chat)
         currentChatNameForExtraction = null;
 
+        // Notificar a Electron que el chat está bloqueado (ANTES de mostrar el blocker visual)
+        // Esto sincroniza el estado lógico con el visual
+        console.log('[HABLAPE_CHAT_BLOCKED]');
+
         // Mostrar blocker INMEDIATAMENTE
-        console.log('[HablaPe] Click en sidebar detectado - Bloqueando inmediatamente');
         window.__hablapeShowChatBlocker();
       }
     }

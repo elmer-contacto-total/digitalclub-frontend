@@ -42,11 +42,13 @@ let activeClientName: string | null = null;
 interface ChatBlockState {
   isBlocked: boolean;
   expectedPhone: string | null;  // Teléfono que esperamos que Angular cargue
+  waitingForManualExtraction: boolean; // True si estamos esperando que el usuario extraiga el número manualmente
   timeoutHandle: NodeJS.Timeout | null;
 }
 const chatBlockState: ChatBlockState = {
   isBlocked: false,
   expectedPhone: null,
+  waitingForManualExtraction: false,
   timeoutHandle: null
 };
 const CHAT_BLOCK_TIMEOUT = 10000; // 10 segundos máximo de bloqueo
@@ -721,15 +723,36 @@ function createWhatsAppView(): void {
     }, 5000); // Esperar 5 segundos para que WhatsApp cargue
   });
 
-  // Escuchar mensajes de consola de WhatsApp para detectar teléfonos extraídos
-  // Esto es más confiable que las variables globales
+  // Escuchar mensajes de consola de WhatsApp para detectar eventos
   whatsappView.webContents.on('console-message', (event, level, message) => {
-    // Buscar mensaje especial de teléfono extraído
+    // Teléfono extraído del panel de contacto
     if (message.startsWith('[HABLAPE_PHONE_EXTRACTED]')) {
       const phone = message.replace('[HABLAPE_PHONE_EXTRACTED]', '').trim();
       if (phone && chatBlockState.isBlocked) {
         console.log('[HablaPe] ✓ Teléfono extraído via console-message:', phone);
         handlePhoneExtracted(phone);
+      }
+    }
+    // Chat bloqueado por click en sidebar - sincronizar estado
+    else if (message === '[HABLAPE_CHAT_BLOCKED]') {
+      // Sincronizar estado: marcar como bloqueado antes de que el scanner lo detecte
+      // Esto evita race conditions donde Angular responde antes que el scanner
+      if (!chatBlockState.isBlocked) {
+        chatBlockState.isBlocked = true;
+        chatBlockState.expectedPhone = null; // Se establecerá cuando el scanner detecte el teléfono
+        chatBlockState.waitingForManualExtraction = false; // El scanner determinará si necesita extracción manual
+        console.log('[HablaPe] Chat bloqueado via sidebar click (pre-sync)');
+
+        // Timeout de seguridad por si el scanner no detecta nada
+        if (chatBlockState.timeoutHandle) {
+          clearTimeout(chatBlockState.timeoutHandle);
+        }
+        chatBlockState.timeoutHandle = setTimeout(() => {
+          if (chatBlockState.isBlocked) {
+            console.log('[HablaPe] ⚠️ TIMEOUT (sidebar click) - desbloqueando');
+            forceUnblockWhatsAppChat();
+          }
+        }, CHAT_BLOCK_TIMEOUT);
       }
     }
   });
@@ -972,9 +995,10 @@ async function blockWhatsAppChat(expectedPhone: string): Promise<void> {
     clearTimeout(chatBlockState.timeoutHandle);
   }
 
-  // Actualizar estado
+  // Actualizar estado - bloqueo normal (no extracción manual)
   chatBlockState.isBlocked = true;
   chatBlockState.expectedPhone = expectedPhone;
+  chatBlockState.waitingForManualExtraction = false;
 
   console.log('[HablaPe] ⏳ BLOQUEANDO chat - esperando CRM para:', expectedPhone);
 
@@ -1013,18 +1037,46 @@ async function tryUnblockWhatsAppChat(processedPhone: string): Promise<boolean> 
   const expectedNorm = normalizePhone(chatBlockState.expectedPhone);
   const processedNorm = normalizePhone(processedPhone);
 
-  console.log('[HablaPe] tryUnblock: expected=' + expectedNorm + ', processed=' + processedNorm);
+  console.log('[HablaPe] tryUnblock: expected=' + expectedNorm + ', processed=' + processedNorm + ', waitingManual=' + chatBlockState.waitingForManualExtraction);
 
-  if (expectedNorm && processedNorm && expectedNorm === processedNorm) {
-    // ✓ El teléfono coincide - desbloquear
-    forceUnblockWhatsAppChat();
-    console.log('[HablaPe] ✓ DESBLOQUEADO - CRM cargó el cliente correcto');
-    return true;
-  } else {
-    // El teléfono no coincide - ignorar (es de un chat anterior)
-    console.log('[HablaPe] ⚠️ Ignorando desbloqueo - teléfono no coincide');
+  // Caso especial: Esperando extracción manual (overlay de instrucciones)
+  // NO desbloquear con crmClientReady vacío - solo se desbloquea con extracción manual
+  if (chatBlockState.waitingForManualExtraction && !processedNorm) {
+    console.log('[HablaPe] ⏳ Esperando extracción manual - ignorando crmClientReady vacío');
     return false;
   }
+
+  // Caso 1: expectedPhone es null pero NO estamos esperando extracción manual
+  // (bloqueado desde sidebar antes que scanner detectara)
+  if (!expectedNorm && !chatBlockState.waitingForManualExtraction) {
+    await forceUnblockWhatsAppChat();
+    console.log('[HablaPe] ✓ DESBLOQUEADO - CRM respondió (sidebar click, pre-scanner)');
+    return true;
+  }
+
+  // Caso 2: Hay teléfono procesado - desbloquear si coincide o si no hay expected
+  if (processedNorm) {
+    if (!expectedNorm || expectedNorm === processedNorm) {
+      await forceUnblockWhatsAppChat();
+      console.log('[HablaPe] ✓ DESBLOQUEADO - teléfono válido recibido');
+      return true;
+    } else {
+      // El teléfono no coincide - ignorar (es de un chat anterior)
+      console.log('[HablaPe] ⚠️ Ignorando desbloqueo - teléfono no coincide');
+      return false;
+    }
+  }
+
+  // Caso 3: Hay expectedPhone pero CRM no envió teléfono
+  // Y NO estamos esperando extracción manual
+  if (expectedNorm && !processedNorm && !chatBlockState.waitingForManualExtraction) {
+    await forceUnblockWhatsAppChat();
+    console.log('[HablaPe] ✓ DESBLOQUEADO - CRM procesó (sin teléfono en respuesta)');
+    return true;
+  }
+
+  console.log('[HablaPe] ⚠️ No se cumplió ninguna condición de desbloqueo');
+  return false;
 }
 
 /**
@@ -1032,26 +1084,41 @@ async function tryUnblockWhatsAppChat(processedPhone: string): Promise<boolean> 
  * Usado por timeout y casos especiales
  */
 async function forceUnblockWhatsAppChat(): Promise<void> {
+  console.log('[HablaPe] forceUnblockWhatsAppChat() llamado');
+
   // Cancelar timeout si existe
   if (chatBlockState.timeoutHandle) {
     clearTimeout(chatBlockState.timeoutHandle);
     chatBlockState.timeoutHandle = null;
   }
 
-  // Actualizar estado
+  // Actualizar estado - resetear todo
   chatBlockState.isBlocked = false;
   chatBlockState.expectedPhone = null;
+  chatBlockState.waitingForManualExtraction = false;
 
-  if (!whatsappView) return;
+  if (!whatsappView) {
+    console.log('[HablaPe] ⚠️ whatsappView es null - no se puede ocultar blocker');
+    return;
+  }
 
+  console.log('[HablaPe] Ejecutando __hablapeHideChatBlocker en WhatsApp...');
   try {
-    await whatsappView.webContents.executeJavaScript(`
-      if (window.__hablapeHideChatBlocker) {
-        window.__hablapeHideChatBlocker();
-      }
+    const result = await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        console.log('[HablaPe] Dentro de executeJavaScript para ocultar blocker');
+        if (window.__hablapeHideChatBlocker) {
+          window.__hablapeHideChatBlocker();
+          return 'success';
+        } else {
+          console.log('[HablaPe] ⚠️ __hablapeHideChatBlocker NO existe');
+          return 'function_not_found';
+        }
+      })()
     `, true);
+    console.log('[HablaPe] executeJavaScript resultado:', result);
   } catch (err) {
-    // Ignorar errores
+    console.error('[HablaPe] ERROR en executeJavaScript:', err);
   }
 }
 
@@ -1062,9 +1129,10 @@ async function forceUnblockWhatsAppChat(): Promise<void> {
 async function showPhoneNeededInWhatsApp(): Promise<void> {
   if (!whatsappView) return;
 
-  // Actualizar estado de bloqueo
+  // Actualizar estado de bloqueo - modo extracción manual
   chatBlockState.isBlocked = true;
   chatBlockState.expectedPhone = null; // No sabemos qué teléfono esperar aún
+  chatBlockState.waitingForManualExtraction = true; // NO desbloquear con crmClientReady vacío
 
   // Cancelar timeout anterior si existe
   if (chatBlockState.timeoutHandle) {
@@ -1775,10 +1843,10 @@ function setupIPC(): void {
   });
 
   // === CRM Ready - Intenta desbloquear el chat si el teléfono coincide ===
-  ipcMain.on('crm-client-ready', (_, data: { phone: string }) => {
+  ipcMain.on('crm-client-ready', async (_, data: { phone: string }) => {
     const phone = data?.phone || '';
     console.log('[HablaPe] *** CRM terminó de procesar:', phone || '(sin teléfono)');
-    tryUnblockWhatsAppChat(phone);
+    await tryUnblockWhatsAppChat(phone);
   });
 
   // === Controles de ventana ===

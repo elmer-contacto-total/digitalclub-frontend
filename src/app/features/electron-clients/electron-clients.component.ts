@@ -113,9 +113,12 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
 
         this.currentName.set(event.name);
 
-        // Sin teléfono = estado vacío, pero guardamos el evento para notificar
+        // Sin teléfono = estado vacío, limpiar todo
         if (!event.phone) {
           this.currentPhone.set(null);
+          this.contact.set(null);
+          this.selectedLabel.set(undefined);
+          this.notesField.set('');
           this.viewState.set('empty');
           return of({ event, result: null });
         }
@@ -164,8 +167,11 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           this.currentName() || ''
         );
       } else {
-        // No phone - show empty state
+        // No phone - show empty state and clear all contact data
+        this.contact.set(null);
         this.viewState.set('empty');
+        this.selectedLabel.set(undefined);
+        this.notesField.set('');
         this.electronService.clearActiveClient();
       }
 
