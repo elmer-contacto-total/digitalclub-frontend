@@ -14,7 +14,7 @@ export type ConfirmDialogType = 'info' | 'warning' | 'danger';
       [title]="title()"
       [closable]="true"
       [closeOnBackdrop]="false"
-      [showFooter]="false"
+      [showFooter]="true"
       size="sm"
       (closed)="onCancel()"
     >
