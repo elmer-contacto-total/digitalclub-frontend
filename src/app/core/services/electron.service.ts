@@ -57,6 +57,7 @@ interface ElectronAPI {
   }) => void): void;
   openDownloadUrl?(url: string): Promise<boolean>;
   getAppVersion?(): Promise<string>;
+  getPendingUpdate?(): Promise<{ version: string; downloadUrl: string; releaseNotes: string | null; fileSize: number | null; mandatory: boolean; publishedAt: string } | null>;
 }
 
 declare global {

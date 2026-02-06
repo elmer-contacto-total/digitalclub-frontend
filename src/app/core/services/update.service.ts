@@ -64,10 +64,19 @@ export class UpdateService implements OnDestroy {
 
     // Listen for update available events from Electron main process
     window.electronAPI?.onUpdateAvailable?.((info: UpdateInfo) => {
-      console.log('[UpdateService] Update available:', info);
+      console.log('[UpdateService] Update available (push):', info);
       this.updateAvailable.set(info);
       this.dismissed.set(false);
     });
+
+    // Also pull pending update (in case we missed the push event due to timing)
+    window.electronAPI?.getPendingUpdate?.().then((info: UpdateInfo | null) => {
+      if (info && !this.updateAvailable()) {
+        console.log('[UpdateService] Update available (pull):', info);
+        this.updateAvailable.set(info);
+        this.dismissed.set(false);
+      }
+    }).catch(() => {});
   }
 
   /**

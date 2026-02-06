@@ -225,6 +225,11 @@ const electronAPI = {
   // Get current app version
   getAppVersion: (): Promise<string> => {
     return ipcRenderer.invoke('get-app-version');
+  },
+
+  // Get pending update info (pull model - for when renderer missed the push)
+  getPendingUpdate: (): Promise<UpdateAvailableInfo | null> => {
+    return ipcRenderer.invoke('get-pending-update');
   }
 };
 
@@ -279,6 +284,7 @@ declare global {
       onUpdateAvailable: (callback: (info: { version: string; downloadUrl: string; releaseNotes: string | null; fileSize: number | null; mandatory: boolean; publishedAt: string }) => void) => void;
       openDownloadUrl: (url: string) => Promise<boolean>;
       getAppVersion: () => Promise<string>;
+      getPendingUpdate: () => Promise<{ version: string; downloadUrl: string; releaseNotes: string | null; fileSize: number | null; mandatory: boolean; publishedAt: string } | null>;
     };
   }
 }

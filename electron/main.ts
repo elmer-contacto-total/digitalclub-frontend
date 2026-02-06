@@ -21,6 +21,9 @@ import { checkForUpdates, notifyUpdateAvailable, openDownloadUrl } from './updat
 // App version - IMPORTANT: Keep in sync with package.json
 const APP_VERSION = '1.0.0';
 
+// Stored update info (so renderer can pull it if it missed the push)
+let pendingUpdateInfo: any = null;
+
 // Fingerprint único para esta instalación
 let userFingerprint: UserFingerprint;
 
@@ -437,6 +440,7 @@ function createWindow(): void {
 
         if (updateInfo?.updateAvailable && mainWindow && !mainWindow.isDestroyed()) {
           console.log('[HablaPe] Update available:', updateInfo.latestVersion?.version);
+          pendingUpdateInfo = updateInfo;
           notifyUpdateAvailable(mainWindow, updateInfo);
         } else {
           console.log('[HablaPe] No update available or app is up to date');
@@ -2134,6 +2138,21 @@ function setupIPC(): void {
 
   ipcMain.handle('get-app-version', () => {
     return APP_VERSION;
+  });
+
+  // Get pending update info (for when renderer missed the push event)
+  ipcMain.handle('get-pending-update', () => {
+    if (pendingUpdateInfo?.updateAvailable && pendingUpdateInfo.latestVersion) {
+      return {
+        version: pendingUpdateInfo.latestVersion.version,
+        downloadUrl: pendingUpdateInfo.latestVersion.downloadUrl,
+        releaseNotes: pendingUpdateInfo.latestVersion.releaseNotes,
+        fileSize: pendingUpdateInfo.latestVersion.fileSize,
+        mandatory: pendingUpdateInfo.latestVersion.mandatory,
+        publishedAt: pendingUpdateInfo.latestVersion.publishedAt
+      };
+    }
+    return null;
   });
 }
 
