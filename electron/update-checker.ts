@@ -52,7 +52,7 @@ export async function checkForUpdates(
 
   const url = `${finalConfig.apiBaseUrl}/api/v1/app/version/check?currentVersion=${encodeURIComponent(currentVersion)}&platform=${encodeURIComponent(finalConfig.platform)}`;
 
-  console.log('[HablaPe Update] Checking for updates:', url);
+  console.log('[MWS Update] Checking for updates:', url);
 
   try {
     const response = await fetch(url, {
@@ -65,16 +65,16 @@ export async function checkForUpdates(
     });
 
     if (!response.ok) {
-      console.warn('[HablaPe Update] Server returned error:', response.status);
+      console.warn('[MWS Update] Server returned error:', response.status);
       return null;
     }
 
     const data: UpdateInfo = await response.json();
-    console.log('[HablaPe Update] Response:', data);
+    console.log('[MWS Update] Response:', data);
 
     return data;
   } catch (error) {
-    console.error('[HablaPe Update] Error checking for updates:', error);
+    console.error('[MWS Update] Error checking for updates:', error);
     return null;
   }
 }
@@ -89,7 +89,7 @@ export function notifyUpdateAvailable(
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (!updateInfo.updateAvailable || !updateInfo.latestVersion) return;
 
-  console.log('[HablaPe Update] Notifying renderer:', updateInfo.latestVersion.version);
+  console.log('[MWS Update] Notifying renderer:', updateInfo.latestVersion.version);
 
   mainWindow.webContents.send('update-available', {
     version: updateInfo.latestVersion.version,
@@ -110,7 +110,7 @@ export async function downloadAndInstallUpdate(
   mainWindow: BrowserWindow | null
 ): Promise<void> {
   if (isDownloading) {
-    console.log('[HablaPe Update] Download already in progress');
+    console.log('[MWS Update] Download already in progress');
     return;
   }
 
@@ -127,24 +127,24 @@ export async function downloadAndInstallUpdate(
 
     // Determine temp file path
     const tempDir = app.getPath('temp');
-    const fileName = `holape-update-${Date.now()}.exe`;
+    const fileName = `mws-desktop-update-${Date.now()}.exe`;
     const filePath = path.join(tempDir, fileName);
 
-    console.log('[HablaPe Update] Downloading to:', filePath);
+    console.log('[MWS Update] Downloading to:', filePath);
 
     // Download the file
     await downloadFile(downloadUrl, filePath, (percent) => {
       sendProgress({ status: 'downloading', percent });
     });
 
-    console.log('[HablaPe Update] Download complete:', filePath);
+    console.log('[MWS Update] Download complete:', filePath);
     sendProgress({ status: 'installing', percent: 100 });
 
     // Small delay so user sees 100%
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Run the installer as a detached process that survives app exit
-    console.log('[HablaPe Update] Launching installer:', filePath);
+    console.log('[MWS Update] Launching installer:', filePath);
     const child = spawn(filePath, [], {
       detached: true,
       stdio: 'ignore',
@@ -158,7 +158,7 @@ export async function downloadAndInstallUpdate(
     }, 2000);
 
   } catch (error: any) {
-    console.error('[HablaPe Update] Download/install error:', error);
+    console.error('[MWS Update] Download/install error:', error);
     sendProgress({ status: 'error', error: error.message || 'Error desconocido' });
     isDownloading = false;
   }
@@ -185,7 +185,7 @@ function downloadFile(
     const request = protocol.get(url, (response) => {
       // Handle redirects
       if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-        console.log('[HablaPe Update] Following redirect to:', response.headers.location);
+        console.log('[MWS Update] Following redirect to:', response.headers.location);
         downloadFile(response.headers.location, destPath, onProgress, redirectCount + 1)
           .then(resolve)
           .catch(reject);
@@ -239,6 +239,6 @@ function downloadFile(
  * Open the download URL in the default browser (fallback)
  */
 export function openDownloadUrl(downloadUrl: string): void {
-  console.log('[HablaPe Update] Opening download URL:', downloadUrl);
+  console.log('[MWS Update] Opening download URL:', downloadUrl);
   shell.openExternal(downloadUrl);
 }

@@ -89,12 +89,12 @@ async function sendAuditLog(payload: AuditLogPayload): Promise<void> {
     });
 
     if (!response.ok) {
-      console.error('[HablaPe Audit] Error enviando log:', response.status);
+      console.error('[MWS Audit] Error enviando log:', response.status);
     } else {
-      console.log('[HablaPe Audit] Log registrado:', payload.action);
+      console.log('[MWS Audit] Log registrado:', payload.action);
     }
   } catch (err) {
-    console.error('[HablaPe Audit] Error de conexión:', err);
+    console.error('[MWS Audit] Error de conexión:', err);
     // TODO: Implementar cola offline para reintentos
   }
 }
@@ -113,9 +113,9 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
     });
 
     if (!response.ok) {
-      console.error('[HablaPe Media] Error enviando medio:', response.status);
+      console.error('[MWS Media] Error enviando medio:', response.status);
     } else {
-      console.log('[HablaPe Media] Medio guardado:', payload.mediaType, payload.size, 'bytes');
+      console.log('[MWS Media] Medio guardado:', payload.mediaType, payload.size, 'bytes');
 
       // Registrar en auditoría
       sendAuditLog({
@@ -139,7 +139,7 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
       });
     }
   } catch (err) {
-    console.error('[HablaPe Media] Error de conexión:', err);
+    console.error('[MWS Media] Error de conexión:', err);
     // TODO: Implementar cola offline para reintentos
   }
 }
@@ -154,21 +154,21 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
  * 3. lastDetectedPhone (del chat scanner) - fallback
  */
 function handleMediaCaptured(data: RawMediaCaptureData): void {
-  console.log('[HablaPe Media] ========== MEDIA CAPTURE START ==========');
-  console.log('[HablaPe Media] Estado actual de loggedInUserId:', loggedInUserId);
-  console.log('[HablaPe Media] Datos recibidos del script:');
-  console.log('[HablaPe Media]   chatPhone:', data.chatPhone);
-  console.log('[HablaPe Media]   chatName:', data.chatName);
-  console.log('[HablaPe Media]   messageSentAt:', data.messageSentAt);
-  console.log('[HablaPe Media]   whatsappMessageId:', data.whatsappMessageId);
-  console.log('[HablaPe Media]   type:', data.type);
-  console.log('[HablaPe Media]   size:', data.size);
+  console.log('[MWS Media] ========== MEDIA CAPTURE START ==========');
+  console.log('[MWS Media] Estado actual de loggedInUserId:', loggedInUserId);
+  console.log('[MWS Media] Datos recibidos del script:');
+  console.log('[MWS Media]   chatPhone:', data.chatPhone);
+  console.log('[MWS Media]   chatName:', data.chatName);
+  console.log('[MWS Media]   messageSentAt:', data.messageSentAt);
+  console.log('[MWS Media]   whatsappMessageId:', data.whatsappMessageId);
+  console.log('[MWS Media]   type:', data.type);
+  console.log('[MWS Media]   size:', data.size);
 
   const isImage = data.type.startsWith('image/');
   const isAudio = data.type.startsWith('audio/');
 
   if (!isImage && !isAudio) {
-    console.log('[HablaPe Media] Tipo no soportado ignorado:', data.type);
+    console.log('[MWS Media] Tipo no soportado ignorado:', data.type);
     return;
   }
 
@@ -196,10 +196,10 @@ function handleMediaCaptured(data: RawMediaCaptureData): void {
 
     if (scriptLast9 === activeLast9) {
       effectiveClientUserId = activeClientUserId;
-      console.log('[HablaPe Media] clientUserId CONFIRMADO - teléfonos coinciden:', scriptLast9);
+      console.log('[MWS Media] clientUserId CONFIRMADO - teléfonos coinciden:', scriptLast9);
     } else {
-      console.log('[HablaPe Media] clientUserId DESCARTADO - teléfonos NO coinciden:');
-      console.log('[HablaPe Media]   script:', scriptLast9, 'vs angular:', activeLast9);
+      console.log('[MWS Media] clientUserId DESCARTADO - teléfonos NO coinciden:');
+      console.log('[MWS Media]   script:', scriptLast9, 'vs angular:', activeLast9);
     }
   }
 
@@ -221,20 +221,20 @@ function handleMediaCaptured(data: RawMediaCaptureData): void {
     source: data.source as 'PREVIEW' | 'PLAYBACK'
   };
 
-  console.log('[HablaPe Media] Active client state (from Angular):');
-  console.log('[HablaPe Media]   activeClientUserId:', activeClientUserId);
-  console.log('[HablaPe Media]   activeClientPhone:', activeClientPhone);
-  console.log('[HablaPe Media]   activeClientName:', activeClientName);
-  console.log('[HablaPe Media] Chat scanner state:');
-  console.log('[HablaPe Media]   lastDetectedPhone:', lastDetectedPhone);
-  console.log('[HablaPe Media]   lastDetectedName:', lastDetectedName);
-  console.log('[HablaPe Media] Payload FINAL a enviar:');
-  console.log('[HablaPe Media]   agentId:', payload.agentId);
-  console.log('[HablaPe Media]   clientUserId:', payload.clientUserId);
-  console.log('[HablaPe Media]   chatPhone:', payload.chatPhone);
-  console.log('[HablaPe Media]   chatName:', payload.chatName);
-  console.log('[HablaPe Media]   messageSentAt:', payload.messageSentAt);
-  console.log('[HablaPe Media] ========== SENDING TO SERVER ==========');
+  console.log('[MWS Media] Active client state (from Angular):');
+  console.log('[MWS Media]   activeClientUserId:', activeClientUserId);
+  console.log('[MWS Media]   activeClientPhone:', activeClientPhone);
+  console.log('[MWS Media]   activeClientName:', activeClientName);
+  console.log('[MWS Media] Chat scanner state:');
+  console.log('[MWS Media]   lastDetectedPhone:', lastDetectedPhone);
+  console.log('[MWS Media]   lastDetectedName:', lastDetectedName);
+  console.log('[MWS Media] Payload FINAL a enviar:');
+  console.log('[MWS Media]   agentId:', payload.agentId);
+  console.log('[MWS Media]   clientUserId:', payload.clientUserId);
+  console.log('[MWS Media]   chatPhone:', payload.chatPhone);
+  console.log('[MWS Media]   chatName:', payload.chatName);
+  console.log('[MWS Media]   messageSentAt:', payload.messageSentAt);
+  console.log('[MWS Media] ========== SENDING TO SERVER ==========');
   sendMediaToServer(payload);
 }
 
@@ -275,17 +275,17 @@ function createWindow(): void {
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     // Solo mostrar error si es el frame principal y no es un error de sub-recurso
     if (!isMainFrame) {
-      console.warn(`[HablaPe] Error cargando recurso secundario: ${errorCode} - ${errorDescription} - ${validatedURL}`);
+      console.warn(`[MWS] Error cargando recurso secundario: ${errorCode} - ${errorDescription} - ${validatedURL}`);
       return;
     }
 
     // Ignorar errores de cancelación (usuario navegó a otra página)
     if (errorCode === -3) { // ERR_ABORTED
-      console.log('[HablaPe] Carga cancelada (navegación)');
+      console.log('[MWS] Carga cancelada (navegación)');
       return;
     }
 
-    console.error(`[HablaPe] Error cargando página principal: ${errorCode} - ${errorDescription}`);
+    console.error(`[MWS] Error cargando página principal: ${errorCode} - ${errorDescription}`);
     errorOverlayShown = true;
 
     // Mostrar página de error con opción de reintentar
@@ -342,12 +342,12 @@ function createWindow(): void {
   // Log cuando termine de cargar y verificar si la página está en blanco
   mainWindow.webContents.on('did-finish-load', () => {
     const loadedURL = mainWindow?.webContents.getURL();
-    console.log('[HolaPe] Página cargada:', loadedURL);
-    console.log('[HolaPe] URL esperada:', ANGULAR_URL);
+    console.log('[MWS] Página cargada:', loadedURL);
+    console.log('[MWS] URL esperada:', ANGULAR_URL);
 
     // No verificar si ya mostramos un error o si es una página de error
     if (errorOverlayShown || loadedURL?.startsWith('data:')) {
-      console.log('[HolaPe] Saltando verificación (error overlay activo o página de error)');
+      console.log('[MWS] Saltando verificación (error overlay activo o página de error)');
       return;
     }
 
@@ -386,11 +386,11 @@ function createWindow(): void {
           })()
         `);
 
-        console.log('[HolaPe Debug] Page check #' + checkCount + ':', pageInfo);
+        console.log('[MWS Debug] Page check #' + checkCount + ':', pageInfo);
 
         // Si Angular cargó correctamente, marcar como exitoso
         if (pageInfo.isLoaded) {
-          console.log('[HolaPe] Angular cargado correctamente');
+          console.log('[MWS] Angular cargado correctamente');
           appLoadedSuccessfully = true;
           return;
         }
@@ -404,11 +404,11 @@ function createWindow(): void {
         // Después de todos los intentos, si no hay contenido visible, mostrar recovery
         // Pero solo si no se mostró ya un error
         if (!errorOverlayShown && (!pageInfo.hasVisibleContent || !pageInfo.hasAppRoot)) {
-          console.log('[HolaPe] Página sin contenido después de ' + (checkCount * checkInterval / 1000) + 's, mostrando recovery');
+          console.log('[MWS] Página sin contenido después de ' + (checkCount * checkInterval / 1000) + 's, mostrando recovery');
           showRecoveryOverlay();
         }
       } catch (err) {
-        console.error('[HolaPe] Error verificando página:', err);
+        console.error('[MWS] Error verificando página:', err);
         if (checkCount < maxChecks && !errorOverlayShown) {
           setTimeout(checkPageContent, checkInterval);
         } else if (!errorOverlayShown) {
@@ -423,7 +423,7 @@ function createWindow(): void {
 
   // Log de errores de consola
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    console.log(`[HolaPe Console] ${message}`);
+    console.log(`[MWS Console] ${message}`);
   });
 
   // NO crear WhatsApp view automáticamente - se crea bajo demanda
@@ -437,18 +437,18 @@ function createWindow(): void {
     // Check for updates after 5 seconds
     setTimeout(async () => {
       try {
-        console.log('[HablaPe] Checking for updates... Current version:', APP_VERSION);
+        console.log('[MWS] Checking for updates... Current version:', APP_VERSION);
         const updateInfo = await checkForUpdates(APP_VERSION);
 
         if (updateInfo?.updateAvailable && mainWindow && !mainWindow.isDestroyed()) {
-          console.log('[HablaPe] Update available:', updateInfo.latestVersion?.version);
+          console.log('[MWS] Update available:', updateInfo.latestVersion?.version);
           pendingUpdateInfo = updateInfo;
           notifyUpdateAvailable(mainWindow, updateInfo);
         } else {
-          console.log('[HablaPe] No update available or app is up to date');
+          console.log('[MWS] No update available or app is up to date');
         }
       } catch (error) {
-        console.error('[HablaPe] Error checking for updates:', error);
+        console.error('[MWS] Error checking for updates:', error);
         // Silently fail - update check is not critical
       }
     }, 5000);
@@ -491,13 +491,13 @@ function showRecoveryOverlay(): void {
   const recoveryHTML = `
     (function() {
       // Evitar duplicados
-      if (document.getElementById('holape-recovery-overlay')) return;
+      if (document.getElementById('mws-recovery-overlay')) return;
 
       const overlay = document.createElement('div');
-      overlay.id = 'holape-recovery-overlay';
+      overlay.id = 'mws-recovery-overlay';
       overlay.innerHTML = \`
         <style>
-          #holape-recovery-overlay {
+          #mws-recovery-overlay {
             position: fixed;
             top: 0;
             left: 0;
@@ -511,29 +511,29 @@ function showRecoveryOverlay(): void {
             z-index: 999999;
             font-family: system-ui, -apple-system, sans-serif;
           }
-          #holape-recovery-overlay .logo {
+          #mws-recovery-overlay .logo {
             font-size: 48px;
             margin-bottom: 24px;
           }
-          #holape-recovery-overlay h1 {
+          #mws-recovery-overlay h1 {
             color: #fafafa;
             font-size: 24px;
             margin-bottom: 8px;
           }
-          #holape-recovery-overlay p {
+          #mws-recovery-overlay p {
             color: #a1a1aa;
             margin-bottom: 24px;
             text-align: center;
             max-width: 400px;
             line-height: 1.5;
           }
-          #holape-recovery-overlay .buttons {
+          #mws-recovery-overlay .buttons {
             display: flex;
             flex-direction: column;
             gap: 12px;
             width: 280px;
           }
-          #holape-recovery-overlay button {
+          #mws-recovery-overlay button {
             padding: 14px 28px;
             border-radius: 8px;
             font-size: 15px;
@@ -543,39 +543,39 @@ function showRecoveryOverlay(): void {
             transition: all 0.2s;
             width: 100%;
           }
-          #holape-recovery-overlay .btn-primary {
+          #mws-recovery-overlay .btn-primary {
             background: #22c55e;
             color: white;
           }
-          #holape-recovery-overlay .btn-primary:hover {
+          #mws-recovery-overlay .btn-primary:hover {
             background: #16a34a;
           }
-          #holape-recovery-overlay .btn-secondary {
+          #mws-recovery-overlay .btn-secondary {
             background: #27272a;
             color: #fafafa;
             border: 1px solid #3f3f46;
           }
-          #holape-recovery-overlay .btn-secondary:hover {
+          #mws-recovery-overlay .btn-secondary:hover {
             background: #3f3f46;
           }
-          #holape-recovery-overlay .btn-danger {
+          #mws-recovery-overlay .btn-danger {
             background: transparent;
             color: #f87171;
             border: 1px solid #7f1d1d;
             font-size: 13px;
             padding: 10px 20px;
           }
-          #holape-recovery-overlay .btn-danger:hover {
+          #mws-recovery-overlay .btn-danger:hover {
             background: #7f1d1d;
             color: white;
           }
-          #holape-recovery-overlay .hint {
+          #mws-recovery-overlay .hint {
             margin-top: 20px;
             font-size: 12px;
             color: #71717a;
             text-align: center;
           }
-          #holape-recovery-overlay .divider {
+          #mws-recovery-overlay .divider {
             margin: 16px 0;
             border-top: 1px solid #27272a;
             width: 100%;
@@ -585,14 +585,14 @@ function showRecoveryOverlay(): void {
         <h1>La aplicación no cargó</h1>
         <p>Esto puede ocurrir por datos de sesión corruptos o problemas de conexión con el servidor.</p>
         <div class="buttons">
-          <button class="btn-primary" onclick="window.holapeRecoveryReload()">
+          <button class="btn-primary" onclick="window.mwsRecoveryReload()">
             Reintentar
           </button>
-          <button class="btn-secondary" onclick="window.holapeRecoveryClearSession()">
+          <button class="btn-secondary" onclick="window.mwsRecoveryClearSession()">
             Limpiar sesión y reintentar
           </button>
           <div class="divider"></div>
-          <button class="btn-danger" onclick="window.holapeRecoveryFullReset()">
+          <button class="btn-danger" onclick="window.mwsRecoveryFullReset()">
             Restablecer completamente
           </button>
         </div>
@@ -601,11 +601,11 @@ function showRecoveryOverlay(): void {
       document.body.appendChild(overlay);
 
       // Funciones globales para los botones
-      window.holapeRecoveryReload = function() {
+      window.mwsRecoveryReload = function() {
         location.reload();
       };
 
-      window.holapeRecoveryClearSession = function() {
+      window.mwsRecoveryClearSession = function() {
         // Limpiar solo datos de sesión de Angular
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -619,7 +619,7 @@ function showRecoveryOverlay(): void {
         location.reload();
       };
 
-      window.holapeRecoveryFullReset = function() {
+      window.mwsRecoveryFullReset = function() {
         if (confirm('¿Estás seguro? Esto borrará TODOS los datos incluyendo la sesión de WhatsApp.')) {
           // Limpiar todo el localStorage
           localStorage.clear();
@@ -641,7 +641,7 @@ function showRecoveryOverlay(): void {
 function createWhatsAppView(): void {
   if (!mainWindow || whatsappView) return;
 
-  console.log('[HablaPe] Creando WhatsApp BrowserView...');
+  console.log('[MWS] Creando WhatsApp BrowserView...');
 
   // Usar partición persistente para guardar sesión
   const whatsappSession = session.fromPartition('persist:whatsapp');
@@ -712,18 +712,18 @@ function createWhatsAppView(): void {
         }
       \`;
       document.head.appendChild(style);
-      console.log('[HablaPe] Botón de adjuntar ocultado');
+      console.log('[MWS] Botón de adjuntar ocultado');
     })();
   `;
 
   whatsappView.webContents.on('dom-ready', () => {
     // Aplicar anti-fingerprinting
     whatsappView?.webContents.executeJavaScript(evasionScript, true)
-      .catch(err => console.error('[HablaPe] Error aplicando anti-fingerprinting:', err));
+      .catch(err => console.error('[MWS] Error aplicando anti-fingerprinting:', err));
 
     // Ocultar botón de adjuntar
     whatsappView?.webContents.executeJavaScript(hideAttachButtonCSS, true)
-      .catch(err => console.error('[HablaPe] Error ocultando botón adjuntar:', err));
+      .catch(err => console.error('[MWS] Error ocultando botón adjuntar:', err));
   });
 
   // Aplicar zoom cuando cargue
@@ -732,7 +732,7 @@ function createWhatsAppView(): void {
   });
 
   whatsappView.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('[HablaPe] Error cargando WhatsApp:', errorCode, errorDescription);
+    console.error('[MWS] Error cargando WhatsApp:', errorCode, errorDescription);
   });
 
   // Cargar WhatsApp Web
@@ -759,10 +759,10 @@ function createWhatsAppView(): void {
       // Sanitizar: solo mantener dígitos (9-15 caracteres)
       const phone = rawPhone.replace(/[^\d]/g, '');
       if (phone && phone.length >= 9 && phone.length <= 15 && chatBlockState.isBlocked) {
-        console.log('[HablaPe] ✓ Teléfono extraído via console-message:', phone);
+        console.log('[MWS] ✓ Teléfono extraído via console-message:', phone);
         handlePhoneExtracted(phone);
       } else if (rawPhone && rawPhone !== phone) {
-        console.log('[HablaPe] Teléfono rechazado (inválido):', rawPhone, '->', phone);
+        console.log('[MWS] Teléfono rechazado (inválido):', rawPhone, '->', phone);
       }
     }
     // Chat bloqueado por click en sidebar - sincronizar estado
@@ -773,7 +773,7 @@ function createWhatsAppView(): void {
         chatBlockState.isBlocked = true;
         chatBlockState.expectedPhone = null; // Se establecerá cuando el scanner detecte el teléfono
         chatBlockState.waitingForManualExtraction = false; // El scanner determinará si necesita extracción manual
-        console.log('[HablaPe] Chat bloqueado via sidebar click (pre-sync)');
+        console.log('[MWS] Chat bloqueado via sidebar click (pre-sync)');
 
         // Timeout de seguridad por si el scanner no detecta nada
         if (chatBlockState.timeoutHandle) {
@@ -781,7 +781,7 @@ function createWhatsAppView(): void {
         }
         chatBlockState.timeoutHandle = setTimeout(() => {
           if (chatBlockState.isBlocked) {
-            console.log('[HablaPe] ⚠️ TIMEOUT (sidebar click) - desbloqueando');
+            console.log('[MWS] ⚠️ TIMEOUT (sidebar click) - desbloqueando');
             forceUnblockWhatsAppChat();
           }
         }, CHAT_BLOCK_TIMEOUT);
@@ -797,7 +797,7 @@ function createWhatsAppView(): void {
 function showWhatsAppView(): void {
   if (!mainWindow) return;
 
-  console.log('[HablaPe] Mostrando WhatsApp view...');
+  console.log('[MWS] Mostrando WhatsApp view...');
 
   // Crear si no existe
   if (!whatsappView) {
@@ -828,7 +828,7 @@ function showWhatsAppView(): void {
 function hideWhatsAppView(): void {
   if (!mainWindow || !whatsappView) return;
 
-  console.log('[HablaPe] Ocultando WhatsApp view...');
+  console.log('[MWS] Ocultando WhatsApp view...');
 
   // Remover del window pero mantener la instancia
   mainWindow.removeBrowserView(whatsappView);
@@ -969,7 +969,7 @@ async function updateChatPhoneInWhatsApp(phone: string, name: string): Promise<v
     await whatsappView.webContents.executeJavaScript(`
       window.__hablapeCurrentChatPhone = '${phone}';
       window.__hablapeCurrentChatName = '${name || ''}';
-      console.log('[HablaPe Debug] Chat actualizado desde Electron:', '${phone}', '${name || ''}');
+      console.log('[MWS Debug] Chat actualizado desde Electron:', '${phone}', '${name || ''}');
     `, true);
   } catch (err) {
     // Ignorar errores silenciosamente
@@ -988,7 +988,7 @@ async function clearExtractedPhoneInWhatsApp(): Promise<void> {
         window.__hablapeClearExtractedPhone();
       }
     `, true);
-    console.log('[HablaPe] Número extraído limpiado');
+    console.log('[MWS] Número extraído limpiado');
   } catch (err) {
     // Ignorar errores silenciosamente
   }
@@ -1032,7 +1032,7 @@ async function blockWhatsAppChat(expectedPhone: string): Promise<void> {
   chatBlockState.expectedPhone = expectedPhone;
   chatBlockState.waitingForManualExtraction = false;
 
-  console.log('[HablaPe] ⏳ BLOQUEANDO chat - esperando CRM para:', expectedPhone);
+  console.log('[MWS] ⏳ BLOQUEANDO chat - esperando CRM para:', expectedPhone);
 
   try {
     await whatsappView.webContents.executeJavaScript(`
@@ -1047,7 +1047,7 @@ async function blockWhatsAppChat(expectedPhone: string): Promise<void> {
   // Timeout de seguridad: desbloquear automáticamente si Angular no responde
   chatBlockState.timeoutHandle = setTimeout(() => {
     if (chatBlockState.isBlocked) {
-      console.log('[HablaPe] ⚠️ TIMEOUT - Desbloqueando automáticamente (CRM no respondió)');
+      console.log('[MWS] ⚠️ TIMEOUT - Desbloqueando automáticamente (CRM no respondió)');
       forceUnblockWhatsAppChat();
     }
   }, CHAT_BLOCK_TIMEOUT);
@@ -1060,7 +1060,7 @@ async function blockWhatsAppChat(expectedPhone: string): Promise<void> {
  */
 async function tryUnblockWhatsAppChat(processedPhone: string): Promise<boolean> {
   if (!chatBlockState.isBlocked) {
-    console.log('[HablaPe] tryUnblock: No hay bloqueo activo, ignorando');
+    console.log('[MWS] tryUnblock: No hay bloqueo activo, ignorando');
     return false;
   }
 
@@ -1069,12 +1069,12 @@ async function tryUnblockWhatsAppChat(processedPhone: string): Promise<boolean> 
   const expectedNorm = normalizePhone(chatBlockState.expectedPhone);
   const processedNorm = normalizePhone(processedPhone);
 
-  console.log('[HablaPe] tryUnblock: expected=' + expectedNorm + ', processed=' + processedNorm + ', waitingManual=' + chatBlockState.waitingForManualExtraction);
+  console.log('[MWS] tryUnblock: expected=' + expectedNorm + ', processed=' + processedNorm + ', waitingManual=' + chatBlockState.waitingForManualExtraction);
 
   // Caso especial: Esperando extracción manual (overlay de instrucciones)
   // NO desbloquear con crmClientReady vacío - solo se desbloquea con extracción manual
   if (chatBlockState.waitingForManualExtraction && !processedNorm) {
-    console.log('[HablaPe] ⏳ Esperando extracción manual - ignorando crmClientReady vacío');
+    console.log('[MWS] ⏳ Esperando extracción manual - ignorando crmClientReady vacío');
     return false;
   }
 
@@ -1082,7 +1082,7 @@ async function tryUnblockWhatsAppChat(processedPhone: string): Promise<boolean> 
   // (bloqueado desde sidebar antes que scanner detectara)
   if (!expectedNorm && !chatBlockState.waitingForManualExtraction) {
     await forceUnblockWhatsAppChat();
-    console.log('[HablaPe] ✓ DESBLOQUEADO - CRM respondió (sidebar click, pre-scanner)');
+    console.log('[MWS] ✓ DESBLOQUEADO - CRM respondió (sidebar click, pre-scanner)');
     return true;
   }
 
@@ -1090,11 +1090,11 @@ async function tryUnblockWhatsAppChat(processedPhone: string): Promise<boolean> 
   if (processedNorm) {
     if (!expectedNorm || expectedNorm === processedNorm) {
       await forceUnblockWhatsAppChat();
-      console.log('[HablaPe] ✓ DESBLOQUEADO - teléfono válido recibido');
+      console.log('[MWS] ✓ DESBLOQUEADO - teléfono válido recibido');
       return true;
     } else {
       // El teléfono no coincide - ignorar (es de un chat anterior)
-      console.log('[HablaPe] ⚠️ Ignorando desbloqueo - teléfono no coincide');
+      console.log('[MWS] ⚠️ Ignorando desbloqueo - teléfono no coincide');
       return false;
     }
   }
@@ -1103,11 +1103,11 @@ async function tryUnblockWhatsAppChat(processedPhone: string): Promise<boolean> 
   // Y NO estamos esperando extracción manual
   if (expectedNorm && !processedNorm && !chatBlockState.waitingForManualExtraction) {
     await forceUnblockWhatsAppChat();
-    console.log('[HablaPe] ✓ DESBLOQUEADO - CRM procesó (sin teléfono en respuesta)');
+    console.log('[MWS] ✓ DESBLOQUEADO - CRM procesó (sin teléfono en respuesta)');
     return true;
   }
 
-  console.log('[HablaPe] ⚠️ No se cumplió ninguna condición de desbloqueo');
+  console.log('[MWS] ⚠️ No se cumplió ninguna condición de desbloqueo');
   return false;
 }
 
@@ -1116,7 +1116,7 @@ async function tryUnblockWhatsAppChat(processedPhone: string): Promise<boolean> 
  * Usado por timeout y casos especiales
  */
 async function forceUnblockWhatsAppChat(): Promise<void> {
-  console.log('[HablaPe] forceUnblockWhatsAppChat() llamado');
+  console.log('[MWS] forceUnblockWhatsAppChat() llamado');
 
   // Cancelar timeout si existe
   if (chatBlockState.timeoutHandle) {
@@ -1130,27 +1130,27 @@ async function forceUnblockWhatsAppChat(): Promise<void> {
   chatBlockState.waitingForManualExtraction = false;
 
   if (!whatsappView) {
-    console.log('[HablaPe] ⚠️ whatsappView es null - no se puede ocultar blocker');
+    console.log('[MWS] ⚠️ whatsappView es null - no se puede ocultar blocker');
     return;
   }
 
-  console.log('[HablaPe] Ejecutando __hablapeHideChatBlocker en WhatsApp...');
+  console.log('[MWS] Ejecutando __hablapeHideChatBlocker en WhatsApp...');
   try {
     const result = await whatsappView.webContents.executeJavaScript(`
       (function() {
-        console.log('[HablaPe] Dentro de executeJavaScript para ocultar blocker');
+        console.log('[MWS] Dentro de executeJavaScript para ocultar blocker');
         if (window.__hablapeHideChatBlocker) {
           window.__hablapeHideChatBlocker();
           return 'success';
         } else {
-          console.log('[HablaPe] ⚠️ __hablapeHideChatBlocker NO existe');
+          console.log('[MWS] ⚠️ __hablapeHideChatBlocker NO existe');
           return 'function_not_found';
         }
       })()
     `, true);
-    console.log('[HablaPe] executeJavaScript resultado:', result);
+    console.log('[MWS] executeJavaScript resultado:', result);
   } catch (err) {
-    console.error('[HablaPe] ERROR en executeJavaScript:', err);
+    console.error('[MWS] ERROR en executeJavaScript:', err);
   }
 }
 
@@ -1177,7 +1177,7 @@ async function showPhoneNeededInWhatsApp(): Promise<void> {
         window.__hablapeShowPhoneNeeded();
       }
     `, true);
-    console.log('[HablaPe] 📱 Mostrando instrucciones para revelar número');
+    console.log('[MWS] 📱 Mostrando instrucciones para revelar número');
   } catch (err) {
     // Ignorar errores
   }
@@ -1185,7 +1185,7 @@ async function showPhoneNeededInWhatsApp(): Promise<void> {
   // Timeout más largo para este caso (30 segundos) ya que requiere acción del usuario
   chatBlockState.timeoutHandle = setTimeout(() => {
     if (chatBlockState.isBlocked) {
-      console.log('[HablaPe] ⚠️ TIMEOUT largo - desbloqueando (usuario no reveló número)');
+      console.log('[MWS] ⚠️ TIMEOUT largo - desbloqueando (usuario no reveló número)');
       forceUnblockWhatsAppChat();
     }
   }, 30000);
@@ -1212,7 +1212,7 @@ async function checkForExtractedPhone(): Promise<void> {
     `, true);
 
     if (result && result.phone) {
-      console.log('[HablaPe] ✓ Teléfono extraído (fallback):', result.phone);
+      console.log('[MWS] ✓ Teléfono extraído (fallback):', result.phone);
       handlePhoneExtracted(result.phone);
     }
   } catch (err) {
@@ -1226,7 +1226,7 @@ async function checkForExtractedPhone(): Promise<void> {
 function handlePhoneExtracted(phone: string): void {
   if (!phone || !mainWindow) return;
 
-  console.log('[HablaPe] ✓ Número extraído por usuario:', phone);
+  console.log('[MWS] ✓ Número extraído por usuario:', phone);
 
   // Actualizar estado
   lastDetectedPhone = phone;
@@ -1435,9 +1435,9 @@ async function scanChat(): Promise<void> {
         // Hay un chat abierto pero no se encontró el número
         // Mostrar instrucciones al usuario para que revele el número
         const nameChanged = result.chatName !== lastDetectedName;
-        console.log('[HablaPe Debug] no_phone_found - chatName:', result.chatName, 'nameChanged:', nameChanged, 'isBlocked:', chatBlockState.isBlocked);
+        console.log('[MWS Debug] no_phone_found - chatName:', result.chatName, 'nameChanged:', nameChanged, 'isBlocked:', chatBlockState.isBlocked);
         if (nameChanged) {
-          console.log('[HablaPe] Chat sin número detectado:', result.chatName);
+          console.log('[MWS] Chat sin número detectado:', result.chatName);
           lastDetectedName = result.chatName;
           lastDetectedPhone = ''; // Limpiar teléfono anterior
 
@@ -1466,7 +1466,7 @@ async function scanChat(): Promise<void> {
       const nameChanged = name && name !== lastDetectedName;
 
       if (phoneChanged || nameChanged) {
-        console.log(`[HolaPe] Chat detectado via ${source}:`, phone, name);
+        console.log(`[MWS] Chat detectado via ${source}:`, phone, name);
 
         // Limpiar número extraído del panel anterior (antes de actualizar el estado)
         await clearExtractedPhoneInWhatsApp();
@@ -1490,7 +1490,7 @@ async function scanChat(): Promise<void> {
     }
 
   } catch (err) {
-    console.error('[HolaPe] Error en scanChat:', err);
+    console.error('[MWS] Error en scanChat:', err);
   }
 
   // Verificar si el usuario extrajo un número del panel de contacto
@@ -1506,7 +1506,7 @@ function startChatScanner(): void {
   if (chatScannerRunning || !whatsappVisible) return;
 
   chatScannerRunning = true;
-  console.log('[HablaPe] Chat scanner iniciado');
+  console.log('[MWS] Chat scanner iniciado');
 
   // Iniciar primer escaneo después de un delay aleatorio
   chatScannerInterval = setTimeout(scanChat, getRandomScanInterval());
@@ -1518,7 +1518,7 @@ function stopChatScanner(): void {
     clearTimeout(chatScannerInterval);
     chatScannerInterval = null;
   }
-  console.log('[HablaPe] Chat scanner detenido');
+  console.log('[MWS] Chat scanner detenido');
 }
 
 // ============================================================================
@@ -1573,10 +1573,10 @@ async function checkWhatsAppSessionState(): Promise<void> {
 
     // Solo notificar si cambió el estado
     if (wasLoggedIn !== isNowLoggedIn) {
-      console.log('[HablaPe] *** CAMBIO DE SESIÓN DETECTADO ***');
-      console.log('[HablaPe] Estado anterior:', wasLoggedIn ? 'Logueado' : 'No logueado');
-      console.log('[HablaPe] Estado nuevo:', isNowLoggedIn ? 'Logueado' : 'No logueado');
-      console.log('[HablaPe] Indicadores:', sessionState.indicators);
+      console.log('[MWS] *** CAMBIO DE SESIÓN DETECTADO ***');
+      console.log('[MWS] Estado anterior:', wasLoggedIn ? 'Logueado' : 'No logueado');
+      console.log('[MWS] Estado nuevo:', isNowLoggedIn ? 'Logueado' : 'No logueado');
+      console.log('[MWS] Indicadores:', sessionState.indicators);
 
       whatsappLoggedIn = isNowLoggedIn;
 
@@ -1606,7 +1606,7 @@ async function checkWhatsAppSessionState(): Promise<void> {
 function startSessionMonitor(): void {
   if (sessionCheckInterval) return;
 
-  console.log('[HablaPe] Iniciando monitor de sesión de WhatsApp');
+  console.log('[MWS] Iniciando monitor de sesión de WhatsApp');
 
   // Verificar cada 3 segundos
   sessionCheckInterval = setInterval(checkWhatsAppSessionState, 3000);
@@ -1623,7 +1623,7 @@ function stopSessionMonitor(): void {
     clearInterval(sessionCheckInterval);
     sessionCheckInterval = null;
   }
-  console.log('[HablaPe] Monitor de sesión detenido');
+  console.log('[MWS] Monitor de sesión detenido');
 }
 
 // Sistema de escaneo de mensajes del chat activo
@@ -1742,7 +1742,7 @@ async function scanChatMessages(telefono: string): Promise<ScannedMessage[]> {
 
     return newMessages;
   } catch (err) {
-    console.error('[HablaPe] Error escaneando mensajes:', err);
+    console.error('[MWS] Error escaneando mensajes:', err);
     return [];
   }
 }
@@ -1802,7 +1802,7 @@ function registerShortcuts(): void {
   // Ctrl+Shift+R - Forzar recarga limpiando sesión
   globalShortcut.register('CommandOrControl+Shift+R', () => {
     if (mainWindow) {
-      console.log('[HolaPe] Forzando recarga con limpieza de sesión');
+      console.log('[MWS] Forzando recarga con limpieza de sesión');
       mainWindow.webContents.executeJavaScript(`
         localStorage.clear();
         sessionStorage.clear();
@@ -1839,13 +1839,13 @@ function setupIPC(): void {
   ipcMain.on('set-logged-in-user', (_, data: { userId: number; userName: string }) => {
     loggedInUserId = data.userId;
     loggedInUserName = data.userName;
-    console.log('[HablaPe] *** Usuario logueado recibido via IPC ***');
-    console.log('[HablaPe] agentId:', loggedInUserId);
-    console.log('[HablaPe] userName:', loggedInUserName);
+    console.log('[MWS] *** Usuario logueado recibido via IPC ***');
+    console.log('[MWS] agentId:', loggedInUserId);
+    console.log('[MWS] userName:', loggedInUserName);
   });
 
   ipcMain.on('clear-logged-in-user', () => {
-    console.log('[HablaPe] Usuario deslogueado:', loggedInUserId);
+    console.log('[MWS] Usuario deslogueado:', loggedInUserId);
     loggedInUserId = null;
     loggedInUserName = null;
   });
@@ -1855,10 +1855,10 @@ function setupIPC(): void {
     activeClientUserId = data.clientUserId;
     activeClientPhone = data.chatPhone;
     activeClientName = data.chatName;
-    console.log('[HablaPe] *** Cliente activo establecido ***');
-    console.log('[HablaPe] clientUserId:', activeClientUserId);
-    console.log('[HablaPe] chatPhone:', activeClientPhone);
-    console.log('[HablaPe] chatName:', activeClientName);
+    console.log('[MWS] *** Cliente activo establecido ***');
+    console.log('[MWS] clientUserId:', activeClientUserId);
+    console.log('[MWS] chatPhone:', activeClientPhone);
+    console.log('[MWS] chatName:', activeClientName);
 
     // También actualizar en WhatsApp BrowserView
     if (activeClientPhone) {
@@ -1867,7 +1867,7 @@ function setupIPC(): void {
   });
 
   ipcMain.on('clear-active-client', () => {
-    console.log('[HablaPe] Cliente activo limpiado');
+    console.log('[MWS] Cliente activo limpiado');
     activeClientUserId = null;
     activeClientPhone = null;
     activeClientName = null;
@@ -1877,7 +1877,7 @@ function setupIPC(): void {
   // === CRM Ready - Intenta desbloquear el chat si el teléfono coincide ===
   ipcMain.on('crm-client-ready', async (_, data: { phone: string }) => {
     const phone = data?.phone || '';
-    console.log('[HablaPe] *** CRM terminó de procesar:', phone || '(sin teléfono)');
+    console.log('[MWS] *** CRM terminó de procesar:', phone || '(sin teléfono)');
     await tryUnblockWhatsAppChat(phone);
   });
 
@@ -1925,14 +1925,14 @@ function setupIPC(): void {
       // Ocultar WhatsApp temporalmente (remover del window)
       if (whatsappVisible && mainWindow.getBrowserViews().includes(whatsappView)) {
         mainWindow.removeBrowserView(whatsappView);
-        console.log('[HablaPe] WhatsApp ocultado temporalmente (overlay abierto)');
+        console.log('[MWS] WhatsApp ocultado temporalmente (overlay abierto)');
       }
     } else {
       // Restaurar WhatsApp si estaba visible
       if (whatsappVisible && !mainWindow.getBrowserViews().includes(whatsappView)) {
         mainWindow.addBrowserView(whatsappView);
         updateWhatsAppViewBounds();
-        console.log('[HablaPe] WhatsApp restaurado (overlay cerrado)');
+        console.log('[MWS] WhatsApp restaurado (overlay cerrado)');
       }
     }
 
@@ -2019,7 +2019,7 @@ function setupIPC(): void {
 
   // Limpiar sesión y recargar (para casos de auth corrupta)
   ipcMain.handle('clear-session-and-reload', async () => {
-    console.log('[HolaPe] Limpiando sesión por solicitud de Angular...');
+    console.log('[MWS] Limpiando sesión por solicitud de Angular...');
     if (mainWindow) {
       await mainWindow.webContents.executeJavaScript(`
         localStorage.clear();
@@ -2032,7 +2032,7 @@ function setupIPC(): void {
 
   // Solo recargar
   ipcMain.handle('reload-app', () => {
-    console.log('[HolaPe] Recargando app...');
+    console.log('[MWS] Recargando app...');
     mainWindow?.webContents.reload();
     return true;
   });
@@ -2040,7 +2040,7 @@ function setupIPC(): void {
   // Enviar mensaje a WhatsApp Web (para canned messages / respuestas rápidas)
   ipcMain.handle('whatsapp:send-message', async (_, text: string) => {
     if (!whatsappView || !whatsappVisible) {
-      console.log('[HablaPe] No se puede enviar mensaje: WhatsApp no visible');
+      console.log('[MWS] No se puede enviar mensaje: WhatsApp no visible');
       return false;
     }
 
@@ -2054,7 +2054,7 @@ function setupIPC(): void {
                         document.querySelector('footer div[contenteditable="true"]');
 
           if (!input) {
-            console.log('[HablaPe] No se encontró el input de mensaje');
+            console.log('[MWS] No se encontró el input de mensaje');
             return { success: false, error: 'input_not_found' };
           }
 
@@ -2074,17 +2074,17 @@ function setupIPC(): void {
         })()
       `, true);
 
-      console.log('[HablaPe] Mensaje insertado:', result);
+      console.log('[MWS] Mensaje insertado:', result);
       return result.success;
     } catch (err) {
-      console.error('[HablaPe] Error enviando mensaje a WhatsApp:', err);
+      console.error('[MWS] Error enviando mensaje a WhatsApp:', err);
       return false;
     }
   });
 
   // Restablecimiento completo - limpia TODOS los datos y reinicia
   ipcMain.handle('full-reset', async () => {
-    console.log('[HolaPe] Ejecutando restablecimiento completo...');
+    console.log('[MWS] Ejecutando restablecimiento completo...');
 
     try {
       // 1. Limpiar localStorage y sessionStorage del renderer
@@ -2099,13 +2099,13 @@ function setupIPC(): void {
       const whatsappSession = session.fromPartition('persist:whatsapp');
       await whatsappSession.clearStorageData();
       await whatsappSession.clearCache();
-      console.log('[HolaPe] Sesión de WhatsApp limpiada');
+      console.log('[MWS] Sesión de WhatsApp limpiada');
 
       // 3. Limpiar la sesión principal
       const defaultSession = session.defaultSession;
       await defaultSession.clearStorageData();
       await defaultSession.clearCache();
-      console.log('[HolaPe] Sesión principal limpiada');
+      console.log('[MWS] Sesión principal limpiada');
 
       // 4. Destruir WhatsApp view si existe
       if (whatsappView && mainWindow) {
@@ -2122,7 +2122,7 @@ function setupIPC(): void {
 
       return true;
     } catch (error) {
-      console.error('[HolaPe] Error en restablecimiento completo:', error);
+      console.error('[MWS] Error en restablecimiento completo:', error);
       // Intentar recargar de todos modos
       mainWindow?.webContents.reload();
       return false;
@@ -2178,7 +2178,7 @@ app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('allow-insecure-localhost');
 
 // Configurar path de datos persistente
-app.setPath('userData', path.join(app.getPath('appData'), 'HablaPe'));
+app.setPath('userData', path.join(app.getPath('appData'), 'MWS Desktop'));
 
 // Ignorar errores de certificado SSL (para servidores con certificados auto-firmados)
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
@@ -2200,7 +2200,7 @@ app.whenReady().then(async () => {
   // Solo limpiar caché de recursos (no datos de usuario)
   const ses = session.defaultSession;
   await ses.clearCache();
-  console.log('[HolaPe] Caché de recursos limpiada');
+  console.log('[MWS] Caché de recursos limpiada');
 
   createWindow();
   registerShortcuts();

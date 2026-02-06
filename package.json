@@ -1,7 +1,7 @@
 {
   "name": "holape-angular",
   "version": "1.0.0",
-  "description": "HolaPe CRM - Angular Frontend with Electron",
+  "description": "MWS Desktop - Monitor WhatsApp Service",
   "main": "dist/electron/main.js",
   "scripts": {
     "ng": "ng",
@@ -20,8 +20,8 @@
     "pack": "npm run electron:build && electron-builder --dir"
   },
   "build": {
-    "appId": "com.contactototal.holape",
-    "productName": "HolaPe",
+    "appId": "com.contactototal.mws-desktop",
+    "productName": "MWS Desktop",
     "directories": {
       "output": "release"
     },
@@ -46,7 +46,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "HolaPe"
+      "shortcutName": "MWS Desktop"
     }
   },
   "prettier": {

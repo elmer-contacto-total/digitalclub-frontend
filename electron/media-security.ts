@@ -1,5 +1,5 @@
 /**
- * Media Security Module for HablaPe
+ * Media Security Module for MWS Desktop
  *
  * Implementa seguridad de medios para WhatsApp Web:
  * - Bloquea todas las descargas
@@ -539,9 +539,9 @@ const BLOCK_DOWNLOAD_SCRIPT = `
             videoHeight: video.videoHeight || null
           }
         });
-        console.log('[HablaPe] Video bloqueado y auditado:', String(originalSrc || '').substring(0, 50));
+        console.log('[MWS] Video bloqueado y auditado:', String(originalSrc || '').substring(0, 50));
       } catch (auditErr) {
-        console.log('[HablaPe] Error al auditar video:', auditErr);
+        console.log('[MWS] Error al auditar video:', auditErr);
       }
     }
   };
@@ -706,12 +706,12 @@ const MEDIA_CAPTURE_SCRIPT = `
     const currentSession = blockSessionId;
     isBlockerVisible = true;
 
-    console.log('[HablaPe] ⏳ CHAT BLOQUEADO - Sesión #' + currentSession);
+    console.log('[MWS] ⏳ CHAT BLOQUEADO - Sesión #' + currentSession);
 
     function tryShowBlocker(attempt) {
       // Verificar que esta sesión siga siendo válida Y que el blocker deba mostrarse
       if (blockSessionId !== currentSession || !isBlockerVisible) {
-        console.log('[HablaPe] Sesión #' + currentSession + ' invalidada o blocker oculto, abortando');
+        console.log('[MWS] Sesión #' + currentSession + ' invalidada o blocker oculto, abortando');
         return;
       }
 
@@ -748,7 +748,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       mainPane.style.position = 'relative';
       mainPane.appendChild(blocker);
-      console.log('[HablaPe] Blocker MOSTRADO - Sesión #' + currentSession);
+      console.log('[MWS] Blocker MOSTRADO - Sesión #' + currentSession);
     }
 
     // Pequeño delay para dar tiempo a WhatsApp de actualizar el DOM
@@ -762,13 +762,13 @@ const MEDIA_CAPTURE_SCRIPT = `
     const currentSession = blockSessionId;
     isBlockerVisible = false;
 
-    console.log('[HablaPe] ✓ CHAT DESBLOQUEADO - Sesión #' + currentSession);
+    console.log('[MWS] ✓ CHAT DESBLOQUEADO - Sesión #' + currentSession);
 
     // Eliminar el blocker inmediatamente
     const blocker = document.getElementById('hablape-chat-blocker');
     if (blocker) {
       blocker.remove();
-      console.log('[HablaPe] Blocker ELIMINADO');
+      console.log('[MWS] Blocker ELIMINADO');
     }
   };
 
@@ -835,7 +835,7 @@ const MEDIA_CAPTURE_SCRIPT = `
     }
   }, true); // Captura en fase de captura para ser más rápido
 
-  console.log('[HablaPe] Interceptor de clicks en sidebar activo');
+  console.log('[MWS] Interceptor de clicks en sidebar activo');
 
   // =========================================================================
   // SOLICITAR AL USUARIO QUE HAGA CLICK EN EL NOMBRE DEL CHAT
@@ -845,7 +845,7 @@ const MEDIA_CAPTURE_SCRIPT = `
   // Mostrar blocker con instrucciones para obtener el número
   window.__hablapeShowPhoneNeeded = function() {
     isBlockerVisible = true;
-    console.log('[HablaPe] 📱 Solicitando al usuario que revele el número...');
+    console.log('[MWS] 📱 Solicitando al usuario que revele el número...');
 
     const mainPane = document.querySelector('#main');
     if (!mainPane) return;
@@ -891,13 +891,13 @@ const MEDIA_CAPTURE_SCRIPT = `
     lastExtractedPhone = null;
     window.__hablapeExtractedPhone = null;
     window.__hablapePhoneExtractedAt = null;
-    console.log('[HablaPe] 🧹 Número extraído limpiado');
+    console.log('[MWS] 🧹 Número extraído limpiado');
   };
 
   // Establecer el nombre del chat actual (para verificar el panel)
   window.__hablapeSetCurrentChatName = function(name) {
     currentChatNameForExtraction = name;
-    console.log('[HablaPe] Chat actual para extracción:', name);
+    console.log('[MWS] Chat actual para extracción:', name);
   };
 
   function extractPhoneFromContactPanel() {
@@ -1048,7 +1048,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           lastExtractedPhone = phone;
           window.__hablapeExtractedPhone = phone;
           window.__hablapePhoneExtractedAt = Date.now();
-          console.log('[HablaPe] ✓ Número extraído del panel:', phone);
+          console.log('[MWS] ✓ Número extraído del panel:', phone);
           console.log('[HABLAPE_PHONE_EXTRACTED]' + phone);
         }
       }
@@ -1097,7 +1097,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             lastExtractedPhone = phone;
             window.__hablapeExtractedPhone = phone;
             window.__hablapePhoneExtractedAt = Date.now();
-            console.log('[HablaPe] ✓ Número extraído:', phone);
+            console.log('[MWS] ✓ Número extraído:', phone);
             console.log('[HABLAPE_PHONE_EXTRACTED]' + phone);
             return true;
           }
@@ -1126,7 +1126,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           lastExtractedPhone = phone;
           window.__hablapeExtractedPhone = phone;
           window.__hablapePhoneExtractedAt = Date.now();
-          console.log('[HablaPe] ✓ Número extraído:', phone);
+          console.log('[MWS] ✓ Número extraído:', phone);
           console.log('[HABLAPE_PHONE_EXTRACTED]' + phone);
         }
       }, 300);
@@ -1147,80 +1147,80 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   function getCurrentChatPhone() {
     try {
-      console.log('[HablaPe Debug] ===== getCurrentChatPhone START =====');
-      console.log('[HablaPe Debug] lastKnownChatPhone actual:', lastKnownChatPhone);
+      console.log('[MWS Debug] ===== getCurrentChatPhone START =====');
+      console.log('[MWS Debug] lastKnownChatPhone actual:', lastKnownChatPhone);
 
       // Método 0: Usar variable global establecida por Electron (MÁS CONFIABLE)
       if (window.__hablapeCurrentChatPhone && window.__hablapeCurrentChatPhone !== 'unknown') {
         lastKnownChatPhone = window.__hablapeCurrentChatPhone;
-        console.log('[HablaPe Debug] M0: usando variable de Electron:', window.__hablapeCurrentChatPhone);
+        console.log('[MWS Debug] M0: usando variable de Electron:', window.__hablapeCurrentChatPhone);
         return window.__hablapeCurrentChatPhone;
       }
 
       // Método 1: Header de conversación
       const chatHeader = document.querySelector('[data-testid="conversation-header"]');
-      console.log('[HablaPe Debug] M1: chatHeader encontrado:', !!chatHeader);
+      console.log('[MWS Debug] M1: chatHeader encontrado:', !!chatHeader);
 
       if (chatHeader) {
         // Buscar TODOS los spans con title para debug
         const allSpans = chatHeader.querySelectorAll('span[title]');
-        console.log('[HablaPe Debug] M1: spans con title:', allSpans.length);
+        console.log('[MWS Debug] M1: spans con title:', allSpans.length);
         allSpans.forEach((s, i) => {
-          console.log('[HablaPe Debug] M1: span[' + i + '] title:', s.getAttribute('title'));
+          console.log('[MWS Debug] M1: span[' + i + '] title:', s.getAttribute('title'));
         });
 
         const phoneSpan = chatHeader.querySelector('span[title]');
         if (phoneSpan) {
           const title = phoneSpan.getAttribute('title');
-          console.log('[HablaPe Debug] M1: title completo:', title);
+          console.log('[MWS Debug] M1: title completo:', title);
           const phoneMatch = title?.match(/\\+?[0-9\\s-]{10,}/);
           if (phoneMatch) {
             const phone = phoneMatch[0].replace(/[\\s-]/g, '');
             lastKnownChatPhone = phone;
-            console.log('[HablaPe Debug] M1: teléfono extraído:', phone);
+            console.log('[MWS Debug] M1: teléfono extraído:', phone);
             return phone;
           } else {
-            console.log('[HablaPe Debug] M1: no match de teléfono en title');
+            console.log('[MWS Debug] M1: no match de teléfono en title');
           }
         }
       }
 
       // Método 2: URL hash
       const hash = window.location.hash;
-      console.log('[HablaPe Debug] M2: hash URL:', hash);
+      console.log('[MWS Debug] M2: hash URL:', hash);
       const hashPhoneMatch = hash.match(/@([0-9]+)/);
       if (hashPhoneMatch) {
         lastKnownChatPhone = hashPhoneMatch[1];
-        console.log('[HablaPe Debug] M2: teléfono extraído:', hashPhoneMatch[1]);
+        console.log('[MWS Debug] M2: teléfono extraído:', hashPhoneMatch[1]);
         return hashPhoneMatch[1];
       }
 
       // Método 3: Sidebar - buscar chat activo
       const sidebar = document.querySelector('#pane-side');
-      console.log('[HablaPe Debug] M3: sidebar encontrado:', !!sidebar);
+      console.log('[MWS Debug] M3: sidebar encontrado:', !!sidebar);
 
       if (sidebar) {
         // Buscar TODOS los elementos con data-id que contengan @c.us
         const allChats = sidebar.querySelectorAll('[data-id*="@c.us"]');
-        console.log('[HablaPe Debug] M3: elementos con data-id @c.us:', allChats.length);
+        console.log('[MWS Debug] M3: elementos con data-id @c.us:', allChats.length);
 
         const activeChat = sidebar.querySelector('[aria-selected="true"]') ||
                           sidebar.querySelector('[data-testid="cell-frame-container"]:focus-within');
-        console.log('[HablaPe Debug] M3: activeChat encontrado:', !!activeChat);
+        console.log('[MWS Debug] M3: activeChat encontrado:', !!activeChat);
 
         if (activeChat) {
           let el = activeChat;
           for (let i = 0; i < 10 && el; i++) {
             const dataId = el.getAttribute?.('data-id');
             if (dataId) {
-              console.log('[HablaPe Debug] M3: data-id en nivel ' + i + ':', dataId);
+              console.log('[MWS Debug] M3: data-id en nivel ' + i + ':', dataId);
             }
             if (dataId && dataId.includes('@c.us')) {
               let phone = dataId.split('@')[0];
               phone = phone.replace(/^(true|false)_/, '');
               if (/^\\d{9,15}$/.test(phone)) {
                 lastKnownChatPhone = phone;
-                console.log('[HablaPe Debug] M3: teléfono extraído:', phone);
+                console.log('[MWS Debug] M3: teléfono extraído:', phone);
                 return phone;
               }
             }
@@ -1231,21 +1231,21 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // Método 4: Mensajes con data-id en el área principal
       const mainPane = document.querySelector('#main');
-      console.log('[HablaPe Debug] M4: #main encontrado:', !!mainPane);
+      console.log('[MWS Debug] M4: #main encontrado:', !!mainPane);
 
       if (mainPane) {
         const messagesWithId = mainPane.querySelectorAll('[data-id*="@c.us"]');
-        console.log('[HablaPe Debug] M4: mensajes con data-id @c.us:', messagesWithId.length);
+        console.log('[MWS Debug] M4: mensajes con data-id @c.us:', messagesWithId.length);
 
         if (messagesWithId.length > 0) {
           const dataId = messagesWithId[0].getAttribute('data-id');
-          console.log('[HablaPe Debug] M4: primer data-id:', dataId);
+          console.log('[MWS Debug] M4: primer data-id:', dataId);
           let phoneFromId = dataId?.split('@')[0];
           if (phoneFromId) {
             phoneFromId = phoneFromId.replace(/^(true|false)_/, '');
             if (/^\\d{9,15}$/.test(phoneFromId)) {
               lastKnownChatPhone = phoneFromId;
-              console.log('[HablaPe Debug] M4: teléfono extraído:', phoneFromId);
+              console.log('[MWS Debug] M4: teléfono extraído:', phoneFromId);
               return phoneFromId;
             }
           }
@@ -1254,17 +1254,17 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // Método 5: Buscar en TODO el documento
       const anyMessageWithId = document.querySelector('[data-id*="@c.us"]');
-      console.log('[HablaPe Debug] M5: cualquier elemento con @c.us:', !!anyMessageWithId);
+      console.log('[MWS Debug] M5: cualquier elemento con @c.us:', !!anyMessageWithId);
 
       if (anyMessageWithId) {
         const dataId = anyMessageWithId.getAttribute('data-id');
-        console.log('[HablaPe Debug] M5: data-id encontrado:', dataId);
+        console.log('[MWS Debug] M5: data-id encontrado:', dataId);
         let phoneFromId = dataId?.split('@')[0];
         if (phoneFromId) {
           phoneFromId = phoneFromId.replace(/^(true|false)_/, '');
           if (/^\\d{9,15}$/.test(phoneFromId)) {
             lastKnownChatPhone = phoneFromId;
-            console.log('[HablaPe Debug] M5: teléfono extraído:', phoneFromId);
+            console.log('[MWS Debug] M5: teléfono extraído:', phoneFromId);
             return phoneFromId;
           }
         }
@@ -1272,14 +1272,14 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // Método 6: Usar caché si existe
       if (lastKnownChatPhone !== 'unknown') {
-        console.log('[HablaPe Debug] M6: usando caché:', lastKnownChatPhone);
+        console.log('[MWS Debug] M6: usando caché:', lastKnownChatPhone);
         return lastKnownChatPhone;
       }
 
-      console.log('[HablaPe Debug] ===== getCurrentChatPhone END: unknown =====');
+      console.log('[MWS Debug] ===== getCurrentChatPhone END: unknown =====');
       return 'unknown';
     } catch (err) {
-      console.log('[HablaPe Debug] getCurrentChatPhone error:', err.message);
+      console.log('[MWS Debug] getCurrentChatPhone error:', err.message);
       return lastKnownChatPhone !== 'unknown' ? lastKnownChatPhone : 'unknown';
     }
   }
@@ -1327,16 +1327,16 @@ const MEDIA_CAPTURE_SCRIPT = `
       if (!messageEl) {
         const cacheAge = Date.now() - lastContextCaptureTime;
         const isCacheFresh = cacheAge < 30000; // 30 segundos
-        console.log('[HablaPe Debug] extractMessageTimestamp: en visor, cache age=' + cacheAge + 'ms, fresh=' + isCacheFresh);
+        console.log('[MWS Debug] extractMessageTimestamp: en visor, cache age=' + cacheAge + 'ms, fresh=' + isCacheFresh);
 
         if (isCacheFresh && lastKnownMessageTimestamp) {
-          console.log('[HablaPe Debug] extractMessageTimestamp: usando cache FRESCO:', lastKnownMessageTimestamp);
+          console.log('[MWS Debug] extractMessageTimestamp: usando cache FRESCO:', lastKnownMessageTimestamp);
           return {
             messageSentAt: lastKnownMessageTimestamp,
             whatsappMessageId: lastKnownWhatsappMessageId
           };
         } else {
-          console.log('[HablaPe Debug] extractMessageTimestamp: cache VIEJO o vacío, retornando null');
+          console.log('[MWS Debug] extractMessageTimestamp: cache VIEJO o vacío, retornando null');
           return {
             messageSentAt: null,
             whatsappMessageId: lastKnownWhatsappMessageId
@@ -1364,7 +1364,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           lastKnownMessageTimestamp = messageSentAt;
           lastKnownWhatsappMessageId = whatsappMessageId;
           lastContextCaptureTime = Date.now();
-          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado via data-pre-plain-text (UTC):', messageSentAt);
+          console.log('[MWS Debug] extractMessageTimestamp: encontrado via data-pre-plain-text (UTC):', messageSentAt);
 
           return { messageSentAt, whatsappMessageId };
         }
@@ -1399,7 +1399,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           lastKnownMessageTimestamp = messageSentAt;
           lastKnownWhatsappMessageId = whatsappMessageId;
           lastContextCaptureTime = Date.now();
-          console.log('[HablaPe Debug] extractMessageTimestamp: encontrado via span (UTC):', messageSentAt, '(from:', text, ')');
+          console.log('[MWS Debug] extractMessageTimestamp: encontrado via span (UTC):', messageSentAt, '(from:', text, ')');
 
           return { messageSentAt, whatsappMessageId };
         }
@@ -1410,13 +1410,13 @@ const MEDIA_CAPTURE_SCRIPT = `
         lastKnownWhatsappMessageId = whatsappMessageId;
       }
 
-      console.log('[HablaPe Debug] extractMessageTimestamp: no encontrado en DOM, timestamp será null');
+      console.log('[MWS Debug] extractMessageTimestamp: no encontrado en DOM, timestamp será null');
       return {
         messageSentAt: null,
         whatsappMessageId: whatsappMessageId || lastKnownWhatsappMessageId
       };
     } catch (err) {
-      console.log('[HablaPe Debug] extractMessageTimestamp error:', err.message);
+      console.log('[MWS Debug] extractMessageTimestamp error:', err.message);
       return {
         messageSentAt: null,
         whatsappMessageId: lastKnownWhatsappMessageId
@@ -1434,7 +1434,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       lastKnownMessageTimestamp = null;
       lastContextCaptureTime = Date.now();
 
-      console.log('[HablaPe Debug] captureMessageContext: iniciando captura...');
+      console.log('[MWS Debug] captureMessageContext: iniciando captura...');
 
       // Buscar el contenedor del mensaje
       let messageEl = clickTarget.closest('[data-id]') ||
@@ -1453,7 +1453,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       }
 
       if (!messageEl) {
-        console.log('[HablaPe Debug] captureMessageContext: NO se encontró contenedor de mensaje');
+        console.log('[MWS Debug] captureMessageContext: NO se encontró contenedor de mensaje');
         return;
       }
 
@@ -1461,7 +1461,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       const dataId = messageEl.getAttribute('data-id');
       if (dataId) {
         lastKnownWhatsappMessageId = dataId;
-        console.log('[HablaPe Debug] captureMessageContext: data-id=' + dataId);
+        console.log('[MWS Debug] captureMessageContext: data-id=' + dataId);
 
         // Extraer teléfono del data-id si tiene formato @c.us
         if (dataId.includes('@c.us')) {
@@ -1478,7 +1478,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       const timeEl = messageEl.querySelector('[data-pre-plain-text]');
       if (timeEl) {
         const prePlainText = timeEl.getAttribute('data-pre-plain-text') || '';
-        console.log('[HablaPe Debug] data-pre-plain-text:', prePlainText);
+        console.log('[MWS Debug] data-pre-plain-text:', prePlainText);
 
         const timeMatch = prePlainText.match(/\\[(\\d{1,2}:\\d{2}),\\s*(\\d{1,2}\\/\\d{1,2}\\/\\d{4})\\]/);
         if (timeMatch) {
@@ -1487,7 +1487,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           const [hours, mins] = time.split(':');
           // Convert local time to UTC
           lastKnownMessageTimestamp = localToUtcIso(year, month, day, hours, mins);
-          console.log('[HablaPe Debug] MÉTODO 1 OK: timestamp (UTC)=' + lastKnownMessageTimestamp);
+          console.log('[MWS Debug] MÉTODO 1 OK: timestamp (UTC)=' + lastKnownMessageTimestamp);
           return;
         }
       }
@@ -1517,7 +1517,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             hours,
             minutes
           );
-          console.log('[HablaPe Debug] MÉTODO 2 OK: timestamp (UTC)=' + lastKnownMessageTimestamp + ' (from span: ' + text + ')');
+          console.log('[MWS Debug] MÉTODO 2 OK: timestamp (UTC)=' + lastKnownMessageTimestamp + ' (from span: ' + text + ')');
           return;
         }
       }
@@ -1526,14 +1526,14 @@ const MEDIA_CAPTURE_SCRIPT = `
       const elementsWithData = messageEl.querySelectorAll('[data-testid*="msg"], [data-testid*="time"]');
       for (const el of elementsWithData) {
         const testId = el.getAttribute('data-testid') || '';
-        console.log('[HablaPe Debug] Elemento con data-testid:', testId);
+        console.log('[MWS Debug] Elemento con data-testid:', testId);
       }
 
       // ========== MÉTODO 4: Buscar en el footer del mensaje ==========
       const msgMeta = messageEl.querySelector('[data-testid="msg-meta"], .message-meta, ._amk6');
       if (msgMeta) {
         const metaText = msgMeta.textContent?.trim() || '';
-        console.log('[HablaPe Debug] msg-meta text:', metaText);
+        console.log('[MWS Debug] msg-meta text:', metaText);
         const metaMatch = metaText.match(/(\\d{1,2}):(\\d{2})/);
         if (metaMatch) {
           const now = new Date();
@@ -1544,16 +1544,16 @@ const MEDIA_CAPTURE_SCRIPT = `
             metaMatch[1],
             metaMatch[2]
           );
-          console.log('[HablaPe Debug] MÉTODO 4 OK: timestamp (UTC)=' + lastKnownMessageTimestamp);
+          console.log('[MWS Debug] MÉTODO 4 OK: timestamp (UTC)=' + lastKnownMessageTimestamp);
           return;
         }
       }
 
-      console.log('[HablaPe Debug] captureMessageContext: NO se pudo extraer timestamp');
-      console.log('[HablaPe Debug] phone=' + lastKnownChatPhone + ', msgId=' + lastKnownWhatsappMessageId);
+      console.log('[MWS Debug] captureMessageContext: NO se pudo extraer timestamp');
+      console.log('[MWS Debug] phone=' + lastKnownChatPhone + ', msgId=' + lastKnownWhatsappMessageId);
 
     } catch (err) {
-      console.log('[HablaPe Debug] captureMessageContext error:', err.message);
+      console.log('[MWS Debug] captureMessageContext error:', err.message);
     }
   }
 
@@ -1596,10 +1596,10 @@ const MEDIA_CAPTURE_SCRIPT = `
       // Ignorar imágenes muy pequeñas (thumbnails/miniaturas del chat)
       // Mínimo 10KB - reducido para capturar más imágenes válidas
       if (!imageData || size < 10000) {
-        console.log('[HablaPe Debug] Imagen ignorada por tamaño:', size, 'bytes');
+        console.log('[MWS Debug] Imagen ignorada por tamaño:', size, 'bytes');
         return;
       }
-      console.log('[HablaPe Debug] Imagen aceptada, tamaño:', size, 'bytes');
+      console.log('[MWS Debug] Imagen aceptada, tamaño:', size, 'bytes');
 
       // Extract message timestamp
       const { messageSentAt, whatsappMessageId } = extractMessageTimestamp(element);
@@ -1608,7 +1608,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       const chatPhone = getCurrentChatPhone();
       const chatName = window.__hablapeCurrentChatName || null;
 
-      console.log('[HablaPe Debug] Agregando a cola - chatPhone:', chatPhone, 'chatName:', chatName);
+      console.log('[MWS Debug] Agregando a cola - chatPhone:', chatPhone, 'chatName:', chatName);
 
       window.__hablapeMediaQueue.push({
         data: imageData,
@@ -1623,7 +1623,7 @@ const MEDIA_CAPTURE_SCRIPT = `
         mediaType: 'IMAGE'
       });
     } catch (err) {
-      console.log('[HablaPe Debug] Error en captureImage:', err.message);
+      console.log('[MWS Debug] Error en captureImage:', err.message);
     }
   }
 
@@ -1643,7 +1643,7 @@ const MEDIA_CAPTURE_SCRIPT = `
   // 4. Captura automáticamente
   // ==========================================================================
 
-  console.log('[HablaPe] Iniciando captura automática de imágenes en chat...');
+  console.log('[MWS] Iniciando captura automática de imágenes en chat...');
 
   // ==========================================================================
   // Función para extraer timestamp directamente del elemento del mensaje
@@ -1663,7 +1663,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             const [hours, mins] = time.split(':');
             // Convert local time to UTC
             const timestamp = localToUtcIso(year, month, day, hours, mins);
-            console.log('[HablaPe Auto] Timestamp extraído (método 1, UTC):', timestamp);
+            console.log('[MWS Auto] Timestamp extraído (método 1, UTC):', timestamp);
             return timestamp;
           }
         }
@@ -1691,7 +1691,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             hours,
             minutes
           );
-          console.log('[HablaPe Auto] Timestamp extraído (método 2, UTC):', timestamp, 'from:', text);
+          console.log('[MWS Auto] Timestamp extraído (método 2, UTC):', timestamp, 'from:', text);
           return timestamp;
         }
       }
@@ -1710,15 +1710,15 @@ const MEDIA_CAPTURE_SCRIPT = `
             metaMatch[1],
             metaMatch[2]
           );
-          console.log('[HablaPe Auto] Timestamp extraído (método 3, UTC):', timestamp);
+          console.log('[MWS Auto] Timestamp extraído (método 3, UTC):', timestamp);
           return timestamp;
         }
       }
 
-      console.log('[HablaPe Auto] No se pudo extraer timestamp del mensaje');
+      console.log('[MWS Auto] No se pudo extraer timestamp del mensaje');
       return null;
     } catch (err) {
-      console.log('[HablaPe Auto] Error extrayendo timestamp:', err.message);
+      console.log('[MWS Auto] Error extrayendo timestamp:', err.message);
       return null;
     }
   }
@@ -1730,7 +1730,7 @@ const MEDIA_CAPTURE_SCRIPT = `
   // ==========================================================================
   function getPhoneFromChatContext(messageEl) {
     try {
-      console.log('[HablaPe Context] ===== Buscando teléfono del contexto del mensaje =====');
+      console.log('[MWS Context] ===== Buscando teléfono del contexto del mensaje =====');
 
       // MÉTODO 1: Buscar en los mensajes del mismo chat (#main)
       // Los mensajes con formato @c.us contienen el teléfono real
@@ -1738,7 +1738,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       if (mainPane) {
         // Buscar TODOS los mensajes con data-id que contengan @c.us
         const messagesWithPhone = mainPane.querySelectorAll('[data-id*="@c.us"]');
-        console.log('[HablaPe Context] Mensajes con @c.us en #main:', messagesWithPhone.length);
+        console.log('[MWS Context] Mensajes con @c.us en #main:', messagesWithPhone.length);
 
         for (const msg of messagesWithPhone) {
           const dataId = msg.getAttribute('data-id');
@@ -1747,7 +1747,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             let phone = dataId.split('@')[0];
             phone = phone.replace(/^(true|false)_/, '');
             if (/^\\d{9,15}$/.test(phone)) {
-              console.log('[HablaPe Context] ✓ Teléfono encontrado en mensajes del chat:', phone);
+              console.log('[MWS Context] ✓ Teléfono encontrado en mensajes del chat:', phone);
               return phone;
             }
           }
@@ -1761,7 +1761,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           let phone = msgDataId.split('@')[0];
           phone = phone.replace(/^(true|false)_/, '');
           if (/^\\d{9,15}$/.test(phone)) {
-            console.log('[HablaPe Context] ✓ Teléfono extraído del mensaje:', phone);
+            console.log('[MWS Context] ✓ Teléfono extraído del mensaje:', phone);
             return phone;
           }
         }
@@ -1770,7 +1770,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       // MÉTODO 3: Buscar en TODO el documento mensajes con @c.us
       // (por si el #main no está accesible)
       const allMessages = document.querySelectorAll('[data-id*="@c.us"]');
-      console.log('[HablaPe Context] Mensajes con @c.us en todo el DOM:', allMessages.length);
+      console.log('[MWS Context] Mensajes con @c.us en todo el DOM:', allMessages.length);
 
       for (const msg of allMessages) {
         const dataId = msg.getAttribute('data-id');
@@ -1778,7 +1778,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           let phone = dataId.split('@')[0];
           phone = phone.replace(/^(true|false)_/, '');
           if (/^\\d{9,15}$/.test(phone)) {
-            console.log('[HablaPe Context] ✓ Teléfono encontrado en DOM:', phone);
+            console.log('[MWS Context] ✓ Teléfono encontrado en DOM:', phone);
             return phone;
           }
         }
@@ -1793,7 +1793,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           const phoneMatch = title?.match(/\\+?[0-9\\s-]{10,}/);
           if (phoneMatch) {
             const phone = phoneMatch[0].replace(/[\\s-]/g, '');
-            console.log('[HablaPe Context] Teléfono del header:', phone);
+            console.log('[MWS Context] Teléfono del header:', phone);
             return phone;
           }
         }
@@ -1801,14 +1801,14 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // MÉTODO 5 (ÚLTIMO FALLBACK): Variable de Electron
       if (window.__hablapeCurrentChatPhone && window.__hablapeCurrentChatPhone !== 'unknown') {
-        console.log('[HablaPe Context] ⚠ Usando variable Electron (fallback):', window.__hablapeCurrentChatPhone);
+        console.log('[MWS Context] ⚠ Usando variable Electron (fallback):', window.__hablapeCurrentChatPhone);
         return window.__hablapeCurrentChatPhone;
       }
 
-      console.log('[HablaPe Context] ✗ No se encontró teléfono');
+      console.log('[MWS Context] ✗ No se encontró teléfono');
       return 'unknown';
     } catch (err) {
-      console.log('[HablaPe Context] Error:', err.message);
+      console.log('[MWS Context] Error:', err.message);
       return window.__hablapeCurrentChatPhone || 'unknown';
     }
   }
@@ -1826,20 +1826,20 @@ const MEDIA_CAPTURE_SCRIPT = `
     try {
       const blobUrl = img.src;
       if (!blobUrl || !blobUrl.startsWith('blob:')) {
-        console.log('[HablaPe Auto] No es blob URL, ignorando');
+        console.log('[MWS Auto] No es blob URL, ignorando');
         return;
       }
 
       // Verificar si ya capturamos esta URL
       if (capturedBlobUrls.has(blobUrl)) {
-        console.log('[HablaPe Auto] URL ya capturada:', blobUrl.substring(0, 50));
+        console.log('[MWS Auto] URL ya capturada:', blobUrl.substring(0, 50));
         return;
       }
 
       // Obtener data-id del mensaje
       const messageId = messageEl.getAttribute('data-id') || null;
       if (messageId && processedMessageIds.has(messageId)) {
-        console.log('[HablaPe Auto] Mensaje ya procesado:', messageId);
+        console.log('[MWS Auto] Mensaje ya procesado:', messageId);
         return;
       }
 
@@ -1855,7 +1855,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // Filtrar imágenes muy pequeñas
       if (size < MIN_IMAGE_SIZE) {
-        console.log('[HablaPe Auto] Imagen muy pequeña:', size, 'bytes, ignorando');
+        console.log('[MWS Auto] Imagen muy pequeña:', size, 'bytes, ignorando');
         return;
       }
 
@@ -1892,11 +1892,11 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       const chatName = window.__hablapeCurrentChatName || null;
 
-      console.log('[HablaPe Auto] ✓ Capturando imagen:');
-      console.log('[HablaPe Auto]   size:', size, 'bytes');
-      console.log('[HablaPe Auto]   chatPhone:', chatPhone, chatPhoneOverride ? '(from click)' : '(from fallback)');
-      console.log('[HablaPe Auto]   messageSentAt:', messageSentAt);
-      console.log('[HablaPe Auto]   messageId:', messageId);
+      console.log('[MWS Auto] ✓ Capturando imagen:');
+      console.log('[MWS Auto]   size:', size, 'bytes');
+      console.log('[MWS Auto]   chatPhone:', chatPhone, chatPhoneOverride ? '(from click)' : '(from fallback)');
+      console.log('[MWS Auto]   messageSentAt:', messageSentAt);
+      console.log('[MWS Auto]   messageId:', messageId);
 
       // Agregar a la cola
       window.__hablapeMediaQueue.push({
@@ -1913,7 +1913,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       });
 
     } catch (err) {
-      console.log('[HablaPe Auto] Error capturando imagen:', err.message);
+      console.log('[MWS Auto] Error capturando imagen:', err.message);
     }
   }
 
@@ -1929,14 +1929,14 @@ const MEDIA_CAPTURE_SCRIPT = `
     // Verificar que la imagen tiene dimensiones válidas (no es thumbnail tiny)
     const rect = img.getBoundingClientRect();
     if (rect.width < 80 || rect.height < 80) {
-      console.log('[HablaPe Protect] Imagen muy pequeña, no proteger:', rect.width, 'x', rect.height);
+      console.log('[MWS Protect] Imagen muy pequeña, no proteger:', rect.width, 'x', rect.height);
       return;
     }
 
     // Solo proteger imágenes blob
     if (!img.src?.startsWith('blob:')) return;
 
-    console.log('[HablaPe Protect] Protegiendo imagen:', rect.width, 'x', rect.height);
+    console.log('[MWS Protect] Protegiendo imagen:', rect.width, 'x', rect.height);
 
     // Aplicar blur a la imagen
     img.classList.add('hablape-protected-image');
@@ -1965,9 +1965,9 @@ const MEDIA_CAPTURE_SCRIPT = `
       // El chat blocker garantiza que estos valores ya están establecidos
       const chatPhone = window.__hablapeCurrentChatPhone || 'unknown';
       const chatName = window.__hablapeCurrentChatName || null;
-      console.log('[HablaPe Protect] ✓ Click - Usando datos del CRM:');
-      console.log('[HablaPe Protect]   chatPhone:', chatPhone);
-      console.log('[HablaPe Protect]   chatName:', chatName);
+      console.log('[MWS Protect] ✓ Click - Usando datos del CRM:');
+      console.log('[MWS Protect]   chatPhone:', chatPhone);
+      console.log('[MWS Protect]   chatName:', chatName);
 
       // Revelar imagen
       img.classList.add('revealed');
@@ -1988,7 +1988,7 @@ const MEDIA_CAPTURE_SCRIPT = `
                            img;
 
         if (clickTarget) {
-          console.log('[HablaPe Protect] Abriendo visor de WhatsApp...');
+          console.log('[MWS Protect] Abriendo visor de WhatsApp...');
           const clickEvent = new MouseEvent('click', {
             bubbles: true,
             cancelable: true,
@@ -2011,7 +2011,7 @@ const MEDIA_CAPTURE_SCRIPT = `
     const images = messageEl.querySelectorAll('img[src^="blob:"]');
     if (images.length === 0) return;
 
-    console.log('[HablaPe Auto] Mensaje con', images.length, 'imagen(es) encontrado');
+    console.log('[MWS Auto] Mensaje con', images.length, 'imagen(es) encontrado');
 
     for (const img of images) {
       // Esperar un poco para que la imagen cargue completamente
@@ -2077,11 +2077,11 @@ const MEDIA_CAPTURE_SCRIPT = `
         childList: true,
         subtree: true
       });
-      console.log('[HablaPe Auto] ✓ Observer iniciado en área de chat');
+      console.log('[MWS Auto] ✓ Observer iniciado en área de chat');
 
       // Escanear mensajes existentes con imágenes
       const existingMessages = mainPane.querySelectorAll('[data-id*="@"]');
-      console.log('[HablaPe Auto] Escaneando', existingMessages.length, 'mensajes existentes...');
+      console.log('[MWS Auto] Escaneando', existingMessages.length, 'mensajes existentes...');
 
       existingMessages.forEach((messageEl, idx) => {
         // Delay escalonado para no saturar
@@ -2089,7 +2089,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       });
     } else {
       // Reintentar en 2 segundos
-      console.log('[HablaPe Auto] Área de chat no encontrada, reintentando...');
+      console.log('[MWS Auto] Área de chat no encontrada, reintentando...');
       setTimeout(startChatObserver, 2000);
     }
   }
@@ -2169,7 +2169,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             const [hours, mins] = time.split(':');
             lastAudioMessageTimestamp = localToUtcIso(year, month, day, hours, mins);
             lastAudioContextTime = Date.now();
-            console.log('[HablaPe Debug] Audio click: capturado timestamp:', lastAudioMessageTimestamp);
+            console.log('[MWS Debug] Audio click: capturado timestamp:', lastAudioMessageTimestamp);
           }
         }
 
@@ -2196,7 +2196,7 @@ const MEDIA_CAPTURE_SCRIPT = `
                 minutes
               );
               lastAudioContextTime = Date.now();
-              console.log('[HablaPe Debug] Audio click: capturado timestamp via span:', lastAudioMessageTimestamp);
+              console.log('[MWS Debug] Audio click: capturado timestamp via span:', lastAudioMessageTimestamp);
               break;
             }
           }
@@ -2229,13 +2229,13 @@ const MEDIA_CAPTURE_SCRIPT = `
           if (audioContextAge < 5000 && lastAudioMessageTimestamp) {
             messageSentAt = lastAudioMessageTimestamp;
             whatsappMessageId = lastAudioWhatsappMessageId;
-            console.log('[HablaPe Debug] Audio play: usando contexto del click:', messageSentAt);
+            console.log('[MWS Debug] Audio play: usando contexto del click:', messageSentAt);
           } else {
             // Fallback al método original
             const extracted = extractMessageTimestamp(audioElement);
             messageSentAt = extracted.messageSentAt;
             whatsappMessageId = extracted.whatsappMessageId;
-            console.log('[HablaPe Debug] Audio play: usando extractMessageTimestamp:', messageSentAt);
+            console.log('[MWS Debug] Audio play: usando extractMessageTimestamp:', messageSentAt);
           }
 
           const reader = new FileReader();
@@ -2288,7 +2288,7 @@ export function setupDownloadBlocking(
       timestamp: new Date().toISOString()
     };
 
-    console.log('[HablaPe] Descarga bloqueada:', blockedEvent.filename);
+    console.log('[MWS] Descarga bloqueada:', blockedEvent.filename);
 
     mainWindow.webContents.send('download-blocked', blockedEvent);
 
@@ -2312,7 +2312,7 @@ export function injectSecurityScripts(view: BrowserView): void {
       await view.webContents.executeJavaScript(BLOCK_DOWNLOAD_SCRIPT, true);
       await view.webContents.executeJavaScript(MEDIA_CAPTURE_SCRIPT, true);
     } catch (err) {
-      console.error('[HablaPe] Error inyectando scripts de seguridad:', err);
+      console.error('[MWS] Error inyectando scripts de seguridad:', err);
     }
   });
 }

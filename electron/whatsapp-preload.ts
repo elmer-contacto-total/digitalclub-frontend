@@ -107,7 +107,7 @@ const applyFingerPrintEvasion = `
     return originalToString.call(this);
   };
 
-  console.log('[HablaPe] Anti-fingerprinting applied');
+  console.log('[MWS] Anti-fingerprinting applied');
 })();
 `;
 

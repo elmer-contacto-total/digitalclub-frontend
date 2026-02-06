@@ -123,10 +123,10 @@ export function getOrCreateFingerprint(): UserFingerprint {
     try {
       const data = fs.readFileSync(fingerprintPath, 'utf-8');
       const fingerprint = JSON.parse(data) as UserFingerprint;
-      console.log('[HablaPe] Fingerprint cargado:', fingerprint.odaId.substring(0, 8) + '...');
+      console.log('[MWS] Fingerprint cargado:', fingerprint.odaId.substring(0, 8) + '...');
       return fingerprint;
     } catch (err) {
-      console.error('[HablaPe] Error cargando fingerprint, generando nuevo...');
+      console.error('[MWS] Error cargando fingerprint, generando nuevo...');
     }
   }
 
@@ -141,9 +141,9 @@ export function getOrCreateFingerprint(): UserFingerprint {
     }
 
     fs.writeFileSync(fingerprintPath, JSON.stringify(fingerprint, null, 2));
-    console.log('[HablaPe] Nuevo fingerprint generado:', fingerprint.odaId.substring(0, 8) + '...');
+    console.log('[MWS] Nuevo fingerprint generado:', fingerprint.odaId.substring(0, 8) + '...');
   } catch (err) {
-    console.error('[HablaPe] Error guardando fingerprint:', err);
+    console.error('[MWS] Error guardando fingerprint:', err);
   }
 
   return fingerprint;
@@ -264,7 +264,7 @@ export function generateEvasionScript(fingerprint: UserFingerprint): string {
     return originalToString.call(this);
   };
 
-  console.log('[HablaPe] Fingerprint aplicado');
+  console.log('[MWS] Fingerprint aplicado');
 })();
 `;
 }
