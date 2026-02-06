@@ -158,6 +158,12 @@ export const routes: Routes = [
         loadChildren: () => import('./features/audits/audits.routes').then(m => m.AUDITS_ROUTES),
         title: 'Auditorías - MWS'
       },
+      // App Versions (super_admin only)
+      {
+        path: 'app_versions',
+        loadChildren: () => import('./features/app-versions/app-versions.routes').then(m => m.APP_VERSIONS_ROUTES),
+        title: 'Versiones de App - MWS'
+      },
       // WhatsApp (implemented)
       {
         path: 'whatsapp_onboarding',
