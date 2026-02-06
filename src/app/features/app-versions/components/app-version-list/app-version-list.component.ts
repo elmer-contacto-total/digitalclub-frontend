@@ -58,10 +58,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
             </div>
             <h3>No hay versiones</h3>
             <p>Crea una nueva versión para comenzar</p>
-            <a routerLink="new" class="btn btn-primary">
-              <i class="ph ph-plus"></i>
-              Nueva Versión
-            </a>
+            <a routerLink="new" class="btn btn-primary">Nueva Versión</a>
           </div>
         } @else {
           <div class="table-container">
@@ -457,16 +454,6 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
     .btn i {
       font-size: 18px;
       flex-shrink: 0;
-    }
-
-    .empty-state .btn {
-      font-size: var(--text-lg);
-      padding: 0 var(--space-5);
-      height: var(--btn-height-lg);
-    }
-
-    .empty-state .btn i {
-      font-size: 22px;
     }
 
     .btn-primary {
