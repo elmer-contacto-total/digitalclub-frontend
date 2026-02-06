@@ -3,7 +3,7 @@ import * as https from 'https';
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execFile } from 'child_process';
+import { spawn } from 'child_process';
 
 /**
  * Update information returned from the API
@@ -143,14 +143,19 @@ export async function downloadAndInstallUpdate(
     // Small delay so user sees 100%
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Run the installer and quit
-    console.log('[HablaPe Update] Launching installer...');
-    execFile(filePath, { detached: true, windowsHide: false } as any);
+    // Run the installer as a detached process that survives app exit
+    console.log('[HablaPe Update] Launching installer:', filePath);
+    const child = spawn(filePath, [], {
+      detached: true,
+      stdio: 'ignore',
+      shell: false
+    });
+    child.unref();
 
-    // Quit the app so the installer can replace files
+    // Give the installer time to start before quitting
     setTimeout(() => {
       app.quit();
-    }, 500);
+    }, 2000);
 
   } catch (error: any) {
     console.error('[HablaPe Update] Download/install error:', error);
