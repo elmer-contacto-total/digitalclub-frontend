@@ -78,14 +78,9 @@ interface VersionDto {
           </div>
 
           <!-- Download button -->
-          <button class="download-btn" (click)="download()" [disabled]="isDownloading()">
-            @if (isDownloading()) {
-              <div class="btn-spinner"></div>
-              Descargando...
-            } @else {
-              <i class="ph ph-download-simple"></i>
-              Descargar Instalador
-            }
+          <button class="download-btn" (click)="download()">
+            <i class="ph ph-download-simple"></i>
+            Descargar Instalador
           </button>
 
           <!-- Release notes -->
@@ -338,20 +333,6 @@ interface VersionDto {
       &:active {
         transform: scale(0.98);
       }
-
-      &:disabled {
-        opacity: 0.7;
-        cursor: not-allowed;
-      }
-    }
-
-    .btn-spinner {
-      width: 18px;
-      height: 18px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
     }
 
     /* Release notes */
@@ -558,37 +539,11 @@ export class DownloadComponent implements OnInit {
     });
   }
 
-  isDownloading = signal(false);
-
   download(): void {
-    const v = this.versionInfo();
-    if (!v?.downloadUrl || this.isDownloading()) return;
-
-    this.isDownloading.set(true);
-    const filename = `MWS-Desktop-v${v.version}-setup.exe`;
-
-    // Fetch as blob to bypass cross-origin download attribute restriction
-    fetch(v.downloadUrl)
-      .then(res => {
-        if (!res.ok) throw new Error('Download failed');
-        return res.blob();
-      })
-      .then(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        this.isDownloading.set(false);
-      })
-      .catch(() => {
-        // Fallback: open directly if fetch fails (e.g. CORS)
-        window.open(v.downloadUrl, '_blank');
-        this.isDownloading.set(false);
-      });
+    const url = this.versionInfo()?.downloadUrl;
+    if (url) {
+      window.open(url, '_blank');
+    }
   }
 
   formatFileSize(bytes: number | null): string {
