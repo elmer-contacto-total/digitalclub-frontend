@@ -128,36 +128,4 @@ export class HeaderComponent {
     }
   }
 
-  // Electron window controls
-  get isElectron(): boolean {
-    return this.electronService.isElectron;
-  }
-
-  isMaximized = signal(false);
-
-  onMinimize(): void {
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.windowMinimize) {
-      (window as any).electronAPI.windowMinimize();
-    }
-  }
-
-  onMaximize(): void {
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.windowMaximize) {
-      (window as any).electronAPI.windowMaximize();
-      this.checkMaximized();
-    }
-  }
-
-  onClose(): void {
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.windowClose) {
-      (window as any).electronAPI.windowClose();
-    }
-  }
-
-  private async checkMaximized(): Promise<void> {
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.windowIsMaximized) {
-      const maximized = await (window as any).electronAPI.windowIsMaximized();
-      this.isMaximized.set(maximized);
-    }
-  }
 }

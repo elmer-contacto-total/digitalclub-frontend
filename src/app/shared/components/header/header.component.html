@@ -168,38 +168,5 @@
       }
     </div>
 
-    <!-- Window Controls (Electron only) -->
-    @if (isElectron) {
-      <div class="window-controls">
-        <button
-          type="button"
-          class="window-btn window-btn-minimize"
-          (click)="onMinimize()"
-          aria-label="Minimizar"
-        >
-          <i class="ph ph-minus"></i>
-        </button>
-        <button
-          type="button"
-          class="window-btn window-btn-maximize"
-          (click)="onMaximize()"
-          [attr.aria-label]="isMaximized() ? 'Restaurar' : 'Maximizar'"
-        >
-          @if (isMaximized()) {
-            <i class="ph ph-copy"></i>
-          } @else {
-            <i class="ph ph-square"></i>
-          }
-        </button>
-        <button
-          type="button"
-          class="window-btn window-btn-close"
-          (click)="onClose()"
-          aria-label="Cerrar"
-        >
-          <i class="ph ph-x"></i>
-        </button>
-      </div>
-    }
   </div>
 </header>

@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   BrowserView,
+  Menu,
   globalShortcut,
   clipboard,
   ipcMain,
@@ -244,15 +245,15 @@ const ANIMATION_DURATION = 200; // ms - debe coincidir con CSS transition
 const ANIMATION_STEPS = 12; // frames para la animación
 
 function createWindow(): void {
+  // Quitar menú nativo de Electron (File, Edit, View, Window, Help)
+  Menu.setApplicationMenu(null);
+
   // Crear ventana principal
   mainWindow = new BrowserWindow({
     width: 1600,
     height: 900,
     minWidth: 1400,
     minHeight: 700,
-    frame: false, // Frameless para custom titlebar
-    titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 15, y: 15 },
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: false,  // Deshabilitado para permitir módulos ES6 de Angular

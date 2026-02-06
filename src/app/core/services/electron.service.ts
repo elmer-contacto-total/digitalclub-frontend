@@ -132,6 +132,11 @@ export class ElectronService {
 
     const isElectron = hasElectronAPI || hasElectronUserAgent;
     this.isElectronSubject.next(isElectron);
+
+    // Add class to body for CSS targeting (e.g. header padding for titlebar overlay)
+    if (isElectron) {
+      document.body.classList.add('electron');
+    }
   }
 
   /**
