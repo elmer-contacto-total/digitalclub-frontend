@@ -18,8 +18,9 @@ import {
 } from './media-security';
 import { checkForUpdates, notifyUpdateAvailable, openDownloadUrl, downloadAndInstallUpdate } from './update-checker';
 
-// App version - IMPORTANT: Keep in sync with package.json
-const APP_VERSION = '1.0.0';
+// App version - read from package.json via Electron's app.getVersion()
+// When building with electron-builder, this reflects the version in package.json
+const APP_VERSION = app.getVersion();
 
 // Stored update info (so renderer can pull it if it missed the push)
 let pendingUpdateInfo: any = null;
