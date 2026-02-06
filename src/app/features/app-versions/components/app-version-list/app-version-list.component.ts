@@ -440,16 +440,23 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
     .btn {
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: var(--space-2);
       height: var(--btn-height);
       padding: 0 var(--space-4);
-      border: none;
+      border: 1px solid transparent;
       border-radius: var(--radius-md);
       font-size: var(--text-base);
       font-weight: var(--font-medium);
       cursor: pointer;
       transition: all var(--duration-normal);
       text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn i {
+      font-size: 16px;
+      flex-shrink: 0;
     }
 
     .btn-primary {
