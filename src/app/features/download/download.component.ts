@@ -540,10 +540,16 @@ export class DownloadComponent implements OnInit {
   }
 
   download(): void {
-    const url = this.versionInfo()?.downloadUrl;
-    if (url) {
-      window.open(url, '_blank');
-    }
+    const v = this.versionInfo();
+    if (!v?.downloadUrl) return;
+
+    const filename = `MWS-Desktop-v${v.version}-setup.exe`;
+    const a = document.createElement('a');
+    a.href = v.downloadUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   formatFileSize(bytes: number | null): string {
