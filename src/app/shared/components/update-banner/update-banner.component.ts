@@ -1,6 +1,7 @@
-import { Component, inject, computed } from '@angular/core';
+import { Component, inject, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { UpdateService } from '../../../core/services/update.service';
+import { ElectronService } from '../../../core/services/electron.service';
 
 @Component({
   selector: 'app-update-banner',
@@ -261,6 +262,15 @@ import { UpdateService } from '../../../core/services/update.service';
 })
 export class UpdateBannerComponent {
   updateService = inject(UpdateService);
+  private electronService = inject(ElectronService);
+
+  constructor() {
+    // Hide WhatsApp BrowserView when update dialog is shown (it renders above web content)
+    effect(() => {
+      const visible = this.showDialog();
+      this.electronService.setWhatsAppOverlayMode(visible);
+    });
+  }
 
   update = computed(() => this.updateService.updateAvailable());
   status = computed(() => this.updateService.downloadStatus());
