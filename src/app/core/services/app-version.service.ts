@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpEvent } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
@@ -14,6 +14,7 @@ export interface AppVersion {
   releaseNotes: string | null;
   fileSize: number | null;
   sha256Hash: string | null;
+  s3Key: string | null;
   mandatory: boolean;
   active: boolean;
   publishedAt: string;
@@ -43,6 +44,7 @@ export interface CreateAppVersionRequest {
   releaseNotes?: string;
   fileSize?: number;
   sha256Hash?: string;
+  s3Key?: string;
   mandatory?: boolean;
   active?: boolean;
   publishedAt?: string;
@@ -58,9 +60,20 @@ export interface UpdateAppVersionRequest {
   releaseNotes?: string;
   fileSize?: number;
   sha256Hash?: string;
+  s3Key?: string;
   mandatory?: boolean;
   active?: boolean;
   publishedAt?: string;
+}
+
+/**
+ * Upload installer response
+ */
+export interface UploadInstallerResponse {
+  s3Key: string;
+  fileSize: number;
+  fileName: string;
+  downloadUrl: string;
 }
 
 /**
@@ -129,6 +142,21 @@ export class AppVersionService {
    */
   toggleActive(id: number): Observable<AppVersion> {
     return this.http.post<AppVersion>(`${this.baseUrl}/${id}/toggle_active`, {});
+  }
+
+  /**
+   * Upload installer file to S3
+   */
+  uploadInstaller(file: File, platform: string): Observable<HttpEvent<UploadInstallerResponse>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('platform', platform);
+
+    return this.http.post<UploadInstallerResponse>(
+      `${this.baseUrl}/upload_installer`,
+      formData,
+      { reportProgress: true, observe: 'events' }
+    );
   }
 
   /**

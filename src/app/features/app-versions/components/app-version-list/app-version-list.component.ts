@@ -53,7 +53,9 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           </div>
         } @else if (versions().length === 0) {
           <div class="empty-state">
-            <i class="ph ph-package"></i>
+            <div class="empty-icon">
+              <i class="ph ph-package"></i>
+            </div>
             <h3>No hay versiones</h3>
             <p>Crea una nueva versión para comenzar</p>
             <a routerLink="new" class="btn btn-primary">
@@ -68,6 +70,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                 <tr>
                   <th>Versión</th>
                   <th>Plataforma</th>
+                  <th>Origen</th>
                   <th>Tamaño</th>
                   <th>Obligatoria</th>
                   <th>Estado</th>
@@ -86,22 +89,33 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                         {{ version.platform | titlecase }}
                       </span>
                     </td>
+                    <td>
+                      @if (version.s3Key) {
+                        <span class="badge badge-info">
+                          <i class="ph ph-cloud-arrow-up"></i> S3
+                        </span>
+                      } @else {
+                        <span class="badge badge-default">
+                          <i class="ph ph-link"></i> URL
+                        </span>
+                      }
+                    </td>
                     <td>{{ formatFileSize(version.fileSize) }}</td>
                     <td>
                       @if (version.mandatory) {
                         <span class="badge badge-warning">Sí</span>
                       } @else {
-                        <span class="badge badge-secondary">No</span>
+                        <span class="badge badge-default">No</span>
                       }
                     </td>
                     <td>
                       @if (version.active) {
                         <span class="badge badge-success">Activa</span>
                       } @else {
-                        <span class="badge badge-danger">Inactiva</span>
+                        <span class="badge badge-error">Inactiva</span>
                       }
                     </td>
-                    <td>{{ formatDate(version.publishedAt) }}</td>
+                    <td class="date-cell">{{ formatDate(version.publishedAt) }}</td>
                     <td>
                       <div class="action-buttons">
                         <button
@@ -114,7 +128,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                         <a [routerLink]="[version.id, 'edit']" class="btn-icon" title="Editar">
                           <i class="ph ph-pencil"></i>
                         </a>
-                        <button class="btn-icon btn-danger" (click)="confirmDelete(version)" title="Eliminar">
+                        <button class="btn-icon btn-icon-danger" (click)="confirmDelete(version)" title="Eliminar">
                           <i class="ph ph-trash"></i>
                         </button>
                       </div>
@@ -140,83 +154,92 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
       </div>
 
       <!-- Delete Confirmation Dialog -->
-      @if (showDeleteDialog()) {
-        <app-confirm-dialog
-          title="Eliminar Versión"
-          [message]="'¿Estás seguro de eliminar la versión ' + versionToDelete()?.version + '?'"
-          confirmText="Eliminar"
-          confirmClass="btn-danger"
-          (confirm)="deleteVersion()"
-          (cancel)="showDeleteDialog.set(false)"
-        />
-      }
+      <app-confirm-dialog
+        [isOpen]="showDeleteDialog()"
+        title="Eliminar Versión"
+        [message]="'¿Estás seguro de eliminar la versión ' + (versionToDelete()?.version || '') + '?'"
+        type="danger"
+        confirmLabel="Eliminar"
+        (confirmed)="deleteVersion()"
+        (cancelled)="showDeleteDialog.set(false)"
+      />
     </div>
   `,
   styles: [`
     .page-container {
-      padding: 1.5rem;
+      padding: var(--space-6);
     }
 
     .page-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 1.5rem;
+      margin-bottom: var(--space-6);
     }
 
     .page-title {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
-      font-size: 1.5rem;
-      font-weight: 600;
-      color: var(--text-primary);
+      gap: var(--space-3);
+      font-size: var(--text-2xl);
+      font-weight: var(--font-semibold);
+      color: var(--fg-default);
       margin: 0;
     }
 
     .page-title i {
-      font-size: 1.75rem;
-      color: var(--primary);
+      font-size: 28px;
+      color: var(--accent-default);
     }
 
     .page-subtitle {
-      color: var(--text-secondary);
-      margin: 0.25rem 0 0;
-      font-size: 0.875rem;
+      color: var(--fg-muted);
+      margin: var(--space-1) 0 0;
+      font-size: var(--text-base);
     }
 
     .filters-bar {
       display: flex;
-      gap: 1rem;
-      margin-bottom: 1rem;
-      padding: 1rem;
-      background: var(--bg-secondary);
-      border-radius: 0.5rem;
+      gap: var(--space-4);
+      margin-bottom: var(--space-4);
+      padding: var(--space-3) var(--space-4);
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
     }
 
     .filter-group {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: var(--space-2);
     }
 
     .filter-group label {
-      font-size: 0.875rem;
-      color: var(--text-secondary);
+      font-size: var(--text-sm);
+      font-weight: var(--font-medium);
+      color: var(--fg-muted);
     }
 
     .filter-group select {
-      padding: 0.5rem 0.75rem;
-      border: 1px solid var(--border-color);
-      border-radius: 0.375rem;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      font-size: 0.875rem;
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius-md);
+      background: var(--input-bg);
+      color: var(--fg-default);
+      font-size: var(--text-base);
+      transition: border-color var(--duration-fast);
+    }
+
+    .filter-group select:focus {
+      outline: none;
+      border-color: var(--input-border-focus);
+      box-shadow: 0 0 0 3px var(--accent-subtle);
     }
 
     .card {
-      background: var(--bg-secondary);
-      border-radius: 0.5rem;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
       overflow: hidden;
     }
 
@@ -224,34 +247,47 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.75rem;
-      padding: 3rem;
-      color: var(--text-secondary);
+      gap: var(--space-3);
+      padding: var(--space-8);
+      color: var(--fg-muted);
     }
 
     .loading-container i {
-      font-size: 1.5rem;
+      font-size: 24px;
+      color: var(--accent-default);
     }
 
     .empty-state {
       text-align: center;
-      padding: 3rem;
-      color: var(--text-secondary);
+      padding: var(--space-8);
+      color: var(--fg-muted);
     }
 
-    .empty-state i {
-      font-size: 3rem;
-      opacity: 0.5;
-      margin-bottom: 1rem;
+    .empty-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto var(--space-4);
+      background: var(--bg-subtle);
+      border-radius: var(--radius-full);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .empty-icon i {
+      font-size: 36px;
+      color: var(--fg-subtle);
     }
 
     .empty-state h3 {
-      margin: 0 0 0.5rem;
-      color: var(--text-primary);
+      margin: 0 0 var(--space-2);
+      color: var(--fg-default);
+      font-weight: var(--font-semibold);
     }
 
     .empty-state p {
-      margin: 0 0 1.5rem;
+      margin: 0 0 var(--space-5);
+      color: var(--fg-subtle);
     }
 
     .table-container {
@@ -265,40 +301,46 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
 
     .data-table th,
     .data-table td {
-      padding: 0.875rem 1rem;
+      padding: var(--space-3) var(--space-4);
       text-align: left;
-      border-bottom: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--table-border);
     }
 
     .data-table th {
-      font-weight: 600;
-      font-size: 0.75rem;
+      font-weight: var(--font-semibold);
+      font-size: var(--text-sm);
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: var(--text-secondary);
-      background: var(--bg-tertiary);
+      color: var(--fg-muted);
+      background: var(--table-header-bg);
     }
 
     .data-table td {
-      font-size: 0.875rem;
-      color: var(--text-primary);
+      font-size: var(--text-base);
+      color: var(--fg-default);
+    }
+
+    .data-table tbody tr {
+      transition: background-color var(--duration-fast);
     }
 
     .data-table tbody tr:hover {
-      background: var(--bg-tertiary);
+      background: var(--table-row-hover);
     }
 
     .version-badge {
-      font-family: monospace;
-      font-weight: 600;
-      color: var(--primary);
+      font-family: var(--font-mono);
+      font-weight: var(--font-semibold);
+      color: var(--accent-default);
     }
 
     .platform-badge {
-      padding: 0.25rem 0.5rem;
-      border-radius: 0.25rem;
-      font-size: 0.75rem;
-      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      font-weight: var(--font-medium);
     }
 
     .platform-windows {
@@ -317,92 +359,111 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
     }
 
     .badge {
-      display: inline-block;
-      padding: 0.25rem 0.5rem;
-      border-radius: 0.25rem;
-      font-size: 0.75rem;
-      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: 2px var(--space-2);
+      border-radius: var(--radius-full);
+      font-size: var(--text-sm);
+      font-weight: var(--font-medium);
     }
 
     .badge-success {
-      background: var(--success-bg);
-      color: var(--success);
+      background: var(--success-subtle);
+      color: var(--success-text);
     }
 
-    .badge-danger {
-      background: var(--error-bg);
-      color: var(--error);
+    .badge-error {
+      background: var(--error-subtle);
+      color: var(--error-text);
     }
 
     .badge-warning {
-      background: var(--warning-bg);
-      color: var(--warning);
+      background: var(--warning-subtle);
+      color: var(--warning-text);
     }
 
-    .badge-secondary {
-      background: var(--bg-tertiary);
-      color: var(--text-secondary);
+    .badge-default {
+      background: var(--bg-muted);
+      color: var(--fg-muted);
+    }
+
+    .badge-info {
+      background: var(--accent-subtle);
+      color: var(--accent-emphasis);
+    }
+
+    .badge i {
+      font-size: 12px;
+    }
+
+    .date-cell {
+      font-size: var(--text-sm) !important;
+      color: var(--fg-muted) !important;
+      white-space: nowrap;
     }
 
     .action-buttons {
       display: flex;
-      gap: 0.5rem;
+      gap: var(--space-1);
     }
 
     .btn-icon {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 2rem;
-      height: 2rem;
+      width: 32px;
+      height: 32px;
       border: none;
-      border-radius: 0.375rem;
-      background: var(--bg-tertiary);
-      color: var(--text-secondary);
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--fg-muted);
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all var(--duration-fast);
+      text-decoration: none;
     }
 
     .btn-icon:hover {
-      background: var(--bg-primary);
-      color: var(--text-primary);
+      background: var(--bg-muted);
+      color: var(--fg-default);
     }
 
     .btn-icon.active {
-      color: var(--success);
+      color: var(--success-default);
     }
 
-    .btn-icon.btn-danger:hover {
-      background: var(--error-bg);
-      color: var(--error);
+    .btn-icon-danger:hover {
+      background: var(--error-subtle);
+      color: var(--error-default);
     }
 
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.625rem 1rem;
+      gap: var(--space-2);
+      height: var(--btn-height);
+      padding: 0 var(--space-4);
       border: none;
-      border-radius: 0.375rem;
-      font-size: 0.875rem;
-      font-weight: 500;
+      border-radius: var(--radius-md);
+      font-size: var(--text-base);
+      font-weight: var(--font-medium);
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all var(--duration-normal);
       text-decoration: none;
     }
 
     .btn-primary {
-      background: var(--primary);
+      background: var(--accent-default);
       color: white;
     }
 
     .btn-primary:hover {
-      background: var(--primary-hover);
+      background: var(--accent-emphasis);
     }
 
     .pagination-container {
-      padding: 1rem;
-      border-top: 1px solid var(--border-color);
+      padding: var(--space-4);
+      border-top: 1px solid var(--table-border);
     }
   `]
 })
