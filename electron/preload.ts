@@ -230,6 +230,16 @@ const electronAPI = {
   // Get pending update info (pull model - for when renderer missed the push)
   getPendingUpdate: (): Promise<UpdateAvailableInfo | null> => {
     return ipcRenderer.invoke('get-pending-update');
+  },
+
+  // Download and install update automatically
+  downloadAndInstallUpdate: (url: string): Promise<boolean> => {
+    return ipcRenderer.invoke('download-and-install-update', url);
+  },
+
+  // Listen for download progress events
+  onUpdateDownloadProgress: (callback: (data: { status: string; percent?: number; error?: string }) => void) => {
+    ipcRenderer.on('update-download-progress', (_, data) => callback(data));
   }
 };
 
@@ -285,6 +295,8 @@ declare global {
       openDownloadUrl: (url: string) => Promise<boolean>;
       getAppVersion: () => Promise<string>;
       getPendingUpdate: () => Promise<{ version: string; downloadUrl: string; releaseNotes: string | null; fileSize: number | null; mandatory: boolean; publishedAt: string } | null>;
+      downloadAndInstallUpdate: (url: string) => Promise<boolean>;
+      onUpdateDownloadProgress: (callback: (data: { status: string; percent?: number; error?: string }) => void) => void;
     };
   }
 }

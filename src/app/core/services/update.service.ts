@@ -14,25 +14,33 @@ export interface UpdateInfo {
 }
 
 /**
- * Service to handle app updates in Electron environment.
- *
- * This service listens for update notifications from the main process
- * and provides methods to dismiss or download updates.
+ * Download progress state
  */
+export type DownloadStatus = 'idle' | 'starting' | 'downloading' | 'installing' | 'error';
+
 @Injectable({
   providedIn: 'root'
 })
 export class UpdateService implements OnDestroy {
   private electronService = inject(ElectronService);
 
-  /** Signal containing the available update info, or null if no update */
+  /** Available update info, or null */
   updateAvailable = signal<UpdateInfo | null>(null);
 
-  /** Signal indicating if the update banner was dismissed by user */
+  /** Whether the update dialog was dismissed by user */
   dismissed = signal(false);
 
   /** Current app version */
   currentVersion = signal<string>('');
+
+  /** Download status */
+  downloadStatus = signal<DownloadStatus>('idle');
+
+  /** Download progress (0-100) */
+  downloadPercent = signal(0);
+
+  /** Download error message */
+  downloadError = signal<string | null>(null);
 
   private initialized = false;
 
@@ -41,35 +49,29 @@ export class UpdateService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Clean up listeners if needed
     if (this.electronService.isElectron) {
       window.electronAPI?.removeAllListeners?.('update-available');
+      window.electronAPI?.removeAllListeners?.('update-download-progress');
     }
   }
 
   private initializeIfElectron(): void {
-    if (this.initialized || !this.electronService.isElectron) {
-      return;
-    }
-
+    if (this.initialized || !this.electronService.isElectron) return;
     this.initialized = true;
 
-    // Get current app version
-    window.electronAPI?.getAppVersion?.().then(version => {
+    window.electronAPI?.getAppVersion?.().then((version: string) => {
       this.currentVersion.set(version);
       console.log('[UpdateService] Current app version:', version);
-    }).catch(err => {
-      console.warn('[UpdateService] Could not get app version:', err);
-    });
+    }).catch(() => {});
 
-    // Listen for update available events from Electron main process
+    // Listen for push events
     window.electronAPI?.onUpdateAvailable?.((info: UpdateInfo) => {
       console.log('[UpdateService] Update available (push):', info);
       this.updateAvailable.set(info);
       this.dismissed.set(false);
     });
 
-    // Also pull pending update (in case we missed the push event due to timing)
+    // Pull pending update (in case we missed the push)
     window.electronAPI?.getPendingUpdate?.().then((info: UpdateInfo | null) => {
       if (info && !this.updateAvailable()) {
         console.log('[UpdateService] Update available (pull):', info);
@@ -77,25 +79,27 @@ export class UpdateService implements OnDestroy {
         this.dismissed.set(false);
       }
     }).catch(() => {});
+
+    // Listen for download progress
+    window.electronAPI?.onUpdateDownloadProgress?.((data: { status: string; percent?: number; error?: string }) => {
+      this.downloadStatus.set(data.status as DownloadStatus);
+      if (data.percent !== undefined) {
+        this.downloadPercent.set(data.percent);
+      }
+      if (data.error) {
+        this.downloadError.set(data.error);
+      }
+    });
   }
 
-  /**
-   * Check if there's an update that should be shown (not dismissed)
-   */
   shouldShowUpdate(): boolean {
     return this.updateAvailable() !== null && !this.dismissed();
   }
 
-  /**
-   * Check if the update is mandatory (cannot be dismissed)
-   */
   isMandatory(): boolean {
     return this.updateAvailable()?.mandatory ?? false;
   }
 
-  /**
-   * Dismiss the update banner (only works for non-mandatory updates)
-   */
   dismissUpdate(): void {
     if (!this.isMandatory()) {
       this.dismissed.set(true);
@@ -103,37 +107,32 @@ export class UpdateService implements OnDestroy {
   }
 
   /**
-   * Open the download URL in the default browser
+   * Start downloading and installing the update
    */
-  downloadUpdate(): void {
+  startUpdate(): void {
     const update = this.updateAvailable();
-    if (update?.downloadUrl) {
-      console.log('[UpdateService] Opening download URL:', update.downloadUrl);
+    if (!update?.downloadUrl) return;
 
-      if (this.electronService.isElectron) {
-        window.electronAPI?.openDownloadUrl?.(update.downloadUrl);
-      } else {
-        // Fallback for web - open in new tab
-        window.open(update.downloadUrl, '_blank');
-      }
+    this.downloadStatus.set('starting');
+    this.downloadPercent.set(0);
+    this.downloadError.set(null);
+
+    if (this.electronService.isElectron) {
+      window.electronAPI?.downloadAndInstallUpdate?.(update.downloadUrl);
+    } else {
+      window.open(update.downloadUrl, '_blank');
     }
   }
 
-  /**
-   * Format file size for display
-   */
   formatFileSize(bytes: number | null): string {
     if (!bytes) return '';
-
     const units = ['B', 'KB', 'MB', 'GB'];
     let unitIndex = 0;
     let size = bytes;
-
     while (size >= 1024 && unitIndex < units.length - 1) {
       size /= 1024;
       unitIndex++;
     }
-
     return `${size.toFixed(1)} ${units[unitIndex]}`;
   }
 }

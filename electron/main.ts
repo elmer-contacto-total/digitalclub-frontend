@@ -16,7 +16,7 @@ import {
   RawMediaCaptureData,
   generateMediaId
 } from './media-security';
-import { checkForUpdates, notifyUpdateAvailable, openDownloadUrl } from './update-checker';
+import { checkForUpdates, notifyUpdateAvailable, openDownloadUrl, downloadAndInstallUpdate } from './update-checker';
 
 // App version - IMPORTANT: Keep in sync with package.json
 const APP_VERSION = '1.0.0';
@@ -2153,6 +2153,15 @@ function setupIPC(): void {
       };
     }
     return null;
+  });
+
+  // Download and install update automatically
+  ipcMain.handle('download-and-install-update', async (_, url: string) => {
+    if (url && url.startsWith('http')) {
+      await downloadAndInstallUpdate(url, mainWindow);
+      return true;
+    }
+    return false;
   });
 }
 

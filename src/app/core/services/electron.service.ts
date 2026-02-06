@@ -58,6 +58,8 @@ interface ElectronAPI {
   openDownloadUrl?(url: string): Promise<boolean>;
   getAppVersion?(): Promise<string>;
   getPendingUpdate?(): Promise<{ version: string; downloadUrl: string; releaseNotes: string | null; fileSize: number | null; mandatory: boolean; publishedAt: string } | null>;
+  downloadAndInstallUpdate?(url: string): Promise<boolean>;
+  onUpdateDownloadProgress?(callback: (data: { status: string; percent?: number; error?: string }) => void): void;
 }
 
 declare global {
