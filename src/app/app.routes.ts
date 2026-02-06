@@ -158,6 +158,12 @@ export const routes: Routes = [
         loadChildren: () => import('./features/audits/audits.routes').then(m => m.AUDITS_ROUTES),
         title: 'Auditorías - MWS'
       },
+      // Media Audit Logs (Security Dashboard)
+      {
+        path: 'media_audit_logs',
+        loadChildren: () => import('./features/media-audit-logs/media-audit-logs.routes').then(m => m.MEDIA_AUDIT_LOGS_ROUTES),
+        title: 'Auditoría de Medios - MWS'
+      },
       // App Versions (super_admin only)
       {
         path: 'app_versions',
