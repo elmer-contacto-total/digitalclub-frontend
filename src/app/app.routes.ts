@@ -203,6 +203,13 @@ export const routes: Routes = [
   { path: 'login', redirectTo: 'auth/login', pathMatch: 'full' },
   { path: 'pre_login', redirectTo: 'auth/login', pathMatch: 'full' },
 
+  // Public download page (no auth required)
+  {
+    path: 'download',
+    loadComponent: () => import('./features/download/download.component').then(m => m.DownloadComponent),
+    title: 'Descargar MWS Desktop'
+  },
+
   // Catch-all redirect
   {
     path: '**',
