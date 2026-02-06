@@ -455,8 +455,18 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
     }
 
     .btn i {
-      font-size: 16px;
+      font-size: 18px;
       flex-shrink: 0;
+    }
+
+    .empty-state .btn {
+      font-size: var(--text-lg);
+      padding: 0 var(--space-5);
+      height: var(--btn-height-lg);
+    }
+
+    .empty-state .btn i {
+      font-size: 22px;
     }
 
     .btn-primary {
