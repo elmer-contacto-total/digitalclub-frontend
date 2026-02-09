@@ -3,7 +3,7 @@
  * Displays a single message bubble
  * PARIDAD RAILS: app/views/admin/messages/_message.html.erb
  */
-import { Component, input, computed } from '@angular/core';
+import { Component, input, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
   Message,
@@ -16,11 +16,12 @@ import {
   isTemplate,
   hasFailed
 } from '../../../../core/models/message.model';
+import { ImagePreviewComponent } from '../../../../shared/components/image-preview/image-preview.component';
 
 @Component({
   selector: 'app-message-item',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ImagePreviewComponent],
   styleUrl: './message-item.component.scss',
   template: `
     <div
@@ -158,9 +159,15 @@ import {
         </div>
       }
     </div>
+
+    <app-image-preview
+      [imageUrl]="previewUrl()"
+      (closed)="previewUrl.set(null)"
+    />
   `
 })
 export class MessageItemComponent {
+  previewUrl = signal<string | null>(null);
   // Inputs
   message = input.required<Message>();
   showAvatar = input(false);
@@ -243,10 +250,9 @@ export class MessageItemComponent {
   }
 
   openMediaPreview(): void {
-    // Could implement a lightbox/modal for image preview
     const url = this.message().binaryContentUrl || this.message().binaryContentData;
     if (url) {
-      window.open(url, '_blank');
+      this.previewUrl.set(url);
     }
   }
 

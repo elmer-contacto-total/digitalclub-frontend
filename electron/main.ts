@@ -1316,106 +1316,12 @@ async function scanChat(): Promise<void> {
           return { debug: 'no_chat_open' };
         }
 
-        // =========================================
-        // PASO 2: ESTRATEGIA PRINCIPAL - SIDEBAR
-        // El sidebar SIEMPRE tiene el chat con data-id
-        // =========================================
-        const sidebar = document.querySelector('#pane-side');
-        if (sidebar) {
-          // Buscar TODOS los elementos con data-id que contengan @c.us
-          const chatItems = sidebar.querySelectorAll('[data-id*="@c.us"]');
-
-          for (const item of chatItems) {
-            // Verificar si este chat coincide con el nombre actual
-            const itemText = item.textContent || '';
-
-            // El chat seleccionado generalmente tiene el nombre visible
-            if (itemText.includes(chatName) ||
-                (chatName.length > 3 && itemText.toLowerCase().includes(chatName.toLowerCase().substring(0, chatName.length - 2)))) {
-              const dataId = item.getAttribute('data-id');
-              if (dataId && dataId.includes('@c.us')) {
-                let phone = dataId.split('@')[0];
-                phone = phone.replace(/^(true|false)_/, '');
-                if (/^\\d{9,15}$/.test(phone)) {
-                  return { phone, name: chatName, source: 'sidebar' };
-                }
-              }
-            }
-          }
-
-          // Fallback: buscar el chat activo por aria-selected o focus
-          const activeItem = sidebar.querySelector('[aria-selected="true"]') ||
-                            sidebar.querySelector('[data-testid="cell-frame-container"]:focus-within');
-          if (activeItem) {
-            // Buscar data-id en el elemento o sus ancestros
-            let el = activeItem;
-            for (let i = 0; i < 10 && el; i++) {
-              const dataId = el.getAttribute?.('data-id');
-              if (dataId && dataId.includes('@c.us')) {
-                let phone = dataId.split('@')[0];
-                phone = phone.replace(/^(true|false)_/, '');
-                if (/^\\d{9,15}$/.test(phone)) {
-                  return { phone, name: chatName, source: 'sidebar-active' };
-                }
-              }
-              el = el.parentElement;
-            }
-          }
-        }
-
-        // =========================================
-        // PASO 3: ESTRATEGIA SECUNDARIA - HEADER
-        // Buscar número en atributos del header
-        // =========================================
-        if (header) {
-          // Buscar en span[title] que contenga número
-          const titleSpans = header.querySelectorAll('span[title]');
-          for (const span of titleSpans) {
-            const title = span.getAttribute('title') || '';
-            const phoneMatch = title.match(/\\+?(\\d[\\d\\s\\-]{8,}\\d)/);
-            if (phoneMatch) {
-              const phone = phoneMatch[1].replace(/[\\s\\-]/g, '');
-              if (phone.length >= 9 && phone.length <= 15) {
-                return { phone, name: chatName, source: 'header-title' };
-              }
-            }
-          }
-        }
-
-        // =========================================
-        // PASO 4: ESTRATEGIA TERCIARIA - MENSAJES
-        // Buscar data-id en mensajes del chat
-        // =========================================
-        const messages = document.querySelectorAll('[data-id*="@c.us"]');
-        for (const msg of messages) {
-          const dataId = msg.getAttribute('data-id');
-          if (dataId && dataId.includes('@c.us')) {
-            let phone = dataId.split('@')[0];
-            phone = phone.replace(/^(true|false)_/, '');
-            if (/^\\d{9,15}$/.test(phone)) {
-              return { phone, name: chatName, source: 'message' };
-            }
-          }
-        }
-
-        // =========================================
-        // PASO 5: EXTRAER DEL NOMBRE
-        // Formato: "Nombre - Teléfono"
-        // =========================================
-        // Patrón con separador
-        const sepMatch = chatName.match(/^(.+?)[\\s]*[-|:]+[\\s]*\\+?(\\d[\\d\\s]{7,}\\d)$/);
-        if (sepMatch) {
-          const phone = sepMatch[2].replace(/\\s/g, '');
-          if (phone.length >= 9) {
-            return { phone, name: sepMatch[1].trim(), source: 'name-separator' };
-          }
-        }
-
-        // Patrón número al final
-        const endMatch = chatName.match(/^(.+?)\\s+(\\d{9,})$/);
-        if (endMatch) {
-          return { phone: endMatch[2], name: endMatch[1].trim(), source: 'name-end' };
-        }
+        // PASOS 2-5 ELIMINADOS: Toda extracción automática de teléfono desde
+        // sidebar, header, mensajes y nombre causaba el bug del "chat más reciente"
+        // (recogía teléfonos de chats anteriores aún en el DOM).
+        //
+        // ÚNICO MÉTODO: El usuario hace click en el nombre del contacto →
+        // Contact Info se abre → extractPhoneFromContactPanel() extrae el número.
 
         return { debug: 'no_phone_found', chatName };
       })()

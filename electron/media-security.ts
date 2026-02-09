@@ -257,6 +257,28 @@ canvas,
   50% { transform: translateY(-5px); }
 }
 
+/* ========== OCULTAR FLECHAS DE NAVEGACIÓN EN VISOR DE IMÁGENES ========== */
+button[aria-label="Next"],
+button[aria-label="Previous"],
+button[aria-label="Siguiente"],
+button[aria-label="Anterior"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* ========== OCULTAR IMÁGENES ADYACENTES EN EL VISOR ========== */
+/* Solo la imagen enfocada (tabindex=0) es visible; las demás se ocultan */
+[role="listitem"][tabindex="-1"][aria-label*="Image"],
+[role="listitem"][tabindex="-1"][aria-label*="Imagen"],
+[role="listitem"][tabindex="-1"][aria-label*="Video"],
+[role="listitem"][tabindex="-1"][aria-label*="Vídeo"],
+[role="listitem"][tabindex="-1"][aria-label*="GIF"],
+[role="listitem"][tabindex="-1"][aria-label*="Sticker"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 /* ========== DESHABILITAR SELECCIÓN EN VISORES ========== */
 [data-testid="media-viewer"],
 [data-testid="image-viewer"],
@@ -700,13 +722,16 @@ const MEDIA_CAPTURE_SCRIPT = `
   let isBlockerVisible = false;
 
   // Mostrar el blocker (cuando cambia el chat)
-  window.__hablapeShowChatBlocker = function() {
+  // options.phoneNeeded = true → muestra "Click nombre del contacto"
+  // sin options → muestra "Cargando información del cliente..."
+  window.__hablapeShowChatBlocker = function(options) {
     // Incrementar sesión - invalida cualquier desbloqueo pendiente de sesiones anteriores
     blockSessionId++;
     const currentSession = blockSessionId;
     isBlockerVisible = true;
+    const needsPhone = options && options.phoneNeeded;
 
-    console.log('[MWS] ⏳ CHAT BLOQUEADO - Sesión #' + currentSession);
+    console.log('[MWS] ' + (needsPhone ? '📱' : '⏳') + ' CHAT BLOQUEADO - Sesión #' + currentSession);
 
     function tryShowBlocker(attempt) {
       // Verificar que esta sesión siga siendo válida Y que el blocker deba mostrarse
@@ -738,13 +763,29 @@ const MEDIA_CAPTURE_SCRIPT = `
       const blocker = document.createElement('div');
       blocker.id = 'hablape-chat-blocker';
       blocker.setAttribute('data-session', String(currentSession));
-      blocker.innerHTML = \`
-        <div class="blocker-content">
-          <div class="blocker-icon">⏳</div>
-          <div class="blocker-text">Cargando información del cliente...</div>
-          <div class="blocker-subtext">Por favor espere</div>
-        </div>
-      \`;
+
+      if (needsPhone) {
+        blocker.setAttribute('data-needs-phone', 'true');
+        blocker.innerHTML = \`
+          <div class="blocker-content">
+            <div class="blocker-icon">📱</div>
+            <div class="blocker-text">Click nombre del contacto</div>
+            <div class="blocker-subtext">Para cargar la información del cliente</div>
+            <div class="blocker-instruction">
+              👆 Haga click en el <strong>nombre del contacto</strong> en la parte superior del chat
+            </div>
+            <div class="blocker-arrow">⬆️</div>
+          </div>
+        \`;
+      } else {
+        blocker.innerHTML = \`
+          <div class="blocker-content">
+            <div class="blocker-icon">⏳</div>
+            <div class="blocker-text">Cargando información del cliente...</div>
+            <div class="blocker-subtext">Por favor espere</div>
+          </div>
+        \`;
+      }
 
       mainPane.style.position = 'relative';
       mainPane.appendChild(blocker);
@@ -798,15 +839,17 @@ const MEDIA_CAPTURE_SCRIPT = `
     const sidePane = document.querySelector('#pane-side');
     if (!sidePane || !sidePane.contains(target)) return;
 
-    // Buscar el elemento del chat clickeado (tiene data-id o está dentro de uno)
-    let chatElement = target.closest('[data-id]');
+    // Buscar el elemento del chat clickeado
+    // WhatsApp usa role="row" para cada chat en la lista (dentro de role="grid")
+    let chatElement = target.closest('[role="row"]') || target.closest('[data-id]');
     if (!chatElement) {
-      // Buscar en ancestros hasta 10 niveles
       let el = target;
       for (let i = 0; i < 10 && el; i++) {
-        if (el.getAttribute && el.getAttribute('data-id')) {
-          chatElement = el;
-          break;
+        if (el.getAttribute) {
+          if (el.getAttribute('role') === 'row' || el.getAttribute('data-id')) {
+            chatElement = el;
+            break;
+          }
         }
         el = el.parentElement;
       }
@@ -814,7 +857,11 @@ const MEDIA_CAPTURE_SCRIPT = `
 
     // Si encontramos un chat y es diferente al último clickeado
     if (chatElement) {
-      const chatId = chatElement.getAttribute('data-id');
+      // Identificar el chat por nombre (span[title]) o data-id o posición
+      const chatId = chatElement.getAttribute('data-id') ||
+                     (chatElement.querySelector('span[title]')?.getAttribute('title')) ||
+                     chatElement.getAttribute('aria-rowindex') ||
+                     ('row_' + chatElement.style?.transform);
       if (chatId && chatId !== lastClickedChatId) {
         lastClickedChatId = chatId;
 
@@ -829,8 +876,8 @@ const MEDIA_CAPTURE_SCRIPT = `
         // Esto sincroniza el estado lógico con el visual
         console.log('[HABLAPE_CHAT_BLOCKED]');
 
-        // Mostrar blocker INMEDIATAMENTE
-        window.__hablapeShowChatBlocker();
+        // Mostrar blocker con instrucciones para obtener el número
+        window.__hablapeShowChatBlocker({ phoneNeeded: true });
       }
     }
   }, true); // Captura en fase de captura para ser más rápido
@@ -844,36 +891,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   // Mostrar blocker con instrucciones para obtener el número
   window.__hablapeShowPhoneNeeded = function() {
-    isBlockerVisible = true;
-    console.log('[MWS] 📱 Solicitando al usuario que revele el número...');
-
-    const mainPane = document.querySelector('#main');
-    if (!mainPane) return;
-
-    // Eliminar blocker existente
-    const existingBlocker = document.getElementById('hablape-chat-blocker');
-    if (existingBlocker) {
-      existingBlocker.remove();
-    }
-
-    // Crear blocker con instrucciones
-    const blocker = document.createElement('div');
-    blocker.id = 'hablape-chat-blocker';
-    blocker.setAttribute('data-needs-phone', 'true');
-    blocker.innerHTML = \`
-      <div class="blocker-content">
-        <div class="blocker-icon">📱</div>
-        <div class="blocker-text">No se detectó el número de teléfono</div>
-        <div class="blocker-subtext">Para continuar:</div>
-        <div class="blocker-instruction">
-          👆 Haga click en el <strong>nombre del contacto</strong> en la parte superior del chat
-        </div>
-        <div class="blocker-arrow">⬆️</div>
-      </div>
-    \`;
-
-    mainPane.style.position = 'relative';
-    mainPane.appendChild(blocker);
+    window.__hablapeShowChatBlocker({ phoneNeeded: true });
   };
 
   // =========================================================================
@@ -912,19 +930,19 @@ const MEDIA_CAPTURE_SCRIPT = `
                        document.querySelector('[data-testid="info-drawer-body"]') ||
                        document.querySelector('[data-testid="drawer-body"]');
 
-    // MÉTODO 1.5: Buscar por cualquier drawer que contenga teléfono
+    // MÉTODO 1.5: Buscar por cualquier drawer/panel que contenga teléfono
     if (!contactPanel) {
-      const allDrawers = document.querySelectorAll('[data-testid*="drawer"]');
-      for (const drawer of allDrawers) {
-        const text = drawer.textContent || '';
+      const allPanels = document.querySelectorAll('[data-testid*="drawer"], [data-testid*="panel"], [data-testid*="info"]');
+      for (const panel of allPanels) {
+        const text = panel.textContent || '';
         if (/\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/.test(text)) {
-          contactPanel = drawer;
+          contactPanel = panel;
           break;
         }
       }
     }
 
-    // MÉTODO 2: Buscar panel lateral por estructura y posición
+    // MÉTODO 2: Buscar panel lateral con heurística de posición
     if (!contactPanel) {
       const allDivs = document.querySelectorAll('div');
       let bestCandidate = null;
@@ -934,14 +952,12 @@ const MEDIA_CAPTURE_SCRIPT = `
         const rect = div.getBoundingClientRect();
         const text = div.textContent || '';
 
-        // Requisito obligatorio: debe contener un teléfono
         const hasPhone = /\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/.test(text);
         if (!hasPhone) continue;
 
         const isVisible = rect.width > 0 && rect.height > 0;
         if (!isVisible) continue;
 
-        // Condiciones flexibles para diferentes tamaños de ventana
         const isRightAligned = rect.right > window.innerWidth - 100;
         const isRightHalf = rect.left > window.innerWidth * 0.4;
         const hasReasonableWidth = rect.width >= 200 && rect.width <= 700;
@@ -949,7 +965,6 @@ const MEDIA_CAPTURE_SCRIPT = `
         const isNotTooSmall = rect.height > 200;
         const isNotFullWidth = rect.width < window.innerWidth * 0.6;
 
-        // Sistema de puntuación
         let score = 0;
         if (isRightAligned) score += 4;
         else if (isRightHalf) score += 2;
@@ -976,24 +991,24 @@ const MEDIA_CAPTURE_SCRIPT = `
       return null;
     }
 
-    // Verificar que el panel corresponde al chat actual
-    if (currentChatNameForExtraction) {
-      const panelName = contactPanel.querySelector('span[title]')?.getAttribute('title') ||
-                       contactPanel.querySelector('h2')?.textContent?.trim() ||
-                       contactPanel.querySelector('header span')?.textContent?.trim();
+    // Verificar que el panel corresponde al chat actual (si podemos leer el nombre)
+    const panelName = contactPanel.querySelector('span[title]')?.getAttribute('title') ||
+                     contactPanel.querySelector('h2')?.textContent?.trim() ||
+                     contactPanel.querySelector('header span')?.textContent?.trim();
 
-      if (panelName) {
-        const normalize = (s) => (s || '').toLowerCase().trim().substring(0, 20);
-        const normalizedPanelName = normalize(panelName);
-        const normalizedChatName = normalize(currentChatNameForExtraction);
+    if (panelName) {
+      const normalize = (s) => (s || '').toLowerCase().trim().substring(0, 20);
+      const normalizedPanelName = normalize(panelName);
+      const normalizedChatName = normalize(currentChatNameForExtraction);
 
-        if (normalizedPanelName !== normalizedChatName &&
-            !normalizedPanelName.includes(normalizedChatName) &&
-            !normalizedChatName.includes(normalizedPanelName)) {
-          return null; // Panel no coincide con chat actual
-        }
+      if (normalizedPanelName !== normalizedChatName &&
+          !normalizedPanelName.includes(normalizedChatName) &&
+          !normalizedChatName.includes(normalizedPanelName)) {
+        return null; // Panel no coincide con chat actual
       }
     }
+    // Si no se puede leer panelName, seguir adelante — el panel fue encontrado
+    // por METHOD 1/1.5 (selectores específicos de drawer), así que es confiable
 
     // Buscar teléfono en el panel
     const phoneRegex = /\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/;
@@ -1034,105 +1049,70 @@ const MEDIA_CAPTURE_SCRIPT = `
     return null;
   }
 
-  function startContactPanelObserver() {
-    if (contactPanelObserver) return;
+  // MutationObserver ELIMINADO: disparaba extractPhoneFromContactPanel() en cada
+  // cambio del DOM, lo que causaba el bug del "chat más reciente" via METHOD 2.
+  //
+  // ÚNICO DISPARADOR: click en el área del header del chat (#main, primeros 60px).
+  // Cuando el usuario hace click ahí, WhatsApp abre Contact Info, y extraemos
+  // el teléfono con reintentos.
 
-    contactPanelObserver = new MutationObserver((mutations) => {
-      const blocker = document.getElementById('hablape-chat-blocker');
-      if (!blocker) return;
-
-      const phone = extractPhoneFromContactPanel();
-      if (phone) {
-        const shouldUpdate = phone !== lastExtractedPhone || !window.__hablapeExtractedPhone;
-        if (shouldUpdate) {
-          lastExtractedPhone = phone;
-          window.__hablapeExtractedPhone = phone;
-          window.__hablapePhoneExtractedAt = Date.now();
-          console.log('[MWS] ✓ Número extraído del panel:', phone);
-          console.log('[HABLAPE_PHONE_EXTRACTED]' + phone);
-        }
-      }
-    });
-
-    contactPanelObserver.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+  // Función helper para emitir teléfono extraído
+  function emitExtractedPhone(phone) {
+    if (phone && (phone !== lastExtractedPhone || !window.__hablapeExtractedPhone)) {
+      lastExtractedPhone = phone;
+      window.__hablapeExtractedPhone = phone;
+      window.__hablapePhoneExtractedAt = Date.now();
+      console.log('[MWS] ✓ Número extraído:', phone);
+      console.log('[HABLAPE_PHONE_EXTRACTED]' + phone);
+      return true;
+    }
+    return false;
   }
 
-  // Iniciar el observer después de que WhatsApp cargue
+  // Iniciar listeners después de que WhatsApp cargue
   setTimeout(() => {
-    startContactPanelObserver();
 
-    // Click listener para detectar clicks en el header del chat
+    // Click listener en #main header para detectar click en nombre del contacto
     document.addEventListener('click', (e) => {
       const blocker = document.getElementById('hablape-chat-blocker');
       if (!blocker) return;
 
-      const clickPath = e.composedPath ? e.composedPath() : [];
-      let isHeaderClick = false;
+      // Verificar si el click fue en el área del header de #main
+      const mainPane = document.querySelector('#main');
+      if (!mainPane || !mainPane.contains(e.target)) return;
 
-      for (const el of clickPath) {
-        if (el.getAttribute) {
-          const testId = el.getAttribute('data-testid');
-          if (testId && (testId.includes('conversation-header') ||
-                         testId.includes('contact') ||
-                         testId.includes('avatar') ||
-                         testId.includes('chat-title'))) {
-            isHeaderClick = true;
-            break;
-          }
-          if (el.classList && el.classList.contains('_amie')) {
-            isHeaderClick = true;
-            break;
-          }
-        }
-      }
+      // El header ocupa los primeros ~60px de #main
+      const mainRect = mainPane.getBoundingClientRect();
+      const clickY = e.clientY - mainRect.top;
+      const isHeaderArea = clickY >= 0 && clickY <= 65;
 
-      if (isHeaderClick) {
-        // Función helper para intentar extracción
-        const tryExtract = () => {
-          const phone = extractPhoneFromContactPanel();
-          if (phone && (phone !== lastExtractedPhone || !window.__hablapeExtractedPhone)) {
-            lastExtractedPhone = phone;
-            window.__hablapeExtractedPhone = phone;
-            window.__hablapePhoneExtractedAt = Date.now();
-            console.log('[MWS] ✓ Número extraído:', phone);
-            console.log('[HABLAPE_PHONE_EXTRACTED]' + phone);
-            return true;
-          }
-          return false;
-        };
+      if (!isHeaderArea) return;
 
-        // Intentar extracción con reintentos (500ms, 1000ms, 2000ms)
-        setTimeout(() => {
+      console.log('[MWS] Click detectado en header del chat (y=' + clickY + ')');
+
+      // Función helper para intentar extracción
+      const tryExtract = () => {
+        const phone = extractPhoneFromContactPanel();
+        return emitExtractedPhone(phone);
+      };
+
+      // Intentar extracción con reintentos (500ms, 1000ms, 1500ms, 2000ms, 3000ms)
+      setTimeout(() => {
+        if (!tryExtract()) setTimeout(() => {
           if (!tryExtract()) setTimeout(() => {
-            if (!tryExtract()) setTimeout(tryExtract, 1000);
+            if (!tryExtract()) setTimeout(() => {
+              if (!tryExtract()) setTimeout(tryExtract, 1000);
+            }, 500);
           }, 500);
         }, 500);
-      }
+      }, 500);
     }, true);
 
-    // Listener de resize - cuando cambia el tamaño de ventana, re-evaluar
-    let resizeTimeout = null;
-    window.addEventListener('resize', () => {
-      const blocker = document.getElementById('hablape-chat-blocker');
-      if (!blocker || window.__hablapeExtractedPhone) return;
-
-      if (resizeTimeout) clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        const phone = extractPhoneFromContactPanel();
-        if (phone) {
-          lastExtractedPhone = phone;
-          window.__hablapeExtractedPhone = phone;
-          window.__hablapePhoneExtractedAt = Date.now();
-          console.log('[MWS] ✓ Número extraído:', phone);
-          console.log('[HABLAPE_PHONE_EXTRACTED]' + phone);
-        }
-      }, 300);
-    });
-
   }, 5000);
+
+  // =========================================================================
+  // CAPTURA DE MEDIOS (imágenes y audio)
+  // =========================================================================
 
   // Variables de estado para contexto del mensaje
   let lastKnownChatPhone = 'unknown';
@@ -1924,6 +1904,11 @@ const MEDIA_CAPTURE_SCRIPT = `
     // Verificar si ya está protegida
     if (img.classList.contains('hablape-protected-image')) return;
     if (img.__hablapeProtected) return;
+
+    // Si la imagen ya fue revelada previamente (persiste entre navegaciones de chat)
+    const messageId = messageEl?.getAttribute?.('data-id');
+    if (messageId && processedMessageIds.has(messageId)) return;
+
     img.__hablapeProtected = true;
 
     // Verificar que la imagen tiene dimensiones válidas (no es thumbnail tiny)
@@ -2311,6 +2296,7 @@ export function injectSecurityScripts(view: BrowserView): void {
       await view.webContents.insertCSS(HIDE_DOWNLOAD_CSS);
       await view.webContents.executeJavaScript(BLOCK_DOWNLOAD_SCRIPT, true);
       await view.webContents.executeJavaScript(MEDIA_CAPTURE_SCRIPT, true);
+      console.log('[MWS] Scripts de seguridad inyectados correctamente');
     } catch (err) {
       console.error('[MWS] Error inyectando scripts de seguridad:', err);
     }

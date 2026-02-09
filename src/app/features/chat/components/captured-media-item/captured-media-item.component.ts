@@ -3,14 +3,15 @@
  * Displays a captured media (image/audio) as an incoming message bubble
  * Integrates seamlessly with the chat timeline
  */
-import { Component, input } from '@angular/core';
+import { Component, input, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CapturedMedia } from '../../../../core/models/conversation.model';
+import { ImagePreviewComponent } from '../../../../shared/components/image-preview/image-preview.component';
 
 @Component({
   selector: 'app-captured-media-item',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ImagePreviewComponent],
   styleUrl: './captured-media-item.component.scss',
   template: `
     <div class="message-item incoming captured-media">
@@ -73,9 +74,15 @@ import { CapturedMedia } from '../../../../core/models/conversation.model';
         </div>
       </div>
     </div>
+
+    <app-image-preview
+      [imageUrl]="previewUrl()"
+      (closed)="previewUrl.set(null)"
+    />
   `
 })
 export class CapturedMediaItemComponent {
+  previewUrl = signal<string | null>(null);
   media = input.required<CapturedMedia>();
 
   formatTime(): string {
@@ -106,7 +113,7 @@ export class CapturedMediaItemComponent {
   openMediaPreview(): void {
     const url = this.media().publicUrl;
     if (url) {
-      window.open(url, '_blank');
+      this.previewUrl.set(url);
     }
   }
 }
