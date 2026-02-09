@@ -126,7 +126,8 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       items: [
         { id: 'users', label: 'Usuarios', icon: 'ph-users', route: '/app/users', badgeKey: 'usersCount' },
         { id: 'imports', label: 'Importaciones', icon: 'ph-download', route: '/app/imports', badgeKey: 'importsCount' },
-        { id: 'templates', label: 'Plantillas de Mensajes', icon: 'ph-file-text', route: '/app/message_templates', badgeKey: 'templatesCount' }
+        { id: 'templates', label: 'Plantillas de Mensajes', icon: 'ph-file-text', route: '/app/message_templates', badgeKey: 'templatesCount' },
+        { id: 'campaigns', label: 'Campañas', icon: 'ph-broadcast', route: '/app/campaigns' }
       ]
     },
     {
@@ -188,7 +189,8 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       items: [
         { id: 'onboarding', label: 'Alta Whatsapp', icon: 'ph-whatsapp-logo', route: '/app/whatsapp_onboarding' },
         { id: 'templates', label: 'Plantillas de Mensajes', icon: 'ph-file-text', route: '/app/message_templates', badgeKey: 'templatesCount' },
-        { id: 'bulk-sends', label: 'Envíos Masivos', icon: 'ph-broadcast', route: '/app/template_bulk_sends', requiresWhatsApp: true }
+        { id: 'bulk-sends', label: 'Envíos Masivos', icon: 'ph-broadcast', route: '/app/template_bulk_sends', requiresWhatsApp: true },
+        { id: 'campaigns', label: 'Campañas', icon: 'ph-paper-plane-tilt', route: '/app/campaigns' }
       ]
     },
     {
@@ -241,6 +243,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLAS',
       items: [
         { id: 'bulk-sends', label: 'Envíos Masivos', icon: 'ph-users', route: '/app/template_bulk_sends', requiresWhatsApp: true },
+        { id: 'campaigns', label: 'Campañas', icon: 'ph-paper-plane-tilt', route: '/app/campaigns' },
         { id: 'canned', label: 'Mensajes Enlatados', icon: 'ph-chat', route: '/app/canned_messages', badgeKey: 'cannedMessagesCount' }
       ]
     },
@@ -279,6 +282,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
         // PARIDAD: Rails admin_agent_prospects_path
         { id: 'prospects', label: 'Prospectos', icon: 'ph-git-pull-request', route: '/app/agent_prospects', badgeKey: 'prospectsCount' },
         { id: 'bulk-sends', label: 'Envíos Masivos', icon: 'ph-broadcast', route: '/app/template_bulk_sends', requiresWhatsApp: true },
+        { id: 'campaigns', label: 'Campañas', icon: 'ph-paper-plane-tilt', route: '/app/campaigns' },
         { id: 'canned', label: 'Mensajes Predefinidos', icon: 'ph-chat-text', route: '/app/canned_messages' }
       ]
     },
@@ -377,6 +381,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLAS',
       items: [
         { id: 'bulk-sends', label: 'Envíos Masivos', icon: 'ph-broadcast', route: '/app/template_bulk_sends', requiresWhatsApp: true },
+        { id: 'campaigns', label: 'Campañas', icon: 'ph-paper-plane-tilt', route: '/app/campaigns' },
         { id: 'canned', label: 'Mensajes Enlatados', icon: 'ph-chat-text', route: '/app/canned_messages', badgeKey: 'cannedMessagesCount' }
       ]
     },
@@ -426,6 +431,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLAS',
       items: [
         { id: 'bulk-sends', label: 'Envíos Masivos', icon: 'ph-broadcast', route: '/app/template_bulk_sends', requiresWhatsApp: true },
+        { id: 'campaigns', label: 'Campañas', icon: 'ph-paper-plane-tilt', route: '/app/campaigns' },
         { id: 'canned', label: 'Mensajes Enlatados', icon: 'ph-chat-text', route: '/app/canned_messages', badgeKey: 'cannedMessagesCount' }
       ]
     },
@@ -475,6 +481,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLAS',
       items: [
         { id: 'bulk-sends', label: 'Envíos Masivos', icon: 'ph-broadcast', route: '/app/template_bulk_sends', requiresWhatsApp: true },
+        { id: 'campaigns', label: 'Campañas', icon: 'ph-paper-plane-tilt', route: '/app/campaigns' },
         { id: 'canned', label: 'Mensajes Enlatados', icon: 'ph-chat-text', route: '/app/canned_messages', badgeKey: 'cannedMessagesCount' }
       ]
     },

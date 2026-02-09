@@ -18,6 +18,7 @@ import {
   generateMediaId
 } from './media-security';
 import { checkForUpdates, notifyUpdateAvailable, openDownloadUrl, downloadAndInstallUpdate } from './update-checker';
+import { BulkSender } from './bulk-sender';
 
 // App version - read from package.json via Electron's app.getVersion()
 // When building with electron-builder, this reflects the version in package.json
@@ -25,6 +26,9 @@ const APP_VERSION = app.getVersion();
 
 // Stored update info (so renderer can pull it if it missed the push)
 let pendingUpdateInfo: any = null;
+
+// Bulk sender for mass messaging campaigns
+const bulkSender = new BulkSender('http://localhost:8080');
 
 // Fingerprint único para esta instalación
 let userFingerprint: UserFingerprint;
@@ -1986,6 +1990,165 @@ function setupIPC(): void {
       console.error('[MWS] Error enviando mensaje a WhatsApp:', err);
       return false;
     }
+  });
+
+  // === Bulk Send IPC Handlers ===
+
+  // Send message AND press Enter (for bulk send)
+  ipcMain.handle('whatsapp:send-and-submit', async (_, text: string) => {
+    if (!whatsappView || !whatsappVisible) {
+      return { success: false, error: 'whatsapp_not_visible' };
+    }
+
+    try {
+      const result = await whatsappView.webContents.executeJavaScript(`
+        (async function() {
+          try {
+            const input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                          document.querySelector('div[contenteditable="true"][data-tab="10"]') ||
+                          document.querySelector('footer div[contenteditable="true"]');
+
+            if (!input) {
+              return { success: false, error: 'input_not_found' };
+            }
+
+            input.focus();
+            input.textContent = '';
+            document.execCommand('insertText', false, ${JSON.stringify(text)});
+            input.dispatchEvent(new InputEvent('input', { bubbles: true, data: ${JSON.stringify(text)} }));
+
+            // Typing simulation delay
+            await new Promise(r => setTimeout(r, ${500 + Math.random() * 1000}));
+
+            // Click send button or press Enter
+            const sendBtn = document.querySelector('[data-testid="send"]') ||
+                            document.querySelector('button[aria-label="Send"]') ||
+                            document.querySelector('span[data-icon="send"]')?.closest('button');
+
+            if (sendBtn) {
+              sendBtn.click();
+            } else {
+              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+            }
+
+            await new Promise(r => setTimeout(r, 1000));
+            return { success: true };
+          } catch(e) {
+            return { success: false, error: e.message || 'send_error' };
+          }
+        })()
+      `, true);
+
+      console.log('[MWS] Message sent and submitted:', result);
+      return result;
+    } catch (err: any) {
+      console.error('[MWS] Error in send-and-submit:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Navigate to a chat by phone number
+  ipcMain.handle('whatsapp:navigate-to-chat', async (_, phone: string) => {
+    if (!whatsappView || !whatsappVisible) {
+      return { success: false, error: 'whatsapp_not_visible' };
+    }
+
+    try {
+      const result = await whatsappView.webContents.executeJavaScript(`
+        (async function() {
+          try {
+            const searchBox = document.querySelector('[data-testid="chat-list-search"]') ||
+                              document.querySelector('[data-icon="search"]')?.closest('button') ||
+                              document.querySelector('#side [contenteditable="true"]');
+
+            if (!searchBox) {
+              return { success: false, error: 'search_not_found' };
+            }
+
+            searchBox.click();
+            searchBox.focus();
+            await new Promise(r => setTimeout(r, 300));
+
+            const searchInput = document.querySelector('[data-testid="chat-list-search-input"]') ||
+                                document.querySelector('#side div[contenteditable="true"]') ||
+                                document.querySelector('[data-testid="search-input"]');
+
+            if (!searchInput) {
+              return { success: false, error: 'search_input_not_found' };
+            }
+
+            searchInput.focus();
+            searchInput.textContent = '';
+            document.execCommand('selectAll');
+            document.execCommand('insertText', false, '${phone.replace(/'/g, "\\'")}');
+            searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+
+            await new Promise(r => setTimeout(r, 1500));
+
+            const firstResult = document.querySelector('[data-testid="cell-frame-container"]') ||
+                                document.querySelector('#pane-side [role="row"]') ||
+                                document.querySelector('#pane-side [data-id]');
+
+            if (!firstResult) {
+              return { success: false, error: 'no_search_result' };
+            }
+
+            firstResult.click();
+            await new Promise(r => setTimeout(r, 1000));
+
+            const composeBox = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                               document.querySelector('footer div[contenteditable="true"]');
+
+            const chatName = document.querySelector('#main header span[title]')?.getAttribute('title') || '';
+
+            return { success: !!composeBox, chatName, error: composeBox ? undefined : 'chat_not_loaded' };
+          } catch(e) {
+            return { success: false, error: e.message || 'navigate_error' };
+          }
+        })()
+      `, true);
+
+      console.log('[MWS] Navigate to chat result:', result);
+      return result;
+    } catch (err: any) {
+      console.error('[MWS] Error navigating to chat:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Start bulk send campaign
+  ipcMain.handle('bulk-send:start', async (_, campaignId: number, authToken: string) => {
+    try {
+      bulkSender.setWhatsAppView(whatsappView);
+      bulkSender.setAuthToken(authToken);
+      bulkSender.start(campaignId);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Pause bulk send
+  ipcMain.handle('bulk-send:pause', async () => {
+    bulkSender.pause();
+    return { success: true };
+  });
+
+  // Resume bulk send
+  ipcMain.handle('bulk-send:resume', async () => {
+    bulkSender.resume();
+    return { success: true };
+  });
+
+  // Cancel bulk send
+  ipcMain.handle('bulk-send:cancel', async () => {
+    bulkSender.cancel();
+    return { success: true };
+  });
+
+  // Get bulk send status
+  ipcMain.handle('bulk-send:status', async () => {
+    return bulkSender.getStatus();
   });
 
   // Restablecimiento completo - limpia TODOS los datos y reinicia

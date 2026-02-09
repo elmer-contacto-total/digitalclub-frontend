@@ -196,6 +196,35 @@ const electronAPI = {
     return ipcRenderer.invoke('whatsapp:send-message', text);
   },
 
+  // Enviar mensaje Y presionar Enter (para envío masivo)
+  sendAndSubmitMessage: (text: string): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('whatsapp:send-and-submit', text);
+  },
+
+  // Navegar a un chat por número de teléfono
+  navigateToChat: (phone: string): Promise<{ success: boolean; chatName?: string; error?: string }> => {
+    return ipcRenderer.invoke('whatsapp:navigate-to-chat', phone);
+  },
+
+  // === Bulk Send ===
+  bulkSend: {
+    start: (campaignId: number, authToken: string): Promise<{ success: boolean; error?: string }> => {
+      return ipcRenderer.invoke('bulk-send:start', campaignId, authToken);
+    },
+    pause: (): Promise<{ success: boolean }> => {
+      return ipcRenderer.invoke('bulk-send:pause');
+    },
+    resume: (): Promise<{ success: boolean }> => {
+      return ipcRenderer.invoke('bulk-send:resume');
+    },
+    cancel: (): Promise<{ success: boolean }> => {
+      return ipcRenderer.invoke('bulk-send:cancel');
+    },
+    getStatus: (): Promise<{ campaignId: number | null; state: string; sentCount: number; failedCount: number; currentPhone: string | null; lastError: string | null }> => {
+      return ipcRenderer.invoke('bulk-send:status');
+    }
+  },
+
   // Modo overlay: ocultar/mostrar WhatsApp cuando hay menús abiertos
   setWhatsAppOverlayMode: (overlayOpen: boolean): Promise<boolean> => {
     return ipcRenderer.invoke('whatsapp:set-overlay-mode', overlayOpen);
@@ -283,6 +312,15 @@ declare global {
       onWhatsAppSessionChange: (callback: (data: { loggedIn: boolean }) => void) => void;
       fullReset: () => Promise<boolean>;
       sendWhatsAppMessage: (text: string) => Promise<boolean>;
+      sendAndSubmitMessage: (text: string) => Promise<{ success: boolean; error?: string }>;
+      navigateToChat: (phone: string) => Promise<{ success: boolean; chatName?: string; error?: string }>;
+      bulkSend: {
+        start: (campaignId: number, authToken: string) => Promise<{ success: boolean; error?: string }>;
+        pause: () => Promise<{ success: boolean }>;
+        resume: () => Promise<{ success: boolean }>;
+        cancel: () => Promise<{ success: boolean }>;
+        getStatus: () => Promise<{ campaignId: number | null; state: string; sentCount: number; failedCount: number; currentPhone: string | null; lastError: string | null }>;
+      };
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
       setLoggedInUser: (userId: number, userName: string) => void;
       clearLoggedInUser: () => void;

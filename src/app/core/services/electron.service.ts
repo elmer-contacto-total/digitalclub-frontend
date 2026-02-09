@@ -405,6 +405,66 @@ export class ElectronService {
     }
   }
 
+  // === Bulk Send ===
+
+  /**
+   * Start bulk send campaign via Electron
+   */
+  async startBulkSend(campaignId: number, authToken: string): Promise<boolean> {
+    if ((window as any).electronAPI?.bulkSend?.start) {
+      try {
+        const result = await (window as any).electronAPI.bulkSend.start(campaignId, authToken);
+        return result.success;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Pause bulk send campaign
+   */
+  async pauseBulkSend(): Promise<boolean> {
+    if ((window as any).electronAPI?.bulkSend?.pause) {
+      const result = await (window as any).electronAPI.bulkSend.pause();
+      return result.success;
+    }
+    return false;
+  }
+
+  /**
+   * Resume bulk send campaign
+   */
+  async resumeBulkSend(): Promise<boolean> {
+    if ((window as any).electronAPI?.bulkSend?.resume) {
+      const result = await (window as any).electronAPI.bulkSend.resume();
+      return result.success;
+    }
+    return false;
+  }
+
+  /**
+   * Cancel bulk send campaign
+   */
+  async cancelBulkSend(): Promise<boolean> {
+    if ((window as any).electronAPI?.bulkSend?.cancel) {
+      const result = await (window as any).electronAPI.bulkSend.cancel();
+      return result.success;
+    }
+    return false;
+  }
+
+  /**
+   * Get bulk send status
+   */
+  async getBulkSendStatus(): Promise<{ campaignId: number | null; state: string; sentCount: number; failedCount: number; currentPhone: string | null; lastError: string | null } | null> {
+    if ((window as any).electronAPI?.bulkSend?.getStatus) {
+      return await (window as any).electronAPI.bulkSend.getStatus();
+    }
+    return null;
+  }
+
   /**
    * Cleanup listeners on service destroy
    */
