@@ -207,16 +207,11 @@ export class MessageItemComponent {
     let dateStr = this.message().createdAt;
     if (!dateStr) return '';
 
-    // Backend envía LocalDateTime sin timezone, pero ya es hora Lima (UTC-5)
-    if (!dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:\d{2}$/)) {
-      dateStr = dateStr.replace(' ', 'T') + '-05:00';
-    }
-
-    const date = new Date(dateStr);
+    // Backend ya envía hora Lima sin timezone - no manipular offset
+    const date = new Date(dateStr.replace(' ', 'T'));
     return date.toLocaleTimeString('es-PE', {
       hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'America/Lima'
+      minute: '2-digit'
     });
   }
 

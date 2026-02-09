@@ -280,30 +280,22 @@ export class MessagesListComponent implements OnInit, OnDestroy {
 
   formatDate(dateStr: string): string {
     if (!dateStr) return '-';
-    // Backend envía LocalDateTime sin timezone, pero ya es hora Lima (UTC-5)
-    if (!dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:\d{2}$/)) {
-      dateStr = dateStr.replace(' ', 'T') + '-05:00';
-    }
-    const date = new Date(dateStr);
+    // Backend ya envía hora Lima sin timezone - no manipular offset
+    const date = new Date(dateStr.replace(' ', 'T'));
     return date.toLocaleDateString('es-PE', {
       day: '2-digit',
       month: 'short',
-      year: 'numeric',
-      timeZone: 'America/Lima'
+      year: 'numeric'
     });
   }
 
   formatTime(dateStr: string): string {
     if (!dateStr) return '';
-    // Backend envía LocalDateTime sin timezone, pero ya es hora Lima (UTC-5)
-    if (!dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:\d{2}$/)) {
-      dateStr = dateStr.replace(' ', 'T') + '-05:00';
-    }
-    const date = new Date(dateStr);
+    // Backend ya envía hora Lima sin timezone - no manipular offset
+    const date = new Date(dateStr.replace(' ', 'T'));
     return date.toLocaleTimeString('es-PE', {
       hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'America/Lima'
+      minute: '2-digit'
     });
   }
 
