@@ -89,18 +89,16 @@ export class CapturedMediaItemComponent {
     let dateStr = this.media().messageSentAt || this.media().capturedAt;
     if (!dateStr) return '';
 
-    // Si el string no tiene Z ni offset, asumir que es UTC y agregar Z
+    // Backend envía LocalDateTime sin timezone, pero ya es hora Lima (UTC-5)
     if (!dateStr.endsWith('Z') && !dateStr.match(/[+-]\d{2}:\d{2}$/)) {
-      // Reemplazar espacio por T si es necesario para formato ISO
-      dateStr = dateStr.replace(' ', 'T') + 'Z';
+      dateStr = dateStr.replace(' ', 'T') + '-05:00';
     }
 
     const date = new Date(dateStr);
-    // Mostrar hora en UTC
     return date.toLocaleTimeString('es-PE', {
       hour: '2-digit',
       minute: '2-digit',
-      timeZone: 'UTC'
+      timeZone: 'America/Lima'
     });
   }
 
