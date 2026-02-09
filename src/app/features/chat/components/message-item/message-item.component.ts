@@ -31,12 +31,10 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
       [class.failed]="hasFailedStatus()"
       [class.template]="isTemplateMessage()"
     >
-      <!-- PARIDAD RAILS: Outgoing avatar a la IZQUIERDA (primero en el DOM) -->
-      @if (isOutgoingMessage()) {
-        <div class="avatar outgoing-avatar">
-          <i class="ph-fill ph-user"></i>
-        </div>
-      }
+      <!-- Avatar a la izquierda para ambos tipos -->
+      <div class="avatar" [class.outgoing-avatar]="isOutgoingMessage()" [class.incoming-avatar]="isIncomingMessage()">
+        <i class="ph-fill ph-user"></i>
+      </div>
 
       <!-- Message Bubble -->
       <div class="message-bubble">
@@ -152,12 +150,6 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
         }
       </div>
 
-      <!-- PARIDAD RAILS: Incoming avatar a la DERECHA (último en el DOM) -->
-      @if (isIncomingMessage()) {
-        <div class="avatar incoming-avatar">
-          <i class="ph-fill ph-user"></i>
-        </div>
-      }
     </div>
 
     <app-image-preview
@@ -226,7 +218,7 @@ export class MessageItemComponent {
     return date.toLocaleTimeString('es-PE', {
       hour: '2-digit',
       minute: '2-digit',
-      timeZone: 'UTC'
+      timeZone: 'America/Lima'
     });
   }
 

@@ -703,6 +703,25 @@ const MEDIA_CAPTURE_SCRIPT = `
   const processedMessageIds = new Set(); // Mensajes ya procesados
   const auditedVideoUrls = new Set();    // Para evitar auditar el mismo video múltiples veces
 
+  // Cargar IDs de imágenes previamente reveladas desde localStorage
+  try {
+    const saved = localStorage.getItem('__hablapeRevealedMessages');
+    if (saved) {
+      JSON.parse(saved).forEach(id => processedMessageIds.add(id));
+    }
+  } catch (e) {}
+
+  function saveRevealedMessage(messageId) {
+    if (!messageId) return;
+    processedMessageIds.add(messageId);
+    try {
+      const arr = Array.from(processedMessageIds);
+      // Limitar a últimos 500 para evitar crecimiento infinito
+      const toSave = arr.slice(-500);
+      localStorage.setItem('__hablapeRevealedMessages', JSON.stringify(toSave));
+    } catch (e) {}
+  }
+
   // Configuración
   const MIN_IMAGE_SIZE = 10000;          // Mínimo 10KB para evitar thumbnails
   const CAPTURE_DELAY = 500;             // Delay antes de capturar (para que cargue)
@@ -1825,7 +1844,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // Marcar como procesado
       capturedBlobUrls.add(blobUrl);
-      if (messageId) processedMessageIds.add(messageId);
+      saveRevealedMessage(messageId);
 
       // Descargar la imagen
       const response = await fetch(blobUrl);
