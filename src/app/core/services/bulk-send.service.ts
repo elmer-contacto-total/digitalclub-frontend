@@ -1,7 +1,6 @@
 /**
- * Campaign Service
- * Servicio para gestión de campañas de envío masivo
- * Soporta Cloud API (plantillas) y Electron (mensajes de texto)
+ * Bulk Send Service
+ * Servicio para gestión de envíos masivos via Electron (CSV-based)
  */
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
@@ -10,7 +9,7 @@ import { environment } from '../../../environments/environment';
 
 // --- Interfaces ---
 
-export interface Campaign {
+export interface BulkSend {
   id: number;
   send_method: string;
   status: string;
@@ -18,6 +17,12 @@ export interface Campaign {
   sent_count: number;
   failed_count: number;
   progress_percent: number;
+  message_content: string | null;
+  message_preview: string | null;
+  attachment_path: string | null;
+  attachment_type: string | null;
+  attachment_size: number | null;
+  attachment_original_name: string | null;
   started_at: string | null;
   completed_at: string | null;
   error_summary: string | null;
@@ -26,41 +31,39 @@ export interface Campaign {
   client_id: number | null;
   user_id: number | null;
   user_name: string | null;
-  bulk_message_id?: number;
-  message_template_id?: number;
-  template_name?: string;
-  message_preview?: string;
 }
 
-export interface CampaignRecipient {
+export interface BulkSendRecipient {
   id: number;
   phone: string;
+  recipient_name: string | null;
   status: string;
   sent_at: string | null;
   error_message: string | null;
-  user_id: number | null;
-  user_name: string | null;
+  custom_variables: Record<string, string> | null;
 }
 
-export interface CampaignDetail extends Campaign {
-  recipients: CampaignRecipient[];
+export interface BulkSendDetail extends BulkSend {
+  recipients: BulkSendRecipient[];
   recipients_total: number;
   recipients_page: number;
   recipients_total_pages: number;
 }
 
-export interface CampaignListResponse {
-  campaigns: Campaign[];
+export interface BulkSendListResponse {
+  bulk_sends: BulkSend[];
   total: number;
   page: number;
   totalPages: number;
 }
 
-export interface CreateCampaignRequest {
-  sendMethod: string;
-  bulkMessageId?: number;
-  messageTemplateId?: number;
-  recipientIds: number[];
+export interface CsvPreviewResponse {
+  headers: string[];
+  preview_rows: string[][];
+  total_rows: number;
+  phone_column: number;
+  name_column: number;
+  error?: string;
 }
 
 export interface BulkSendRules {
@@ -72,7 +75,6 @@ export interface BulkSendRules {
   pause_duration_minutes: number;
   send_hour_start: number;
   send_hour_end: number;
-  cloud_api_delay_ms: number;
   enabled: boolean;
 }
 
@@ -80,101 +82,97 @@ export interface NextRecipientResponse {
   has_next: boolean;
   recipient_id?: number;
   phone?: string;
-  user_name?: string;
+  recipient_name?: string;
   content?: string;
-  template_name?: string;
+  attachment_path?: string;
+  attachment_type?: string;
+  attachment_original_name?: string;
   message?: string;
 }
 
 @Injectable({
   providedIn: 'root'
 })
-export class CampaignService {
+export class BulkSendService {
   private http = inject(HttpClient);
-  private baseUrl = `${environment.apiUrl}/app/campaigns`;
+  private baseUrl = `${environment.apiUrl}/app/bulk_sends`;
 
   /**
-   * Lista de campañas
+   * Preview CSV (parse headers + first rows)
    */
-  getCampaigns(page: number = 0, size: number = 20, status?: string): Observable<CampaignListResponse> {
+  previewCsv(file: File): Observable<CsvPreviewResponse> {
+    const formData = new FormData();
+    formData.append('csv', file);
+    return this.http.post<CsvPreviewResponse>(`${this.baseUrl}/csv/preview`, formData);
+  }
+
+  /**
+   * Create bulk send from CSV
+   */
+  createFromCsv(csvFile: File, messageContent: string, phoneColumn: number,
+                nameColumn: number, attachment?: File): Observable<{ result: string; bulk_send: BulkSend; message: string }> {
+    const formData = new FormData();
+    formData.append('csv', csvFile);
+    formData.append('message_content', messageContent);
+    formData.append('phone_column', phoneColumn.toString());
+    formData.append('name_column', nameColumn.toString());
+    if (attachment) {
+      formData.append('attachment', attachment);
+    }
+    return this.http.post<{ result: string; bulk_send: BulkSend; message: string }>(`${this.baseUrl}/csv`, formData);
+  }
+
+  /**
+   * Lista de envíos masivos
+   */
+  getBulkSends(page: number = 0, size: number = 20, status?: string): Observable<BulkSendListResponse> {
     let params = new HttpParams()
       .set('page', page.toString())
       .set('size', size.toString());
-
     if (status) {
       params = params.set('status', status);
     }
-
-    return this.http.get<CampaignListResponse>(this.baseUrl, { params });
+    return this.http.get<BulkSendListResponse>(this.baseUrl, { params });
   }
 
   /**
-   * Detalle de campaña con destinatarios
+   * Detalle de envío con destinatarios
    */
-  getCampaign(id: number, recipientPage: number = 0, recipientSize: number = 50): Observable<CampaignDetail> {
+  getBulkSend(id: number, recipientPage: number = 0, recipientSize: number = 50): Observable<BulkSendDetail> {
     const params = new HttpParams()
       .set('recipientPage', recipientPage.toString())
       .set('recipientSize', recipientSize.toString());
-
-    return this.http.get<CampaignDetail>(`${this.baseUrl}/${id}`, { params });
+    return this.http.get<BulkSendDetail>(`${this.baseUrl}/${id}`, { params });
   }
 
-  /**
-   * Crear nueva campaña
-   */
-  createCampaign(request: CreateCampaignRequest): Observable<{ result: string; campaign: Campaign; message: string }> {
-    return this.http.post<{ result: string; campaign: Campaign; message: string }>(this.baseUrl, request);
-  }
-
-  /**
-   * Pausar campaña
-   */
-  pauseCampaign(id: number): Observable<{ result: string; message: string }> {
+  pauseBulkSend(id: number): Observable<{ result: string; message: string }> {
     return this.http.post<{ result: string; message: string }>(`${this.baseUrl}/${id}/pause`, {});
   }
 
-  /**
-   * Reanudar campaña
-   */
-  resumeCampaign(id: number): Observable<{ result: string; message: string }> {
+  resumeBulkSend(id: number): Observable<{ result: string; message: string }> {
     return this.http.post<{ result: string; message: string }>(`${this.baseUrl}/${id}/resume`, {});
   }
 
-  /**
-   * Cancelar campaña
-   */
-  cancelCampaign(id: number): Observable<{ result: string; message: string }> {
+  cancelBulkSend(id: number): Observable<{ result: string; message: string }> {
     return this.http.post<{ result: string; message: string }>(`${this.baseUrl}/${id}/cancel`, {});
   }
 
-  /**
-   * Siguiente destinatario (para Electron polling)
-   */
   getNextRecipient(id: number): Observable<NextRecipientResponse> {
     return this.http.get<NextRecipientResponse>(`${this.baseUrl}/${id}/next-recipient`);
   }
 
-  /**
-   * Reportar resultado de envío (Electron)
-   */
-  reportRecipientResult(campaignId: number, recipientId: number, success: boolean, errorMessage?: string): Observable<any> {
-    return this.http.post(`${this.baseUrl}/${campaignId}/recipient-result`, {
+  reportRecipientResult(bulkSendId: number, recipientId: number, success: boolean, errorMessage?: string): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${bulkSendId}/recipient-result`, {
       recipientId,
       success,
       errorMessage
     });
   }
 
-  /**
-   * Obtener reglas de envío
-   */
   getRules(): Observable<{ rules: BulkSendRules }> {
     return this.http.get<{ rules: BulkSendRules }>(`${this.baseUrl}/rules`);
   }
 
-  /**
-   * Actualizar reglas de envío
-   */
   updateRules(rules: Partial<BulkSendRules>): Observable<{ result: string; rules: BulkSendRules }> {
     return this.http.put<{ result: string; rules: BulkSendRules }>(`${this.baseUrl}/rules`, rules);
   }
@@ -185,10 +183,10 @@ export class CampaignService {
     const labels: Record<string, string> = {
       'PENDING': 'Pendiente',
       'PROCESSING': 'En proceso',
-      'PAUSED': 'Pausada',
-      'COMPLETED': 'Completada',
-      'CANCELLED': 'Cancelada',
-      'FAILED': 'Fallida'
+      'PAUSED': 'Pausado',
+      'COMPLETED': 'Completado',
+      'CANCELLED': 'Cancelado',
+      'FAILED': 'Fallido'
     };
     return labels[status] || status;
   }
@@ -205,10 +203,6 @@ export class CampaignService {
     return classes[status] || 'badge-secondary';
   }
 
-  getMethodLabel(method: string): string {
-    return method === 'CLOUD_API' ? 'Cloud API' : 'Electron';
-  }
-
   getRecipientStatusLabel(status: string): string {
     const labels: Record<string, string> = {
       'PENDING': 'Pendiente',
@@ -217,5 +211,12 @@ export class CampaignService {
       'SKIPPED': 'Omitido'
     };
     return labels[status] || status;
+  }
+
+  formatFileSize(bytes: number | null): string {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 }

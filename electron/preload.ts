@@ -208,8 +208,8 @@ const electronAPI = {
 
   // === Bulk Send ===
   bulkSend: {
-    start: (campaignId: number, authToken: string): Promise<{ success: boolean; error?: string }> => {
-      return ipcRenderer.invoke('bulk-send:start', campaignId, authToken);
+    start: (bulkSendId: number, authToken: string): Promise<{ success: boolean; error?: string }> => {
+      return ipcRenderer.invoke('bulk-send:start', bulkSendId, authToken);
     },
     pause: (): Promise<{ success: boolean }> => {
       return ipcRenderer.invoke('bulk-send:pause');
@@ -220,7 +220,7 @@ const electronAPI = {
     cancel: (): Promise<{ success: boolean }> => {
       return ipcRenderer.invoke('bulk-send:cancel');
     },
-    getStatus: (): Promise<{ campaignId: number | null; state: string; sentCount: number; failedCount: number; currentPhone: string | null; lastError: string | null }> => {
+    getStatus: (): Promise<{ bulkSendId: number | null; state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; lastError: string | null }> => {
       return ipcRenderer.invoke('bulk-send:status');
     }
   },
@@ -315,11 +315,11 @@ declare global {
       sendAndSubmitMessage: (text: string) => Promise<{ success: boolean; error?: string }>;
       navigateToChat: (phone: string) => Promise<{ success: boolean; chatName?: string; error?: string }>;
       bulkSend: {
-        start: (campaignId: number, authToken: string) => Promise<{ success: boolean; error?: string }>;
+        start: (bulkSendId: number, authToken: string) => Promise<{ success: boolean; error?: string }>;
         pause: () => Promise<{ success: boolean }>;
         resume: () => Promise<{ success: boolean }>;
         cancel: () => Promise<{ success: boolean }>;
-        getStatus: () => Promise<{ campaignId: number | null; state: string; sentCount: number; failedCount: number; currentPhone: string | null; lastError: string | null }>;
+        getStatus: () => Promise<{ bulkSendId: number | null; state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; lastError: string | null }>;
       };
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
       setLoggedInUser: (userId: number, userName: string) => void;

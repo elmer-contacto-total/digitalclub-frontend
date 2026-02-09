@@ -369,6 +369,16 @@ const BLOCK_DOWNLOAD_SCRIPT = `
     }
   }, true);
 
+  // ===== BLOQUEAR DROP DE ARCHIVOS (envío via drag & drop) =====
+  ['dragover', 'dragenter', 'drop'].forEach((evt) => {
+    document.addEventListener(evt, (e) => {
+      if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    }, true);
+  });
+
   // ===== BLOQUEAR TECLAS DE GUARDADO =====
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {

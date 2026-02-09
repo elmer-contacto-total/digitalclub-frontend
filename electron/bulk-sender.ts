@@ -17,13 +17,22 @@ export interface BulkSendRules {
 }
 
 export interface BulkSenderStatus {
-  campaignId: number | null;
+  bulkSendId: number | null;
   state: 'idle' | 'running' | 'paused' | 'cancelled' | 'completed' | 'error';
   sentCount: number;
   failedCount: number;
+  totalRecipients: number;
   currentPhone: string | null;
   lastError: string | null;
 }
+
+export type OverlayUpdateCallback = (data: {
+  state: string;
+  sentCount: number;
+  failedCount: number;
+  totalRecipients: number;
+  currentPhone: string | null;
+}) => void;
 
 const DEFAULT_RULES: BulkSendRules = {
   min_delay_seconds: 30,
@@ -36,15 +45,17 @@ const DEFAULT_RULES: BulkSendRules = {
 };
 
 export class BulkSender {
-  private campaignId: number | null = null;
+  private bulkSendId: number | null = null;
   private apiBaseUrl: string;
   private authToken: string = '';
   private rules: BulkSendRules = { ...DEFAULT_RULES };
   private whatsappView: BrowserView | null = null;
+  private onOverlayUpdate: OverlayUpdateCallback | null = null;
 
   private _state: 'idle' | 'running' | 'paused' | 'cancelled' | 'completed' | 'error' = 'idle';
   private sentCount = 0;
   private failedCount = 0;
+  private totalRecipients = 0;
   private consecutiveFailures = 0;
   private currentPhone: string | null = null;
   private lastError: string | null = null;
@@ -53,6 +64,23 @@ export class BulkSender {
 
   constructor(apiBaseUrl: string) {
     this.apiBaseUrl = apiBaseUrl;
+  }
+
+  setOverlayCallback(cb: OverlayUpdateCallback): void {
+    this.onOverlayUpdate = cb;
+  }
+
+  private emitOverlayUpdate(): void {
+    if (this.onOverlayUpdate) {
+      this.onOverlayUpdate({
+        state: this._state,
+        sentCount: this.sentCount,
+        failedCount: this.failedCount,
+        totalRecipients: this.totalRecipients,
+        currentPhone: this.currentPhone
+      });
+    }
+    this.updateOverlay();
   }
 
   setWhatsAppView(view: BrowserView | null): void {
@@ -65,63 +93,74 @@ export class BulkSender {
 
   getStatus(): BulkSenderStatus {
     return {
-      campaignId: this.campaignId,
+      bulkSendId: this.bulkSendId,
       state: this._state,
       sentCount: this.sentCount,
       failedCount: this.failedCount,
+      totalRecipients: this.totalRecipients,
       currentPhone: this.currentPhone,
       lastError: this.lastError
     };
   }
 
-  async start(campaignId: number): Promise<void> {
+  async start(bulkSendId: number): Promise<void> {
     if (this._state === 'running') {
-      console.log('[BulkSender] Already running campaign', this.campaignId);
+      console.log('[BulkSender] Already running bulk send', this.bulkSendId);
       return;
     }
 
-    this.campaignId = campaignId;
+    this.bulkSendId = bulkSendId;
     this._state = 'running';
     this.sentCount = 0;
     this.failedCount = 0;
+    this.totalRecipients = 0;
     this.consecutiveFailures = 0;
     this.currentPhone = null;
     this.lastError = null;
     this.isPaused = false;
     this.isCancelled = false;
 
-    console.log(`[BulkSender] Starting campaign ${campaignId}`);
+    console.log(`[BulkSender] Starting bulk send ${bulkSendId}`);
+
+    // Show overlay
+    await this.showOverlay();
 
     // Fetch rules from backend
     await this.fetchRules();
 
     // Main send loop
     await this.processLoop();
+
+    // Hide overlay when done
+    await this.hideOverlay();
   }
 
   pause(): void {
-    console.log(`[BulkSender] Pausing campaign ${this.campaignId}`);
+    console.log(`[BulkSender] Pausing bulk send ${this.bulkSendId}`);
     this.isPaused = true;
     this._state = 'paused';
-    // Also notify backend
     this.notifyBackend('pause');
+    this.emitOverlayUpdate();
+    this.hideOverlay();
   }
 
   resume(): void {
     if (this._state !== 'paused') return;
-    console.log(`[BulkSender] Resuming campaign ${this.campaignId}`);
+    console.log(`[BulkSender] Resuming bulk send ${this.bulkSendId}`);
     this.isPaused = false;
     this._state = 'running';
-    // Notify backend and restart loop
     this.notifyBackend('resume');
-    this.processLoop();
+    this.showOverlay();
+    this.processLoop().then(() => this.hideOverlay());
   }
 
   cancel(): void {
-    console.log(`[BulkSender] Cancelling campaign ${this.campaignId}`);
+    console.log(`[BulkSender] Cancelling bulk send ${this.bulkSendId}`);
     this.isCancelled = true;
     this._state = 'cancelled';
     this.notifyBackend('cancel');
+    this.emitOverlayUpdate();
+    this.hideOverlay();
   }
 
   private async processLoop(): Promise<void> {
@@ -131,13 +170,15 @@ export class BulkSender {
       // Check cancel/pause
       if (this.isCancelled) {
         this._state = 'cancelled';
-        console.log(`[BulkSender] Campaign ${this.campaignId} cancelled`);
+        this.emitOverlayUpdate();
+        console.log(`[BulkSender] Bulk send ${this.bulkSendId} cancelled`);
         return;
       }
 
       if (this.isPaused) {
         this._state = 'paused';
-        console.log(`[BulkSender] Campaign ${this.campaignId} paused`);
+        this.emitOverlayUpdate();
+        console.log(`[BulkSender] Bulk send ${this.bulkSendId} paused`);
         return;
       }
 
@@ -152,15 +193,19 @@ export class BulkSender {
       const next = await this.fetchNextRecipient();
       if (!next || !next.has_next) {
         this._state = 'completed';
-        console.log(`[BulkSender] Campaign ${this.campaignId} completed: ${this.sentCount} sent, ${this.failedCount} failed`);
+        this.emitOverlayUpdate();
+        console.log(`[BulkSender] Bulk send ${this.bulkSendId} completed: ${this.sentCount} sent, ${this.failedCount} failed`);
         return;
       }
 
       this.currentPhone = next.phone;
       const content = next.content || '';
       const recipientId = next.recipient_id;
+      const hasAttachment = !!next.attachment_path;
 
-      console.log(`[BulkSender] Sending to ${next.phone} (${next.user_name || 'Unknown'})`);
+      this.emitOverlayUpdate();
+
+      console.log(`[BulkSender] Sending to ${next.phone} (${next.recipient_name || 'Unknown'})`);
 
       try {
         // Navigate to chat
@@ -173,10 +218,21 @@ export class BulkSender {
         const typingDelay = 500 + Math.random() * 1000;
         await this.sleep(typingDelay);
 
-        // Send message
-        const sendResult = await this.sendAndSubmit(content);
-        if (!sendResult.success) {
-          throw new Error(`Failed to send message: ${sendResult.error}`);
+        // Send message (with or without attachment)
+        if (hasAttachment) {
+          const sendResult = await this.sendMediaWithCaption(
+            next.attachment_path,
+            content,
+            next.attachment_type || 'document'
+          );
+          if (!sendResult.success) {
+            throw new Error(`Failed to send media: ${sendResult.error}`);
+          }
+        } else {
+          const sendResult = await this.sendAndSubmit(content);
+          if (!sendResult.success) {
+            throw new Error(`Failed to send message: ${sendResult.error}`);
+          }
         }
 
         // Report success
@@ -185,6 +241,7 @@ export class BulkSender {
         this.consecutiveFailures = 0;
         messagesSinceLastPause++;
 
+        this.emitOverlayUpdate();
         console.log(`[BulkSender] Sent to ${next.phone} (${this.sentCount} total)`);
 
       } catch (err: any) {
@@ -195,6 +252,7 @@ export class BulkSender {
         this.failedCount++;
         this.consecutiveFailures++;
         this.lastError = errorMsg;
+        this.emitOverlayUpdate();
 
         // Backoff on consecutive failures
         if (this.consecutiveFailures >= 5) {
@@ -202,11 +260,11 @@ export class BulkSender {
           this.isPaused = true;
           this._state = 'paused';
           this.lastError = 'Auto-paused after 5 consecutive failures';
+          this.emitOverlayUpdate();
           return;
         }
 
         if (this.consecutiveFailures >= 3) {
-          // Double the delay
           const backoffDelay = this.getRandomDelay() * 2;
           console.log(`[BulkSender] Backoff: waiting ${backoffDelay}ms`);
           await this.sleep(backoffDelay);
@@ -366,11 +424,193 @@ export class BulkSender {
     }
   }
 
+  // --- Media Sending ---
+
+  private async sendMediaWithCaption(
+    filePath: string,
+    caption: string,
+    mediaType: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.whatsappView) {
+      return { success: false, error: 'WhatsApp view not available' };
+    }
+
+    try {
+      // Use session to intercept file dialog and provide our file
+      const ses = this.whatsappView.webContents.session;
+
+      // Set up file dialog intercept
+      const { dialog } = require('electron');
+
+      const result = await this.whatsappView.webContents.executeJavaScript(`
+        (async function() {
+          try {
+            // Click attach button
+            const attachBtn = document.querySelector('[data-testid="attach-menu-plus"]') ||
+                              document.querySelector('span[data-icon="attach-menu-plus"]')?.closest('button') ||
+                              document.querySelector('[data-testid="clip"]')?.closest('button');
+
+            if (!attachBtn) {
+              return { success: false, error: 'attach_button_not_found' };
+            }
+
+            attachBtn.click();
+            await new Promise(r => setTimeout(r, 500));
+
+            // Click correct option based on type
+            let menuItem;
+            if ('${mediaType}' === 'image' || '${mediaType}' === 'video') {
+              menuItem = document.querySelector('[data-testid="attach-image"]') ||
+                         document.querySelector('li[data-testid="mi-attach-media"]') ||
+                         document.querySelector('[aria-label*="photo"]') ||
+                         document.querySelector('[aria-label*="Photos"]');
+            } else {
+              menuItem = document.querySelector('[data-testid="attach-document"]') ||
+                         document.querySelector('li[data-testid="mi-attach-document"]') ||
+                         document.querySelector('[aria-label*="Document"]');
+            }
+
+            if (menuItem) {
+              menuItem.click();
+            }
+
+            // The file input dialog will be intercepted by Electron
+            await new Promise(r => setTimeout(r, 1000));
+
+            return { success: true, stage: 'menu_clicked' };
+          } catch(e) {
+            return { success: false, error: e.message || 'attach_error' };
+          }
+        })()
+      `, true);
+
+      if (!result.success) {
+        return result;
+      }
+
+      // Wait for file input — use IPC file dialog intercept
+      // The webContents file-dialog-open event is triggered
+      // We provide our file path via the dialog override
+      await this.sleep(500);
+
+      // Input the file path via the file input element
+      const fileInputResult = await this.whatsappView.webContents.executeJavaScript(`
+        (async function() {
+          try {
+            // Wait for upload preview
+            await new Promise(r => setTimeout(r, 2000));
+
+            // Add caption text if present
+            const captionInput = document.querySelector('[data-testid="media-caption-input-container"] div[contenteditable="true"]') ||
+                                 document.querySelector('div[data-testid="media-caption-input"]') ||
+                                 document.querySelector('.copyable-area div[contenteditable="true"][data-tab]');
+
+            if (captionInput && ${JSON.stringify(caption)}) {
+              captionInput.focus();
+              captionInput.textContent = '';
+              document.execCommand('insertText', false, ${JSON.stringify(caption)});
+              captionInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            }
+
+            await new Promise(r => setTimeout(r, 500));
+
+            // Click send
+            const sendBtn = document.querySelector('[data-testid="send"]') ||
+                            document.querySelector('span[data-icon="send"]')?.closest('button');
+
+            if (sendBtn) {
+              sendBtn.click();
+              await new Promise(r => setTimeout(r, 2000));
+              return { success: true };
+            }
+
+            return { success: false, error: 'send_button_not_found_after_media' };
+          } catch(e) {
+            return { success: false, error: e.message || 'caption_send_error' };
+          }
+        })()
+      `, true);
+
+      return fileInputResult;
+    } catch (err: any) {
+      return { success: false, error: err.message || 'media_send_error' };
+    }
+  }
+
+  // --- Overlay ---
+
+  private async showOverlay(): Promise<void> {
+    if (!this.whatsappView) return;
+    try {
+      await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          // Remove existing overlay if any
+          const existing = document.getElementById('bulk-send-overlay');
+          if (existing) existing.remove();
+
+          const overlay = document.createElement('div');
+          overlay.id = 'bulk-send-overlay';
+          overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;';
+          overlay.innerHTML = \`
+            <div style="background:white;border-radius:16px;padding:32px;text-align:center;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+              <div style="width:60px;height:60px;border-radius:50%;background:#4361ee;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                </svg>
+              </div>
+              <h3 style="margin:0 0 8px;font-size:20px;color:#1a1a2e;">Envío masivo en curso</h3>
+              <p id="bulk-overlay-status" style="margin:0 0 16px;font-size:14px;color:#6c757d;">Iniciando...</p>
+              <div style="background:#e9ecef;border-radius:8px;height:8px;overflow:hidden;margin-bottom:8px;">
+                <div id="bulk-overlay-progress" style="height:100%;background:#4361ee;border-radius:8px;transition:width 0.3s;width:0%"></div>
+              </div>
+              <p id="bulk-overlay-count" style="margin:0 0 20px;font-size:13px;color:#999;">0 / 0 enviados</p>
+              <p style="font-size:12px;color:#aaa;margin:0;">WhatsApp está bloqueado durante el envío masivo</p>
+            </div>
+          \`;
+          document.body.appendChild(overlay);
+        })()
+      `);
+    } catch (err) {
+      console.warn('[BulkSender] Failed to show overlay:', err);
+    }
+  }
+
+  private async hideOverlay(): Promise<void> {
+    if (!this.whatsappView) return;
+    try {
+      await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          const overlay = document.getElementById('bulk-send-overlay');
+          if (overlay) overlay.remove();
+        })()
+      `);
+    } catch (err) {
+      console.warn('[BulkSender] Failed to hide overlay:', err);
+    }
+  }
+
+  private async updateOverlay(): Promise<void> {
+    if (!this.whatsappView) return;
+    const pct = this.totalRecipients > 0 ? Math.round((this.sentCount + this.failedCount) * 100 / this.totalRecipients) : 0;
+    try {
+      await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          const status = document.getElementById('bulk-overlay-status');
+          const progress = document.getElementById('bulk-overlay-progress');
+          const count = document.getElementById('bulk-overlay-count');
+          if (status) status.textContent = 'Enviando a ${(this.currentPhone || '').replace(/'/g, "\\'")}...';
+          if (progress) progress.style.width = '${pct}%';
+          if (count) count.textContent = '${this.sentCount} / ${this.totalRecipients} enviados' + (${this.failedCount} > 0 ? ' (${this.failedCount} fallidos)' : '');
+        })()
+      `);
+    } catch { /* ignore */ }
+  }
+
   // --- API Communication ---
 
   private async fetchRules(): Promise<void> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/app/campaigns/rules`, {
+      const response = await fetch(`${this.apiBaseUrl}/app/bulk_sends/rules`, {
         headers: this.getHeaders()
       });
       if (response.ok) {
@@ -394,7 +634,7 @@ export class BulkSender {
 
   private async fetchNextRecipient(): Promise<any> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/app/campaigns/${this.campaignId}/next-recipient`, {
+      const response = await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/next-recipient`, {
         headers: this.getHeaders()
       });
       if (response.ok) {
@@ -409,7 +649,7 @@ export class BulkSender {
 
   private async reportResult(recipientId: number, success: boolean, errorMessage?: string): Promise<void> {
     try {
-      await fetch(`${this.apiBaseUrl}/app/campaigns/${this.campaignId}/recipient-result`, {
+      await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/recipient-result`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({ recipientId, success, errorMessage: errorMessage || null })
@@ -421,7 +661,7 @@ export class BulkSender {
 
   private async notifyBackend(action: 'pause' | 'resume' | 'cancel'): Promise<void> {
     try {
-      await fetch(`${this.apiBaseUrl}/app/campaigns/${this.campaignId}/${action}`, {
+      await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/${action}`, {
         method: 'POST',
         headers: this.getHeaders()
       });

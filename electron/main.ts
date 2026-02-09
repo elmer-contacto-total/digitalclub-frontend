@@ -27,7 +27,7 @@ const APP_VERSION = app.getVersion();
 // Stored update info (so renderer can pull it if it missed the push)
 let pendingUpdateInfo: any = null;
 
-// Bulk sender for mass messaging campaigns
+// Bulk sender for mass messaging
 const bulkSender = new BulkSender('http://localhost:8080');
 
 // Fingerprint único para esta instalación
@@ -2116,12 +2116,12 @@ function setupIPC(): void {
     }
   });
 
-  // Start bulk send campaign
-  ipcMain.handle('bulk-send:start', async (_, campaignId: number, authToken: string) => {
+  // Start bulk send
+  ipcMain.handle('bulk-send:start', async (_, bulkSendId: number, authToken: string) => {
     try {
       bulkSender.setWhatsAppView(whatsappView);
       bulkSender.setAuthToken(authToken);
-      bulkSender.start(campaignId);
+      bulkSender.start(bulkSendId);
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };

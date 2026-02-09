@@ -46,6 +46,11 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
           </div>
         }
 
+        <!-- Sender name above media -->
+        @if (hasMediaContent() && message().historicSenderName) {
+          <strong class="sender-name">{{ message().historicSenderName }}:</strong>
+        }
+
         <!-- Media Content -->
         @if (hasMediaContent()) {
           <div class="media-content">

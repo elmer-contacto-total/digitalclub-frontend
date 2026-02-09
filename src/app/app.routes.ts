@@ -134,11 +134,11 @@ export const routes: Routes = [
         loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
         title: 'Envíos Masivos - MWS'
       },
-      // Campaigns (bulk sending with Cloud API and Electron)
+      // Envíos Masivos (bulk sending via Electron)
       {
-        path: 'campaigns',
-        loadChildren: () => import('./features/campaigns/campaigns.routes').then(m => m.CAMPAIGNS_ROUTES),
-        title: 'Campañas - MWS'
+        path: 'bulk_sends',
+        loadChildren: () => import('./features/bulk-sends/bulk-sends.routes').then(m => m.BULK_SENDS_ROUTES),
+        title: 'Envíos Masivos - MWS'
       },
       // Canned Messages (implemented)
       {

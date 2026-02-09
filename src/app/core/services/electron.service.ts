@@ -410,10 +410,10 @@ export class ElectronService {
   /**
    * Start bulk send campaign via Electron
    */
-  async startBulkSend(campaignId: number, authToken: string): Promise<boolean> {
+  async startBulkSend(bulkSendId: number, authToken: string): Promise<boolean> {
     if ((window as any).electronAPI?.bulkSend?.start) {
       try {
-        const result = await (window as any).electronAPI.bulkSend.start(campaignId, authToken);
+        const result = await (window as any).electronAPI.bulkSend.start(bulkSendId, authToken);
         return result.success;
       } catch {
         return false;

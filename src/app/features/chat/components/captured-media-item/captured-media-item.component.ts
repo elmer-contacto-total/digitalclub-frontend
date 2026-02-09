@@ -28,6 +28,11 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
           Media Capturado
         </div>
 
+        <!-- Sender name -->
+        @if (media().chatName) {
+          <strong class="sender-name">{{ media().chatName }}:</strong>
+        }
+
         <!-- Media Content -->
         <div class="media-content">
           @if (media().mediaType === 'image') {
