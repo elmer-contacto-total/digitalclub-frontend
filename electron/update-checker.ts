@@ -145,7 +145,7 @@ export async function downloadAndInstallUpdate(
 
     // Run the installer as a detached process that survives app exit
     console.log('[MWS Update] Launching installer:', filePath);
-    const child = spawn(filePath, [], {
+    const child = spawn(filePath, ['/S'], {
       detached: true,
       stdio: 'ignore',
       shell: false

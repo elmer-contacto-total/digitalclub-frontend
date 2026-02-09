@@ -1,6 +1,6 @@
 {
   "name": "holape-angular",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "MWS Desktop - Monitor WhatsApp Service",
   "main": "dist/electron/main.js",
   "scripts": {
@@ -16,7 +16,8 @@
     "electron:start": "npm run electron:build && electron .",
     "electron": "npm run electron:dev",
     "dist": "npm run electron:build && electron-builder",
-    "dist:win": "npm run electron:build && electron-builder --win",
+    "generate:installer-assets": "node scripts/generate-installer-bitmaps.js",
+    "dist:win": "npm run generate:installer-assets && npm run electron:build && electron-builder --win",
     "pack": "npm run electron:build && electron-builder --dir"
   },
   "build": {
@@ -31,6 +32,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -43,10 +45,16 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "MWS Desktop"
+      "shortcutName": "MWS Desktop",
+      "runAfterFinish": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp"
     }
   },
   "prettier": {
@@ -93,6 +101,7 @@
     "karma-jasmine": "~5.1.0",
     "karma-jasmine-html-reporter": "~2.1.0",
     "postcss": "^8.5.6",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.8.2"
   }
