@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil, switchMap, of } from 'rxjs';
 import { ElectronService } from '../../core/services/electron.service';
 import { ElectronContactsService } from './services/electron-contacts.service';
+import { WebSocketService } from '../../core/services/websocket.service';
 import {
   CrmContact,
   LocalContact,
@@ -37,6 +38,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   private electronService = inject(ElectronService);
   private contactsService = inject(ElectronContactsService);
   private cannedMessageService = inject(CannedMessageService);
+  private wsService = inject(WebSocketService);
   private destroy$ = new Subject<void>();
 
   // State
@@ -88,6 +90,9 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     if (this.electronService.isElectron) {
       this.electronService.showWhatsApp();
     }
+
+    // Connect to WebSocket (so the agent has a session for real-time notifications)
+    this.wsService.connect();
 
     // Listen for CRM reset events (logout, WhatsApp logout, etc.)
     this.electronService.crmReset$.pipe(
