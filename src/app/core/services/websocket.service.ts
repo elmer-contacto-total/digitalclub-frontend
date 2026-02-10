@@ -19,7 +19,7 @@ export type WebSocketStatus = 'disconnected' | 'connecting' | 'connected' | 'rec
  * Message received via WebSocket
  */
 export interface WsMessage {
-  type: 'NEW_MESSAGE' | 'MESSAGE_READ' | 'TYPING' | 'ONLINE_STATUS' | 'TICKET_UPDATE' | 'ALERT';
+  type: 'NEW_MESSAGE' | 'MESSAGE_READ' | 'TYPING' | 'ONLINE_STATUS' | 'TICKET_UPDATE' | 'ALERT' | 'CAPTURED_MEDIA' | 'CAPTURED_MEDIA_DELETED';
   payload: unknown;
 }
 
@@ -71,6 +71,28 @@ export interface WsAlertPayload {
   severity: string;
 }
 
+/**
+ * Captured media payload (from Electron via backend WebSocket)
+ */
+export interface WsCapturedMediaPayload {
+  id: number;
+  mediaUuid: string;
+  agentId: number | null;
+  clientUserId: number | null;
+  mediaType: string;
+  mimeType: string;
+  publicUrl: string | null;
+  filePath: string | null;
+  sizeBytes: number | null;
+  durationSeconds: number | null;
+  capturedAt: string;
+  messageSentAt: string | null;
+  chatPhone: string | null;
+  chatName: string | null;
+  deleted?: boolean;
+  deletedAt?: string | null;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -97,6 +119,8 @@ export class WebSocketService implements OnDestroy {
   private onlineStatusSubject = new Subject<WsOnlineStatusPayload>();
   private ticketUpdateSubject = new Subject<WsTicketUpdatePayload>();
   private alertSubject = new Subject<WsAlertPayload>();
+  private capturedMediaSubject = new Subject<WsCapturedMediaPayload>();
+  private capturedMediaDeletedSubject = new Subject<WsCapturedMediaPayload>();
 
   // Public observables
   readonly messages$ = this.messageSubject.asObservable();
@@ -104,6 +128,8 @@ export class WebSocketService implements OnDestroy {
   readonly onlineStatus$ = this.onlineStatusSubject.asObservable();
   readonly ticketUpdates$ = this.ticketUpdateSubject.asObservable();
   readonly alerts$ = this.alertSubject.asObservable();
+  readonly capturedMedia$ = this.capturedMediaSubject.asObservable();
+  readonly capturedMediaDeleted$ = this.capturedMediaDeletedSubject.asObservable();
 
   /**
    * Connect to WebSocket server
@@ -246,6 +272,35 @@ export class WebSocketService implements OnDestroy {
   }
 
   /**
+   * Subscribe to captured media notifications
+   * PARIDAD SPRING BOOT: /user/{userId}/queue/captured_media
+   */
+  subscribeToCapturedMedia(userId: number): void {
+    if (!this.stompClient?.active) {
+      console.warn('Cannot subscribe: WebSocket not connected');
+      return;
+    }
+
+    const sub = this.stompClient.subscribe(
+      `/user/${userId}/queue/captured_media`,
+      (message: IMessage) => {
+        try {
+          const data = JSON.parse(message.body);
+          const payload = (data.payload || data) as WsCapturedMediaPayload;
+          if (data.type === 'CAPTURED_MEDIA_DELETED') {
+            this.capturedMediaDeletedSubject.next(payload);
+          } else {
+            this.capturedMediaSubject.next(payload);
+          }
+        } catch (e) {
+          console.error('Failed to parse captured media message:', e);
+        }
+      }
+    );
+    this.subscriptions.push(sub);
+  }
+
+  /**
    * Send a chat message via WebSocket
    * PARIDAD SPRING BOOT: @MessageMapping("/chat.send")
    */
@@ -312,11 +367,12 @@ export class WebSocketService implements OnDestroy {
     this.reconnectAttempts = 0;
     this._lastError.set(null);
 
-    // Auto-subscribe to user messages and alerts
+    // Auto-subscribe to user messages, alerts, and captured media
     const user = this.authService.currentUser();
     if (user) {
       this.subscribeToUserMessages(user.id);
       this.subscribeToAlerts(user.id);
+      this.subscribeToCapturedMedia(user.id);
 
       // Send online presence
       this.sendPresenceUpdate(true);
@@ -394,6 +450,14 @@ export class WebSocketService implements OnDestroy {
           this.alertSubject.next(data.payload as WsAlertPayload);
           break;
 
+        case 'CAPTURED_MEDIA':
+          this.capturedMediaSubject.next(data.payload as WsCapturedMediaPayload);
+          break;
+
+        case 'CAPTURED_MEDIA_DELETED':
+          this.capturedMediaDeletedSubject.next(data.payload as WsCapturedMediaPayload);
+          break;
+
         default:
           // For messages without type wrapper (direct message payload)
           if ((data as any).message || (data as any).content) {
@@ -417,5 +481,7 @@ export class WebSocketService implements OnDestroy {
     this.onlineStatusSubject.complete();
     this.ticketUpdateSubject.complete();
     this.alertSubject.complete();
+    this.capturedMediaSubject.complete();
+    this.capturedMediaDeletedSubject.complete();
   }
 }

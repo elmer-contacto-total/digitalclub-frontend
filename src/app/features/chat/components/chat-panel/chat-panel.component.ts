@@ -3,11 +3,11 @@
  * Main chat area with header, messages, and input
  * PARIDAD RAILS: app/views/admin/messages/_chat_panel.html.erb
  */
-import { Component, inject, signal, computed, input, output, OnInit, OnDestroy, effect } from '@angular/core';
+import { Component, inject, signal, input, output, OnInit, OnDestroy, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject, takeUntil } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
-import { WebSocketService } from '../../../../core/services/websocket.service';
+import { WebSocketService, WsCapturedMediaPayload } from '../../../../core/services/websocket.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { ConversationDetail, CapturedMedia } from '../../../../core/models/conversation.model';
 import { Message } from '../../../../core/models/message.model';
@@ -95,15 +95,16 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
   private ticketUnsubscribe: (() => void) | null = null;
   private notificationSound: HTMLAudioElement | null = null;
 
-  // Computed signals for captured media (passed to message-list)
-  capturedMedia = computed(() => this.conversationDetail()?.capturedMedia || []);
+  // Mutable signal for captured media (REST + WebSocket updates)
+  capturedMedia = signal<CapturedMedia[]>([]);
 
   constructor() {
-    // Update messages when conversation detail changes
+    // Update messages and captured media when conversation detail changes
     effect(() => {
       const detail = this.conversationDetail();
       if (detail) {
         this.messages.set(detail.messages || []);
+        this.capturedMedia.set(detail.capturedMedia || []);
         this.subscribeToTicket(detail.ticket?.id);
       }
     }, { allowSignalWrites: true });
@@ -124,6 +125,45 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
         if (payload.senderId !== currentUserId) {
           this.playNotificationSound();
         }
+      }
+    });
+
+    // Listen for captured media via WebSocket (real-time from Electron)
+    this.wsService.capturedMedia$.pipe(takeUntil(this.destroy$)).subscribe(payload => {
+      // Only add media that belongs to the current conversation's client
+      if (payload.clientUserId === this.clientId()) {
+        const media: CapturedMedia = {
+          id: payload.id,
+          mediaUuid: payload.mediaUuid,
+          mediaType: payload.mediaType?.toLowerCase() as 'image' | 'audio',
+          mimeType: payload.mimeType,
+          publicUrl: payload.publicUrl,
+          filePath: payload.filePath,
+          sizeBytes: payload.sizeBytes,
+          durationSeconds: payload.durationSeconds,
+          capturedAt: payload.capturedAt,
+          messageSentAt: payload.messageSentAt,
+          chatPhone: payload.chatPhone,
+          chatName: payload.chatName,
+          deleted: payload.deleted,
+          deletedAt: payload.deletedAt
+        };
+        // Deduplicate by id and append
+        this.capturedMedia.update(existing => {
+          if (existing.some(m => m.id === media.id)) {
+            return existing;
+          }
+          return [...existing, media];
+        });
+      }
+    });
+
+    // Listen for captured media deletions via WebSocket
+    this.wsService.capturedMediaDeleted$.pipe(takeUntil(this.destroy$)).subscribe(payload => {
+      if (payload.clientUserId === this.clientId()) {
+        this.capturedMedia.update(existing =>
+          existing.map(m => m.id === payload.id ? { ...m, deleted: true, deletedAt: payload.deletedAt } : m)
+        );
       }
     });
 
