@@ -845,6 +845,9 @@ function showWhatsAppView(): void {
   whatsappVisible = true;
   updateWhatsAppViewBounds();
 
+  // Notificar al IIFE que la vista es visible (para congelar/descongelar deletion tracking)
+  whatsappView?.webContents.executeJavaScript('window.__hablapeViewVisible = true;', true).catch(() => {});
+
   // Iniciar scanner si WhatsApp ya cargó
   if (whatsappInitialized) {
     startChatScanner();
@@ -862,6 +865,9 @@ function hideWhatsAppView(): void {
   if (!mainWindow || !whatsappView) return;
 
   console.log('[MWS] Ocultando WhatsApp view...');
+
+  // Notificar al IIFE que la vista se oculta (para congelar deletion tracking)
+  whatsappView.webContents.executeJavaScript('window.__hablapeViewVisible = false;', true).catch(() => {});
 
   // Remover del window pero mantener la instancia
   mainWindow.removeBrowserView(whatsappView);
