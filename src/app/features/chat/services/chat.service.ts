@@ -384,7 +384,9 @@ export class ChatService {
       capturedAt: media.capturedAt || media.captured_at || '',
       messageSentAt: media.messageSentAt || media.message_sent_at || null,
       chatPhone: media.chatPhone || media.chat_phone || null,
-      chatName: media.chatName || media.chat_name || null
+      chatName: media.chatName || media.chat_name || null,
+      deleted: media.deleted || false,
+      deletedAt: media.deletedAt || media.deleted_at || null
     };
   }
 

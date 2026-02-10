@@ -14,19 +14,26 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
   imports: [CommonModule, ImagePreviewComponent],
   styleUrl: './captured-media-item.component.scss',
   template: `
-    <div class="message-item incoming captured-media">
+    <div class="message-item incoming captured-media" [class.deleted-bubble]="media().deleted">
       <!-- Avatar (primero para alineación izquierda) -->
       <div class="avatar incoming-avatar">
         <i class="ph-fill ph-user"></i>
       </div>
 
       <!-- Message Bubble -->
-      <div class="message-bubble">
+      <div class="message-bubble" [class.deleted-bubble]="media().deleted">
         <!-- Captured Badge -->
-        <div class="captured-badge">
-          <i class="ph-fill ph-camera"></i>
-          Media Capturado
-        </div>
+        @if (media().deleted) {
+          <div class="captured-badge deleted-badge">
+            <i class="ph-fill ph-trash"></i>
+            Mensaje Eliminado
+          </div>
+        } @else {
+          <div class="captured-badge">
+            <i class="ph-fill ph-camera"></i>
+            Media Capturado
+          </div>
+        }
 
         <!-- Sender name -->
         @if (media().chatName) {
@@ -34,7 +41,7 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
         }
 
         <!-- Media Content -->
-        <div class="media-content">
+        <div class="media-content" [class.deleted-media]="media().deleted">
           @if (media().mediaType === 'image') {
             @if (media().publicUrl) {
               <img
@@ -70,11 +77,23 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
           }
         </div>
 
+        <!-- Deleted info -->
+        @if (media().deleted && media().deletedAt) {
+          <div class="deleted-info">
+            <i class="ph-fill ph-trash"></i>
+            Eliminado: {{ formatDeletedTime() }}
+          </div>
+        }
+
         <!-- Footer -->
         <div class="message-footer">
           <span class="message-time">{{ formatTime() }}</span>
           <span class="capture-indicator">
-            <i class="ph-fill ph-eye"></i>
+            @if (media().deleted) {
+              <i class="ph-fill ph-trash deleted-icon"></i>
+            } @else {
+              <i class="ph-fill ph-eye"></i>
+            }
           </span>
         </div>
       </div>
@@ -100,6 +119,16 @@ export class CapturedMediaItemComponent {
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+
+  formatDeletedTime(): string {
+    const dateStr = this.media().deletedAt;
+    if (!dateStr) return '';
+
+    const date = new Date(dateStr.replace(' ', 'T'));
+    const time = date.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+    const day = date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+    return `${time} ${day}`;
   }
 
   formatDuration(seconds: number): string {

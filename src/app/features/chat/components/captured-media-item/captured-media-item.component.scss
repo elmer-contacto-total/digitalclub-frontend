@@ -75,6 +75,7 @@
 .media-content {
   margin-bottom: var(--space-2);
   max-width: 300px;
+  position: relative;
 }
 
 .media-image {
@@ -155,6 +156,49 @@
     font-size: var(--text-sm);
     opacity: 0.7;
   }
+}
+
+// ========== DELETED MESSAGE STYLES ==========
+
+.deleted-bubble {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.deleted-badge {
+  color: #ef4444 !important;
+  font-weight: 600;
+  border-bottom-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+.deleted-media {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(239, 68, 68, 0.15);
+    border-radius: var(--radius-md);
+    pointer-events: none;
+  }
+}
+
+.deleted-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: #ef4444;
+  margin-bottom: var(--space-1);
+
+  i {
+    font-size: 11px;
+  }
+}
+
+.deleted-icon {
+  color: #ef4444;
 }
 
 // Responsive adjustments

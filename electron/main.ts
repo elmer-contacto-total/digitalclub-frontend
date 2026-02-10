@@ -15,6 +15,7 @@ import {
   MediaCapturePayload,
   AuditLogPayload,
   RawMediaCaptureData,
+  DeletedMediaNotification,
   generateMediaId
 } from './media-security';
 import { checkForUpdates, notifyUpdateAvailable, openDownloadUrl, downloadAndInstallUpdate } from './update-checker';
@@ -145,6 +146,30 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
   } catch (err) {
     console.error('[MWS Media] Error de conexión:', err);
     // TODO: Implementar cola offline para reintentos
+  }
+}
+
+/**
+ * Notifica al backend que un mensaje de WhatsApp fue eliminado
+ */
+async function sendMediaDeletionToServer(whatsappMessageId: string): Promise<void> {
+  try {
+    const response = await fetch(`${MEDIA_API_URL}/mark-deleted`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ whatsappMessageId })
+    });
+
+    if (!response.ok) {
+      console.error('[MWS Deleted] Error notificando eliminación:', response.status);
+    } else {
+      const result = await response.json();
+      console.log('[MWS Deleted] Eliminación notificada:', whatsappMessageId, 'status:', result.status);
+    }
+  } catch (err) {
+    console.error('[MWS Deleted] Error de conexión:', err);
   }
 }
 
@@ -691,6 +716,10 @@ function createWhatsAppView(): void {
         ...payload,
         agentId: loggedInUserId
       });
+    },
+    onMediaDeleted: (data) => {
+      console.log('[MWS Deleted] Mensaje eliminado detectado:', data.whatsappMessageId);
+      sendMediaDeletionToServer(data.whatsappMessageId);
     }
   });
 

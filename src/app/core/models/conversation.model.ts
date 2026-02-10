@@ -222,6 +222,8 @@ export interface CapturedMedia {
   messageSentAt: string | null;
   chatPhone: string | null;
   chatName: string | null;
+  deleted?: boolean;
+  deletedAt?: string | null;
 }
 
 // ===== HELPER FUNCTIONS =====

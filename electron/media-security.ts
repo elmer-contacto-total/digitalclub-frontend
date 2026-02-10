@@ -713,6 +713,10 @@ const MEDIA_CAPTURE_SCRIPT = `
   const processedMessageIds = new Set(); // Mensajes ya procesados
   const auditedVideoUrls = new Set();    // Para evitar auditar el mismo video múltiples veces
 
+  // Cola para notificar mensajes eliminados al backend
+  window.__hablapeDeletedQueue = window.__hablapeDeletedQueue || [];
+  const detectedDeletions = new Set();   // WhatsApp message IDs ya detectados como eliminados
+
   // Cargar IDs de imágenes previamente reveladas desde localStorage
   try {
     const saved = localStorage.getItem('__hablapeRevealedMessages');
@@ -2078,6 +2082,24 @@ const MEDIA_CAPTURE_SCRIPT = `
           });
         }
       }
+
+      // Check removed/changed nodes for deleted messages
+      for (const node of mutation.removedNodes) {
+        if (node.nodeType !== 1) continue;
+        const dataId = node.getAttribute?.('data-id');
+        if (dataId && processedMessageIds.has(dataId) && !detectedDeletions.has(dataId)) {
+          // Content was removed from a captured message - check parent
+          const parentMsg = document.querySelector('[data-id="' + dataId + '"]');
+          if (parentMsg && isMessageDeleted(parentMsg)) {
+            detectedDeletions.add(dataId);
+            window.__hablapeDeletedQueue.push({
+              whatsappMessageId: dataId,
+              detectedAt: new Date().toISOString()
+            });
+            console.log('[MWS Deleted] Mensaje eliminado detectado (observer):', dataId);
+          }
+        }
+      }
     }
   });
 
@@ -2276,6 +2298,61 @@ const MEDIA_CAPTURE_SCRIPT = `
 
     return originalAudioPlay.call(this);
   };
+
+  // ==========================================================================
+  // DETECCIÓN DE MENSAJES ELIMINADOS
+  // Detecta cuando WhatsApp reemplaza contenido con "Se eliminó este mensaje"
+  // Solo verifica mensajes que ya fueron capturados (processedMessageIds)
+  // ==========================================================================
+
+  function isMessageDeleted(messageEl) {
+    if (!messageEl) return false;
+
+    // Check data-testid for revoked/recalled indicators
+    const revokedEl = messageEl.querySelector('[data-testid="recalled"], [data-testid="msg-revoked"]');
+    if (revokedEl) return true;
+
+    // Check data-icon for recalled indicator
+    const revokedIcon = messageEl.querySelector('[data-icon="recalled"]');
+    if (revokedIcon) return true;
+
+    // Check text content for deletion messages (Spanish and English)
+    const textContent = messageEl.textContent || '';
+    const deletionPhrases = [
+      'Se eliminó este mensaje',
+      'Eliminaste este mensaje',
+      'This message was deleted',
+      'You deleted this message',
+      'Este mensaje fue eliminado'
+    ];
+    for (const phrase of deletionPhrases) {
+      if (textContent.includes(phrase)) return true;
+    }
+
+    return false;
+  }
+
+  function checkForDeletedMessages() {
+    for (const messageId of processedMessageIds) {
+      if (detectedDeletions.has(messageId)) continue;
+
+      // Find message in DOM by data-id
+      const messageEl = document.querySelector('[data-id="' + messageId + '"]');
+      if (!messageEl) continue; // Not in current view
+
+      if (isMessageDeleted(messageEl)) {
+        detectedDeletions.add(messageId);
+        window.__hablapeDeletedQueue.push({
+          whatsappMessageId: messageId,
+          detectedAt: new Date().toISOString()
+        });
+        console.log('[MWS Deleted] Mensaje eliminado detectado:', messageId);
+      }
+    }
+  }
+
+  // Scan periódico cada 3 segundos
+  setInterval(checkForDeletedMessages, 3000);
 })();
 `;
 
@@ -2332,6 +2409,12 @@ export function injectSecurityScripts(view: BrowserView): void {
   });
 }
 
+// Tipo para notificación de mensaje eliminado
+export interface DeletedMediaNotification {
+  whatsappMessageId: string;
+  detectedAt: string;
+}
+
 // Tipo para datos crudos del script de captura
 export interface RawMediaCaptureData {
   data: string;
@@ -2351,9 +2434,33 @@ export function setupMediaCapture(
   view: BrowserView,
   userId: string,
   onMediaCaptured: (data: RawMediaCaptureData) => void,
-  onAuditLog: (payload: AuditLogPayload) => void
+  onAuditLog: (payload: AuditLogPayload) => void,
+  onMediaDeleted?: (data: DeletedMediaNotification) => void
 ): void {
   let pollingInterval: NodeJS.Timeout | null = null;
+
+  async function collectDeletedMedia(): Promise<void> {
+    try {
+      const result = await view.webContents.executeJavaScript(`
+        (function() {
+          if (!window.__hablapeDeletedQueue || window.__hablapeDeletedQueue.length === 0) {
+            return [];
+          }
+          const items = window.__hablapeDeletedQueue.slice();
+          window.__hablapeDeletedQueue = [];
+          return items;
+        })()
+      `, true);
+
+      if (result && Array.isArray(result) && result.length > 0 && onMediaDeleted) {
+        for (const item of result) {
+          onMediaDeleted(item);
+        }
+      }
+    } catch (err) {
+      // Silently ignore polling errors
+    }
+  }
 
   async function collectCapturedMedia(): Promise<void> {
     try {
@@ -2417,6 +2524,7 @@ export function setupMediaCapture(
   async function pollAll(): Promise<void> {
     await collectCapturedMedia();
     await collectAuditEvents();
+    await collectDeletedMedia();
   }
 
   view.webContents.on('did-finish-load', () => {
@@ -2449,9 +2557,10 @@ export function initializeMediaSecurity(
   callbacks: {
     onMediaCaptured: (data: RawMediaCaptureData) => void;
     onAuditLog: (payload: AuditLogPayload) => void;
+    onMediaDeleted?: (data: DeletedMediaNotification) => void;
   }
 ): void {
   setupDownloadBlocking(view, mainWindow, userId, callbacks.onAuditLog);
   injectSecurityScripts(view);
-  setupMediaCapture(view, userId, callbacks.onMediaCaptured, callbacks.onAuditLog);
+  setupMediaCapture(view, userId, callbacks.onMediaCaptured, callbacks.onAuditLog, callbacks.onMediaDeleted);
 }
