@@ -28,22 +28,21 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     ConfirmDialogComponent
   ],
   template: `
-    <div class="import-list-container">
-      <!-- Header - PARIDAD: Rails admin/imports/index.html.erb -->
+    <div class="imports-page">
+      <!-- Header -->
       <div class="page-header">
-        <div class="row">
-          <div class="view-index-button-container">
-            <div class="view-index-title-container">
-              <h1>Lista de importaciones</h1>
-            </div>
-            @if (canCreateImport()) {
-              <a routerLink="new" class="btn btn-secondary" [queryParams]="{import_type: 'users'}">
-                <i class="ph ph-plus"></i>
-                <span>Importar usuarios</span>
-              </a>
-            }
-          </div>
+        <div class="page-header-left">
+          <h1 class="page-title">Importaciones</h1>
+          <p class="page-subtitle">Gestión de importaciones masivas de usuarios</p>
         </div>
+        @if (canCreateImport()) {
+          <div class="page-actions">
+            <a routerLink="new" class="btn-primary" [queryParams]="{import_type: 'users'}">
+              <i class="ph ph-plus"></i>
+              Nueva importación
+            </a>
+          </div>
+        }
       </div>
 
       <!-- Content -->
@@ -56,92 +55,88 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
           description="Aún no se han realizado importaciones"
         >
           @if (canCreateImport()) {
-            <a routerLink="new" class="btn btn-secondary" [queryParams]="{import_type: 'users'}">
+            <a routerLink="new" class="btn-primary" [queryParams]="{import_type: 'users'}">
               <i class="ph ph-plus"></i>
               Importar usuarios
             </a>
           }
         </app-empty-state>
       } @else {
-        <!-- Table - PARIDAD: Rails DataTable -->
-        <div class="table-responsive">
-          <table class="table table-striped table-bordered table-hover">
+        <!-- Table Card -->
+        <div class="table-card">
+          <table class="data-table">
             <thead>
               <tr>
+                <th>Fecha</th>
+                <th>Usuario</th>
                 @if (isSuperAdmin()) {
                   <th>Cliente</th>
                 }
-                <th>Fecha</th>
-                <th>Usuario</th>
-                <th>Cliente</th>
                 <th>Tipo</th>
                 <th>Archivo</th>
-                <th>Total Registros</th>
+                <th class="text-right">Registros</th>
                 <th>Estado</th>
-                <th class="no-sort"></th>
-                <th class="no-sort"></th>
+                <th class="col-actions"></th>
               </tr>
             </thead>
             <tbody>
               @for (importItem of imports(); track importItem.id) {
                 <tr>
+                  <td class="text-nowrap">{{ formatDate(importItem.createdAt) }}</td>
+                  <td>{{ importItem.userName || '-' }}</td>
                   @if (isSuperAdmin()) {
                     <td>{{ importItem.clientName || '-' }}</td>
                   }
-                  <td>{{ formatDate(importItem.createdAt) }}</td>
-                  <td>{{ importItem.userName || '-' }}</td>
-                  <td>{{ importItem.clientName || '-' }}</td>
-                  <td>{{ getImportTypeLabel(importItem.importType) }}</td>
+                  <td>
+                    <span class="type-tag">{{ getImportTypeLabel(importItem.importType) }}</span>
+                  </td>
                   <td>
                     @if (importItem.importFileName) {
-                      <a [href]="importItem.importFileUrl" target="_blank">
+                      <a [href]="importItem.importFileUrl" target="_blank" class="file-link">
+                        <i class="ph ph-file-csv"></i>
                         {{ importItem.importFileName }}
                       </a>
                     } @else {
-                      -
+                      <span class="text-subtle">-</span>
                     }
                   </td>
-                  <td>{{ importItem.totRecords || 0 }}</td>
+                  <td class="text-right">{{ importItem.totRecords || 0 }}</td>
                   <td>
-                    <span class="badge" [ngClass]="getStatusClass(importItem.status)">
+                    <span class="status-badge" [ngClass]="getStatusClass(importItem.status)">
                       {{ getStatusLabel(importItem.status) }}
                     </span>
                   </td>
-                  <td>
-                    <a [routerLink]="[importItem.id]" class="btn btn-sm btn-link" title="Ver">
-                      <i class="ph ph-eye"></i>
-                    </a>
-                  </td>
-                  <td>
-                    @if (!isCompleted(importItem.status)) {
-                      <button
-                        class="btn btn-sm btn-link text-danger"
-                        (click)="confirmDelete(importItem)"
-                        title="Eliminar"
-                      >
-                        <i class="ph ph-trash"></i>
-                      </button>
-                    }
+                  <td class="col-actions">
+                    <div class="row-actions">
+                      <a [routerLink]="[importItem.id]" class="action-btn" title="Ver detalle">
+                        <i class="ph ph-eye"></i>
+                      </a>
+                      @if (!isCompleted(importItem.status)) {
+                        <button class="action-btn action-btn-danger" (click)="confirmDelete(importItem)" title="Eliminar">
+                          <i class="ph ph-trash"></i>
+                        </button>
+                      }
+                    </div>
                   </td>
                 </tr>
               }
             </tbody>
           </table>
-        </div>
 
-        <!-- Pagination -->
-        <div class="table-footer">
-          <div class="records-info">
-            Mostrando {{ startRecord() }} - {{ endRecord() }} de {{ totalRecords() }} importaciones
+          <!-- Table Footer -->
+          <div class="table-footer">
+            <span class="records-info">
+              Mostrando {{ startRecord() }}-{{ endRecord() }} de {{ totalRecords() }}
+            </span>
+            <app-pagination
+              [currentPage]="currentPage()"
+              [totalItems]="totalRecords()"
+              [pageSize]="pageSize()"
+              [pageSizeOptions]="[10, 25, 50]"
+              (pageChange)="onPageChange($event)"
+              (pageSizeChange)="onPageSizeChange($event)"
+            />
           </div>
-          <app-pagination
-            [currentPage]="currentPage()"
-            [totalItems]="totalRecords()"
-            [pageSize]="pageSize()"
-            [pageSizeOptions]="[10, 25, 50]"
-            (pageChange)="onPageChange($event)"
-            (pageSizeChange)="onPageSizeChange($event)"
-          />
         </div>
       }
 
@@ -159,146 +154,187 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     </div>
   `,
   styles: [`
-    .import-list-container {
-      padding: 24px;
+    .imports-page {
+      padding: var(--space-6);
+      max-width: 1400px;
+      margin: 0 auto;
     }
 
-    /* Page Header - PARIDAD: Rails page-header */
+    /* Page Header */
     .page-header {
-      margin-bottom: 24px;
-    }
-
-    .view-index-button-container {
       display: flex;
-      align-items: center;
-      gap: 20px;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: var(--space-6);
+      gap: var(--space-4);
     }
 
-    .view-index-title-container h1 {
+    .page-title {
       margin: 0;
-      font-size: 1.5rem;
-      font-weight: 500;
-      color: var(--text-primary, #212529);
+      font-size: var(--text-2xl);
+      font-weight: var(--font-semibold);
+      color: var(--fg-default);
     }
 
-    .btn {
+    .page-subtitle {
+      margin: var(--space-1) 0 0;
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+
+    .page-actions {
+      flex-shrink: 0;
+    }
+
+    /* Buttons */
+    .btn-primary {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      border: 1px solid transparent;
-      border-radius: 4px;
-      font-size: 14px;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      height: var(--btn-height);
+      background: var(--accent-default);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: var(--text-base);
+      font-weight: var(--font-medium);
       cursor: pointer;
       text-decoration: none;
-      transition: all 0.15s;
+      transition: background var(--duration-fast);
+
+      &:hover { background: var(--accent-emphasis); }
     }
 
-    .btn-secondary {
-      background-color: var(--secondary-color, #6c757d);
-      border-color: var(--secondary-color, #6c757d);
-      color: white;
-
-      &:hover {
-        background-color: #5c636a;
-        border-color: #565e64;
-      }
+    /* Table Card */
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
     }
 
-    .btn-link {
-      background: none;
-      border: none;
-      color: var(--primary-color, #0d6efd);
-      padding: 4px 8px;
-
-      &:hover {
-        text-decoration: underline;
-      }
-
-      &.text-danger {
-        color: var(--danger-color, #dc3545);
-      }
-    }
-
-    .btn-sm {
-      padding: 4px 8px;
-      font-size: 12px;
-    }
-
-    /* Table - PARIDAD: Rails DataTable */
-    .table-responsive {
-      background: white;
-      border-radius: 4px;
-      overflow: auto;
-    }
-
-    .table {
+    .data-table {
       width: 100%;
-      margin: 0;
       border-collapse: collapse;
-      font-size: 14px;
+      font-size: var(--text-base);
     }
 
-    .table th,
-    .table td {
-      padding: 12px;
-      border: 1px solid var(--border-color, #dee2e6);
+    .data-table thead th {
+      padding: var(--space-3) var(--space-4);
+      background: var(--table-header-bg);
+      color: var(--fg-muted);
+      font-size: var(--text-sm);
+      font-weight: var(--font-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      text-align: left;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--table-border);
+    }
+
+    .data-table tbody td {
+      padding: var(--space-3) var(--space-4);
+      color: var(--fg-default);
+      border-bottom: 1px solid var(--table-border);
       vertical-align: middle;
     }
 
-    .table thead th {
-      background: var(--bg-light, #f8f9fa);
-      font-weight: 600;
-      color: var(--text-primary, #212529);
-      text-align: left;
-      white-space: nowrap;
+    .data-table tbody tr {
+      transition: background var(--duration-fast);
     }
 
-    .table-striped tbody tr:nth-of-type(odd) {
-      background: rgba(0, 0, 0, 0.02);
+    .data-table tbody tr:hover {
+      background: var(--table-row-hover);
     }
 
-    .table-hover tbody tr:hover {
-      background: rgba(0, 0, 0, 0.05);
+    .data-table tbody tr:last-child td {
+      border-bottom: none;
     }
 
-    .no-sort {
-      width: 40px;
+    .text-right { text-align: right; }
+    .text-nowrap { white-space: nowrap; }
+    .text-subtle { color: var(--fg-subtle); }
+
+    .col-actions {
+      width: 80px;
       text-align: center;
     }
 
-    /* Status Badge - PARIDAD: Rails status badges */
-    .badge {
+    /* Type Tag */
+    .type-tag {
       display: inline-block;
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
+      padding: 2px var(--space-2);
+      background: var(--bg-muted);
+      color: var(--fg-muted);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
     }
 
-    .badge-secondary {
-      background: #e9ecef;
-      color: #495057;
+    /* File Link */
+    .file-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      color: var(--accent-default);
+      text-decoration: none;
+      font-size: var(--text-sm);
+
+      &:hover { text-decoration: underline; }
+
+      i { font-size: 16px; }
     }
 
-    .badge-warning {
-      background: #fff3cd;
-      color: #856404;
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px var(--space-3);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: var(--font-medium);
+      white-space: nowrap;
     }
 
-    .badge-success {
-      background: #d1fae5;
-      color: #065f46;
+    .badge-secondary { background: var(--bg-muted); color: var(--fg-muted); }
+    .badge-warning { background: var(--warning-subtle); color: var(--warning-text); }
+    .badge-success { background: var(--success-subtle); color: var(--success-text); }
+    .badge-danger { background: var(--error-subtle); color: var(--error-text); }
+    .badge-info { background: var(--info-subtle); color: var(--info-text); }
+
+    /* Row Actions */
+    .row-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-1);
     }
 
-    .badge-danger {
-      background: #fee2e2;
-      color: #991b1b;
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--fg-muted);
+      cursor: pointer;
+      text-decoration: none;
+      transition: all var(--duration-fast);
+
+      &:hover {
+        background: var(--bg-muted);
+        color: var(--fg-default);
+      }
+
+      i { font-size: 18px; }
     }
 
-    .badge-info {
-      background: #dbeafe;
-      color: #1e40af;
+    .action-btn-danger:hover {
+      background: var(--error-subtle);
+      color: var(--error-default);
     }
 
     /* Table Footer */
@@ -306,22 +342,20 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 16px;
-      background: white;
-      border: 1px solid var(--border-color, #dee2e6);
-      border-top: none;
-      font-size: 13px;
+      padding: var(--space-3) var(--space-4);
+      border-top: 1px solid var(--table-border);
     }
 
     .records-info {
-      color: var(--text-secondary, #6c757d);
+      font-size: var(--text-sm);
+      color: var(--fg-subtle);
     }
 
     @media (max-width: 768px) {
-      .import-list-container { padding: 16px; }
-      .view-index-button-container { flex-direction: column; align-items: flex-start; }
-      .table-responsive { overflow-x: auto; }
-      .table { min-width: 800px; }
+      .imports-page { padding: var(--space-4); }
+      .page-header { flex-direction: column; }
+      .table-card { overflow-x: auto; }
+      .data-table { min-width: 700px; }
     }
   `]
 })

@@ -20,89 +20,91 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     LoadingSpinnerComponent
   ],
   template: `
-    <div class="import-detail-container">
-      <!-- Header - PARIDAD: Rails admin/imports/show.html.erb -->
+    <div class="imports-page">
+      <!-- Header -->
       <div class="page-header">
-        <a routerLink="/app/imports" class="btn btn-secondary">
+        <a routerLink="/app/imports" class="back-link">
           <i class="ph ph-arrow-left"></i>
-          Volver
+          Importaciones
         </a>
-        <div class="title-container">
-          <h1>Ver importación</h1>
-        </div>
+        <h1 class="page-title">Detalle de importación</h1>
       </div>
 
       @if (isLoading()) {
         <app-loading-spinner [overlay]="false" message="Cargando..." />
       } @else if (importData()) {
-        <!-- Detail Fields - PARIDAD: Rails dl-horizontal -->
-        <dl class="dl-horizontal">
-          <dt>Cliente:</dt>
-          <dd>{{ importData()?.clientName || '-' }}</dd>
-        </dl>
-
-        <dl class="dl-horizontal">
-          <dt>Archivo:</dt>
-          <dd>
-            @if (importData()?.importFileName) {
-              <a [href]="importData()?.importFileUrl" target="_blank">
-                {{ importData()?.importFileName }}
-              </a>
-            } @else {
-              -
-            }
-          </dd>
-        </dl>
-
-        <dl class="dl-horizontal">
-          <dt>Total Registros:</dt>
-          <dd>{{ importData()?.totRecords || 0 }}</dd>
-        </dl>
-
-        <dl class="dl-horizontal">
-          <dt>Estado:</dt>
-          <dd>
-            <span class="badge" [ngClass]="getStatusClass()">
-              {{ getStatusLabel() }}
+        <!-- Detail Card -->
+        <div class="detail-card">
+          <div class="detail-row">
+            <span class="detail-label">Estado</span>
+            <span class="detail-value">
+              <span class="status-badge" [ngClass]="getStatusClass()">
+                {{ getStatusLabel() }}
+              </span>
             </span>
-          </dd>
-        </dl>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Progreso</span>
+            <span class="detail-value">
+              <div class="progress-inline">
+                <div class="progress-bar-bg">
+                  <div class="progress-bar-fill" [style.width.%]="importData()?.progressPercent || 0"></div>
+                </div>
+                <span>{{ importData()?.progressPercent || 0 }}%</span>
+              </div>
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Total registros</span>
+            <span class="detail-value">{{ importData()?.totRecords || 0 }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Cliente</span>
+            <span class="detail-value">{{ importData()?.clientName || '-' }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Creado por</span>
+            <span class="detail-value">{{ importData()?.userName || '-' }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Fecha</span>
+            <span class="detail-value">{{ formatDate(importData()?.createdAt) }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Archivo</span>
+            <span class="detail-value">
+              @if (importData()?.importFileName) {
+                <a [href]="importData()?.importFileUrl" target="_blank" class="file-link">
+                  <i class="ph ph-file-csv"></i>
+                  {{ importData()?.importFileName }}
+                </a>
+              } @else {
+                <span class="text-subtle">-</span>
+              }
+            </span>
+          </div>
+          @if (importData()?.errorsText) {
+            <div class="detail-row errors-row">
+              <span class="detail-label">Errores</span>
+              <span class="detail-value">
+                <pre class="error-block">{{ importData()?.errorsText }}</pre>
+              </span>
+            </div>
+          }
+        </div>
 
-        <dl class="dl-horizontal">
-          <dt>Progreso:</dt>
-          <dd>{{ importData()?.progressPercent || 0 }}%</dd>
-        </dl>
-
-        <dl class="dl-horizontal">
-          <dt>Creado por:</dt>
-          <dd>{{ importData()?.userName || '-' }}</dd>
-        </dl>
-
-        <dl class="dl-horizontal">
-          <dt>Fecha de Creación:</dt>
-          <dd>{{ formatDate(importData()?.createdAt) }}</dd>
-        </dl>
-
-        @if (importData()?.errorsText) {
-          <dl class="dl-horizontal">
-            <dt>Errores:</dt>
-            <dd class="error-text">{{ importData()?.errorsText }}</dd>
-          </dl>
-        }
-
-        <!-- Actions based on status -->
+        <!-- Actions -->
         <div class="form-actions">
           @if (importData()?.status === 'status_valid') {
-            <a [routerLink]="['/app/imports', importData()?.id, 'preview']" class="btn btn-primary">
+            <a [routerLink]="['/app/imports', importData()?.id, 'preview']" class="btn-primary">
               <i class="ph ph-eye"></i>
-              Ver Validación
+              Ver validación
             </a>
           }
-
           @if (importData()?.status === 'status_processing') {
-            <a [routerLink]="['/app/imports', importData()?.id, 'progress']" class="btn btn-primary">
+            <a [routerLink]="['/app/imports', importData()?.id, 'progress']" class="btn-primary">
               <i class="ph ph-arrow-circle-right"></i>
-              Ver Progreso
+              Ver progreso
             </a>
           }
         </div>
@@ -110,119 +112,168 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     </div>
   `,
   styles: [`
-    .import-detail-container {
-      padding: 24px;
+    .imports-page {
+      padding: var(--space-6);
+      max-width: 800px;
+      margin: 0 auto;
     }
 
     .page-header {
-      margin-bottom: 24px;
+      margin-bottom: var(--space-6);
     }
 
-    .title-container {
-      margin-top: 16px;
-
-      h1 {
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 500;
-        color: var(--text-primary, #212529);
-      }
-    }
-
-    .btn {
+    .back-link {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      border: 1px solid transparent;
-      border-radius: 4px;
-      font-size: 14px;
+      gap: var(--space-2);
+      color: var(--fg-muted);
+      text-decoration: none;
+      font-size: var(--text-sm);
+      margin-bottom: var(--space-2);
+      transition: color var(--duration-fast);
+
+      &:hover { color: var(--accent-default); }
+    }
+
+    .page-title {
+      margin: 0;
+      font-size: var(--text-2xl);
+      font-weight: var(--font-semibold);
+      color: var(--fg-default);
+    }
+
+    /* Detail Card */
+    .detail-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .detail-row {
+      display: flex;
+      align-items: flex-start;
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border-muted);
+
+      &:last-child { border-bottom: none; }
+    }
+
+    .detail-label {
+      min-width: 140px;
+      font-size: var(--text-sm);
+      font-weight: var(--font-medium);
+      color: var(--fg-muted);
+      flex-shrink: 0;
+    }
+
+    .detail-value {
+      font-size: var(--text-base);
+      color: var(--fg-default);
+    }
+
+    .text-subtle { color: var(--fg-subtle); }
+
+    /* Progress Inline */
+    .progress-inline {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .progress-bar-bg {
+      width: 120px;
+      height: 6px;
+      background: var(--bg-muted);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent-default);
+      border-radius: var(--radius-full);
+      transition: width 0.3s ease;
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px var(--space-3);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: var(--font-medium);
+    }
+
+    .badge-secondary { background: var(--bg-muted); color: var(--fg-muted); }
+    .badge-warning { background: var(--warning-subtle); color: var(--warning-text); }
+    .badge-success { background: var(--success-subtle); color: var(--success-text); }
+    .badge-danger { background: var(--error-subtle); color: var(--error-text); }
+    .badge-info { background: var(--info-subtle); color: var(--info-text); }
+
+    /* File Link */
+    .file-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      color: var(--accent-default);
+      text-decoration: none;
+
+      &:hover { text-decoration: underline; }
+      i { font-size: 18px; }
+    }
+
+    /* Error Block */
+    .error-block {
+      margin: 0;
+      padding: var(--space-3);
+      background: var(--error-subtle);
+      color: var(--error-text);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .errors-row {
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    /* Buttons */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      height: var(--btn-height);
+      background: var(--accent-default);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: var(--text-base);
+      font-weight: var(--font-medium);
       cursor: pointer;
       text-decoration: none;
-      transition: all 0.15s;
+      transition: background var(--duration-fast);
+
+      &:hover { background: var(--accent-emphasis); }
     }
-
-    .btn-primary {
-      background-color: var(--primary-color, #0d6efd);
-      border-color: var(--primary-color, #0d6efd);
-      color: white;
-
-      &:hover {
-        background-color: var(--primary-dark, #0b5ed7);
-      }
-    }
-
-    .btn-secondary {
-      background-color: var(--secondary-color, #6c757d);
-      border-color: var(--secondary-color, #6c757d);
-      color: white;
-
-      &:hover {
-        background-color: #5c636a;
-      }
-    }
-
-    /* DL Horizontal - PARIDAD: Rails dl-horizontal */
-    .dl-horizontal {
-      display: flex;
-      margin: 0 0 12px 0;
-      padding: 12px 16px;
-      background: white;
-      border: 1px solid var(--border-color, #dee2e6);
-      border-radius: 4px;
-
-      dt {
-        min-width: 160px;
-        font-weight: 600;
-        color: var(--text-primary, #212529);
-      }
-
-      dd {
-        margin: 0;
-        color: var(--text-secondary, #6c757d);
-
-        a {
-          color: var(--primary-color, #0d6efd);
-          text-decoration: none;
-
-          &:hover {
-            text-decoration: underline;
-          }
-        }
-      }
-    }
-
-    .error-text {
-      color: #dc3545;
-      font-family: monospace;
-      white-space: pre-wrap;
-    }
-
-    /* Badge */
-    .badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .badge-secondary { background: #e9ecef; color: #495057; }
-    .badge-warning { background: #fff3cd; color: #856404; }
-    .badge-success { background: #d1fae5; color: #065f46; }
-    .badge-danger { background: #fee2e2; color: #991b1b; }
-    .badge-info { background: #dbeafe; color: #1e40af; }
 
     .form-actions {
-      margin-top: 20px;
       display: flex;
-      gap: 12px;
+      gap: var(--space-3);
+      margin-top: var(--space-4);
     }
 
     @media (max-width: 768px) {
-      .import-detail-container { padding: 16px; }
-      .dl-horizontal { flex-direction: column; }
-      .dl-horizontal dt { margin-bottom: 4px; }
+      .imports-page { padding: var(--space-4); }
+      .detail-row { flex-direction: column; gap: var(--space-1); }
+      .detail-label { min-width: unset; }
     }
   `]
 })

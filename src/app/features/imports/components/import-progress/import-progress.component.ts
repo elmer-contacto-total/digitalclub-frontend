@@ -20,78 +20,79 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     LoadingSpinnerComponent
   ],
   template: `
-    <div class="import-progress-container">
-      <!-- Header - PARIDAD: Rails admin/imports/create_import_user.html.erb -->
+    <div class="imports-page">
+      <!-- Header -->
       <div class="page-header">
-        <a routerLink="/app/imports/new" [queryParams]="{import_type: 'users'}" class="btn btn-secondary">
+        <a routerLink="/app/imports" class="back-link">
           <i class="ph ph-arrow-left"></i>
-          Volver
+          Importaciones
         </a>
-        <div class="title-container">
-          <h1>Importación Paso 3</h1>
-        </div>
-
-        <!-- Progress Section - PARIDAD: Rails import-progress controller -->
-        <div class="progress-section">
-          <div class="progress">
-            <div
-              class="progress-bar"
-              role="progressbar"
-              [style.width.%]="progressPercent()"
-              [attr.aria-valuenow]="progressPercent()"
-              aria-valuemin="0"
-              aria-valuemax="100"
-            >
-              {{ progressPercent() }}%
-            </div>
-          </div>
-          <div class="progress-message">{{ progressMessage() }}</div>
-          <div class="import-status">
-            <span class="badge" [ngClass]="getStatusClass()">
-              {{ getStatusLabel() }}
-            </span>
-          </div>
-
-          @if (isComplete()) {
-            <div class="title-container complete-message">
-              @if (importData()?.status === 'status_completed') {
-                <p class="text-success">
-                  <i class="ph ph-check-circle"></i>
-                  Importación completada exitosamente
-                </p>
-                <p>Se importaron {{ importData()?.totRecords }} usuarios.</p>
-              } @else if (importData()?.status === 'status_error') {
-                <p class="text-danger">
-                  <i class="ph ph-x-circle"></i>
-                  Error durante la importación
-                </p>
-                <p class="error-text">{{ errorsText() }}</p>
-              }
-            </div>
-          }
-        </div>
+        <h1 class="page-title">Progreso de importación</h1>
       </div>
 
-      <!-- Table - PARIDAD: Rails DataTable for processed users -->
+      <!-- Progress Card -->
+      <div class="progress-card">
+        <div class="progress-top">
+          <div class="progress-info">
+            <span class="progress-percent">{{ progressPercent() }}%</span>
+            <span class="progress-message">{{ progressMessage() }}</span>
+          </div>
+          <span class="status-badge" [ngClass]="getStatusClass()">
+            {{ getStatusLabel() }}
+          </span>
+        </div>
+        <div class="progress-track">
+          <div
+            class="progress-fill"
+            [class.progress-complete]="isComplete() && importData()?.status === 'status_completed'"
+            [class.progress-error]="isComplete() && importData()?.status === 'status_error'"
+            [style.width.%]="progressPercent()"
+          ></div>
+        </div>
+
+        @if (isComplete()) {
+          @if (importData()?.status === 'status_completed') {
+            <div class="result-banner result-success">
+              <i class="ph ph-check-circle"></i>
+              <div>
+                <strong>Importación completada</strong>
+                <p>Se importaron {{ importData()?.totRecords }} usuarios exitosamente.</p>
+              </div>
+            </div>
+          } @else if (importData()?.status === 'status_error') {
+            <div class="result-banner result-error">
+              <i class="ph ph-x-circle"></i>
+              <div>
+                <strong>Error durante la importación</strong>
+                @if (errorsText()) {
+                  <pre class="error-block">{{ errorsText() }}</pre>
+                }
+              </div>
+            </div>
+          }
+        }
+      </div>
+
+      <!-- Table -->
       @if (tempUsers().length > 0) {
-        <div class="table-responsive">
-          <table class="table table-striped table-bordered table-hover">
+        <div class="table-card">
+          <table class="data-table">
             <thead>
               <tr>
                 <th>Codigo</th>
                 <th>Email</th>
                 <th>Nombres</th>
                 <th>Apellido</th>
-                <th>Código País</th>
+                <th>Cód. País</th>
                 <th>Teléfono</th>
                 <th>Rol</th>
-                <th>Email del Manager</th>
-                <th>Mensaje de Error</th>
+                <th>Manager</th>
+                <th>Error</th>
               </tr>
             </thead>
             <tbody>
               @for (user of tempUsers(); track user.id) {
-                <tr [class.has-error]="user.errorMessage">
+                <tr [class.row-error]="user.errorMessage">
                   <td>{{ user.codigo }}</td>
                   <td>{{ user.email }}</td>
                   <td>{{ user.firstName }}</td>
@@ -108,15 +109,15 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         </div>
       }
 
-      <!-- Actions - PARIDAD: Rails see_users link -->
+      <!-- Actions -->
       <div class="form-actions">
-        <a routerLink="/app/users" class="btn btn-primary">
-          <i class="ph ph-list"></i>
-          Ver usuarios
-        </a>
-        <a routerLink="/app/imports" class="btn btn-secondary">
+        <a routerLink="/app/imports" class="btn-secondary">
           <i class="ph ph-list"></i>
           Ver importaciones
+        </a>
+        <a routerLink="/app/users" class="btn-primary">
+          <i class="ph ph-users"></i>
+          Ver usuarios
         </a>
       </div>
 
@@ -126,210 +127,230 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     </div>
   `,
   styles: [`
-    .import-progress-container {
-      padding: 24px;
+    .imports-page {
+      padding: var(--space-6);
+      max-width: 1200px;
+      margin: 0 auto;
     }
 
-    .page-header {
-      margin-bottom: 24px;
-    }
+    .page-header { margin-bottom: var(--space-6); }
 
-    .title-container {
-      margin-top: 16px;
-
-      h1 {
-        margin: 0 0 16px 0;
-        font-size: 1.5rem;
-        font-weight: 500;
-        color: var(--text-primary, #212529);
-      }
-
-      p {
-        margin: 0 0 12px 0;
-        color: var(--text-secondary, #6c757d);
-      }
-    }
-
-    /* Progress Section - PARIDAD: Rails progress styles */
-    .progress-section {
-      margin: 20px 0;
-    }
-
-    .progress {
-      height: 24px;
-      background-color: #e9ecef;
-      border-radius: 4px;
-      overflow: hidden;
-      margin-bottom: 12px;
-    }
-
-    .progress-bar {
-      height: 100%;
-      background-color: var(--primary-color, #0d6efd);
-      color: white;
-      display: flex;
+    .back-link {
+      display: inline-flex;
       align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      font-weight: 500;
-      transition: width 0.3s ease;
+      gap: var(--space-2);
+      color: var(--fg-muted);
+      text-decoration: none;
+      font-size: var(--text-sm);
+      margin-bottom: var(--space-2);
+      transition: color var(--duration-fast);
+      &:hover { color: var(--accent-default); }
+    }
+
+    .page-title {
+      margin: 0;
+      font-size: var(--text-2xl);
+      font-weight: var(--font-semibold);
+      color: var(--fg-default);
+    }
+
+    /* Progress Card */
+    .progress-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-4);
+      margin-bottom: var(--space-4);
+    }
+
+    .progress-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--space-3);
+    }
+
+    .progress-info {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-3);
+    }
+
+    .progress-percent {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-semibold);
+      color: var(--fg-default);
     }
 
     .progress-message {
-      font-size: 14px;
-      color: var(--text-secondary, #6c757d);
-      margin-bottom: 8px;
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
     }
 
-    .import-status {
-      margin-bottom: 16px;
+    .progress-track {
+      height: 8px;
+      background: var(--bg-muted);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+      margin-bottom: var(--space-4);
     }
 
-    .complete-message {
-      padding: 16px;
-      border-radius: 4px;
-      background: var(--bg-light, #f8f9fa);
-      border: 1px solid var(--border-color, #dee2e6);
+    .progress-fill {
+      height: 100%;
+      background: var(--accent-default);
+      border-radius: var(--radius-full);
+      transition: width 0.4s ease;
     }
 
-    .text-success {
-      color: #065f46 !important;
-      font-weight: 500;
+    .progress-complete { background: var(--success-default); }
+    .progress-error { background: var(--error-default); }
+
+    /* Result Banners */
+    .result-banner {
       display: flex;
-      align-items: center;
-      gap: 8px;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-md);
 
-      i {
-        font-size: 24px;
-      }
+      > i { font-size: 24px; flex-shrink: 0; margin-top: 2px; }
+      strong { display: block; margin-bottom: var(--space-1); }
+      p { margin: 0; font-size: var(--text-sm); }
     }
 
-    .text-danger {
-      color: #991b1b !important;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      i {
-        font-size: 24px;
-      }
+    .result-success {
+      background: var(--success-subtle);
+      color: var(--success-text);
     }
 
-    .error-text {
-      padding: 12px;
-      background: #fee2e2;
-      border-radius: 4px;
-      color: #991b1b;
-      font-family: monospace;
+    .result-error {
+      background: var(--error-subtle);
+      color: var(--error-text);
+    }
+
+    .error-block {
+      margin: var(--space-2) 0 0;
+      padding: var(--space-3);
+      background: rgba(0,0,0,0.05);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
       white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 200px;
+      overflow-y: auto;
     }
 
-    /* Badge */
-    .badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .badge-secondary { background: #e9ecef; color: #495057; }
-    .badge-warning { background: #fff3cd; color: #856404; }
-    .badge-success { background: #d1fae5; color: #065f46; }
-    .badge-danger { background: #fee2e2; color: #991b1b; }
-    .badge-info { background: #dbeafe; color: #1e40af; }
-
-    .btn {
+    /* Status Badge */
+    .status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      border: 1px solid transparent;
-      border-radius: 4px;
-      font-size: 14px;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.15s;
+      padding: 2px var(--space-3);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs);
+      font-weight: var(--font-medium);
     }
 
-    .btn-primary {
-      background-color: var(--primary-color, #0d6efd);
-      border-color: var(--primary-color, #0d6efd);
-      color: white;
+    .badge-secondary { background: var(--bg-muted); color: var(--fg-muted); }
+    .badge-warning { background: var(--warning-subtle); color: var(--warning-text); }
+    .badge-success { background: var(--success-subtle); color: var(--success-text); }
+    .badge-danger { background: var(--error-subtle); color: var(--error-text); }
+    .badge-info { background: var(--info-subtle); color: var(--info-text); }
 
-      &:hover {
-        background-color: var(--primary-dark, #0b5ed7);
-      }
-    }
-
-    .btn-secondary {
-      background-color: var(--secondary-color, #6c757d);
-      border-color: var(--secondary-color, #6c757d);
-      color: white;
-
-      &:hover {
-        background-color: #5c636a;
-      }
-    }
-
-    /* Table - PARIDAD: Rails DataTable */
-    .table-responsive {
-      background: white;
-      border-radius: 4px;
+    /* Table */
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
       overflow: auto;
-      margin: 20px 0;
+      margin-bottom: var(--space-4);
     }
 
-    .table {
+    .data-table {
       width: 100%;
-      margin: 0;
       border-collapse: collapse;
-      font-size: 14px;
+      font-size: var(--text-sm);
     }
 
-    .table th,
-    .table td {
-      padding: 12px;
-      border: 1px solid var(--border-color, #dee2e6);
+    .data-table thead th {
+      padding: var(--space-3) var(--space-4);
+      background: var(--table-header-bg);
+      color: var(--fg-muted);
+      font-size: var(--text-xs);
+      font-weight: var(--font-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      text-align: left;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--table-border);
+    }
+
+    .data-table tbody td {
+      padding: var(--space-2) var(--space-4);
+      color: var(--fg-default);
+      border-bottom: 1px solid var(--table-border);
       vertical-align: middle;
     }
 
-    .table thead th {
-      background: var(--bg-light, #f8f9fa);
-      font-weight: 600;
-      color: var(--text-primary, #212529);
-      text-align: left;
-      white-space: nowrap;
+    .data-table tbody tr {
+      transition: background var(--duration-fast);
+      &:hover { background: var(--table-row-hover); }
+      &:last-child td { border-bottom: none; }
     }
 
-    .table-striped tbody tr:nth-of-type(odd) {
-      background: rgba(0, 0, 0, 0.02);
-    }
-
-    .table-hover tbody tr:hover {
-      background: rgba(0, 0, 0, 0.05);
-    }
-
-    .table tbody tr.has-error {
-      background: #fff5f5;
-    }
+    .row-error { background: var(--error-subtle) !important; }
 
     .error-cell {
-      color: #dc3545;
-      font-weight: 500;
+      color: var(--error-text);
+      font-weight: var(--font-medium);
+      font-size: var(--text-xs);
+    }
+
+    /* Buttons */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      height: var(--btn-height);
+      background: var(--accent-default);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: var(--text-base);
+      font-weight: var(--font-medium);
+      cursor: pointer;
+      text-decoration: none;
+      transition: background var(--duration-fast);
+      &:hover { background: var(--accent-emphasis); }
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      height: var(--btn-height);
+      background: var(--bg-muted);
+      color: var(--fg-default);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      font-size: var(--text-base);
+      font-weight: var(--font-medium);
+      cursor: pointer;
+      text-decoration: none;
+      transition: all var(--duration-fast);
+      &:hover { background: var(--bg-emphasis); }
     }
 
     .form-actions {
-      margin-top: 20px;
       display: flex;
-      gap: 12px;
+      gap: var(--space-3);
     }
 
     @media (max-width: 768px) {
-      .import-progress-container { padding: 16px; }
-      .table-responsive { overflow-x: auto; }
-      .table { min-width: 900px; }
+      .imports-page { padding: var(--space-4); }
+      .table-card { overflow-x: auto; }
+      .data-table { min-width: 800px; }
       .form-actions { flex-direction: column; }
     }
   `]
