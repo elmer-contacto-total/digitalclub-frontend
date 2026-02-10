@@ -716,6 +716,7 @@ const MEDIA_CAPTURE_SCRIPT = `
   // Cola para notificar mensajes eliminados al backend
   window.__hablapeDeletedQueue = window.__hablapeDeletedQueue || [];
   const detectedDeletions = new Set();   // WhatsApp message IDs ya detectados como eliminados
+  const messagesWithMedia = new Set();   // Messages that had media content when captured
 
   // Cargar IDs de imágenes previamente reveladas desde localStorage
   try {
@@ -1635,6 +1636,7 @@ const MEDIA_CAPTURE_SCRIPT = `
         source: source,
         mediaType: 'IMAGE'
       });
+      if (whatsappMessageId) messagesWithMedia.add(whatsappMessageId);
     } catch (err) {
       console.log('[MWS Debug] Error en captureImage:', err.message);
     }
@@ -1924,6 +1926,7 @@ const MEDIA_CAPTURE_SCRIPT = `
         source: 'CHAT_AUTO',
         mediaType: 'IMAGE'
       });
+      if (messageId) messagesWithMedia.add(messageId);
 
     } catch (err) {
       console.log('[MWS Auto] Error capturando imagen:', err.message);
@@ -2084,20 +2087,25 @@ const MEDIA_CAPTURE_SCRIPT = `
       }
 
       // Check removed/changed nodes for deleted messages
+      // When media is deleted, child nodes (img, audio containers) get removed
       for (const node of mutation.removedNodes) {
         if (node.nodeType !== 1) continue;
-        const dataId = node.getAttribute?.('data-id');
-        if (dataId && processedMessageIds.has(dataId) && !detectedDeletions.has(dataId)) {
-          // Content was removed from a captured message - check parent
-          const parentMsg = document.querySelector('[data-id="' + dataId + '"]');
-          if (parentMsg && isMessageDeleted(parentMsg)) {
-            detectedDeletions.add(dataId);
-            window.__hablapeDeletedQueue.push({
-              whatsappMessageId: dataId,
-              detectedAt: new Date().toISOString()
-            });
-            console.log('[MWS Deleted] Mensaje eliminado detectado (observer):', dataId);
-          }
+        // Check if the removed node was inside a message we captured
+        const parentMsg = node.closest ? node.closest('[data-id]') : null;
+        const dataId = parentMsg ? parentMsg.getAttribute('data-id') : node.getAttribute?.('data-id');
+        if (dataId && messagesWithMedia.has(dataId) && !detectedDeletions.has(dataId)) {
+          // A child was removed from a captured message - check if media is gone
+          setTimeout(() => {
+            const msgEl = document.querySelector('[data-id="' + dataId + '"]');
+            if (msgEl && isMessageDeleted(msgEl)) {
+              detectedDeletions.add(dataId);
+              window.__hablapeDeletedQueue.push({
+                whatsappMessageId: dataId,
+                detectedAt: new Date().toISOString()
+              });
+              console.log('[MWS Deleted] Mensaje eliminado detectado (observer):', dataId);
+            }
+          }, 500);
         }
       }
     }
@@ -2288,6 +2296,7 @@ const MEDIA_CAPTURE_SCRIPT = `
               source: 'PLAYBACK',
               mediaType: 'AUDIO'
             });
+            if (whatsappMessageId) messagesWithMedia.add(whatsappMessageId);
           };
           reader.readAsDataURL(blob);
         } catch (err) {
@@ -2301,25 +2310,23 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   // ==========================================================================
   // DETECCIÓN DE MENSAJES ELIMINADOS
-  // Detecta cuando WhatsApp reemplaza contenido con "Se eliminó este mensaje"
-  // Solo verifica mensajes que ya fueron capturados (processedMessageIds)
+  // Estrategia: un mensaje que TENÍA media (img/audio) y ya no la tiene
+  // fue eliminado. También detecta texto "Se eliminó" y data-testid recalled.
+  // Solo verifica mensajes en messagesWithMedia (capturados en esta sesión).
   // ==========================================================================
 
   function isMessageDeleted(messageEl) {
     if (!messageEl) return false;
 
-    // Check data-testid for revoked/recalled indicators
-    const revokedEl = messageEl.querySelector('[data-testid="recalled"], [data-testid="msg-revoked"]');
-    if (revokedEl) return true;
+    // Method 1: data-testid/data-icon for revoked/recalled
+    if (messageEl.querySelector('[data-testid="recalled"], [data-testid="msg-revoked"], [data-icon="recalled"]')) {
+      return true;
+    }
 
-    // Check data-icon for recalled indicator
-    const revokedIcon = messageEl.querySelector('[data-icon="recalled"]');
-    if (revokedIcon) return true;
-
-    // Check text content for deletion messages (Spanish and English)
+    // Method 2: deletion text phrases (Spanish and English)
     const textContent = messageEl.textContent || '';
     const deletionPhrases = [
-      'Se eliminó este mensaje',
+      'Se elimin\u00f3 este mensaje',
       'Eliminaste este mensaje',
       'This message was deleted',
       'You deleted this message',
@@ -2329,16 +2336,26 @@ const MEDIA_CAPTURE_SCRIPT = `
       if (textContent.includes(phrase)) return true;
     }
 
+    // Method 3: message HAD media but no longer has any media elements
+    // A captured message should have img[src^="blob:"] or audio or
+    // at least an image container. If all are gone, media was deleted.
+    const hasImage = messageEl.querySelector('img[src^="blob:"], img[src^="http"], [data-testid="image-thumb"], [data-testid="media-canvas"]');
+    const hasAudio = messageEl.querySelector('audio, [data-testid*="audio"], [data-testid*="ptt"]');
+    if (!hasImage && !hasAudio) {
+      return true;
+    }
+
     return false;
   }
 
   function checkForDeletedMessages() {
-    for (const messageId of processedMessageIds) {
+    // Only check messages that we know had media (captured in this session)
+    for (const messageId of messagesWithMedia) {
       if (detectedDeletions.has(messageId)) continue;
 
       // Find message in DOM by data-id
       const messageEl = document.querySelector('[data-id="' + messageId + '"]');
-      if (!messageEl) continue; // Not in current view
+      if (!messageEl) continue; // Not in current view, skip
 
       if (isMessageDeleted(messageEl)) {
         detectedDeletions.add(messageId);
