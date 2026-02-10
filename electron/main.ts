@@ -794,6 +794,11 @@ function createWhatsAppView(): void {
       if (phone && phone.length >= 9 && phone.length <= 15 && chatBlockState.isBlocked) {
         console.log('[MWS] ✓ Teléfono extraído via console-message:', phone);
         handlePhoneExtracted(phone);
+        // Limpiar variable en IIFE para evitar que checkForExtractedPhone la procese también
+        whatsappView?.webContents.executeJavaScript(
+          'window.__hablapeExtractedPhone = null; window.__hablapePhoneExtractedAt = null;',
+          true
+        ).catch(() => {});
       } else if (rawPhone && rawPhone !== phone) {
         console.log('[MWS] Teléfono rechazado (inválido):', rawPhone, '->', phone);
       }
@@ -1265,20 +1270,19 @@ async function checkForExtractedPhone(): Promise<void> {
 function handlePhoneExtracted(phone: string): void {
   if (!phone || !mainWindow) return;
 
+  // Guard: si ya se procesó este teléfono, ignorar duplicados
+  if (phone === chatBlockState.expectedPhone) return;
+
   console.log('[MWS] ✓ Número extraído por usuario:', phone);
 
-  // Actualizar estado
   lastDetectedPhone = phone;
-  chatBlockState.expectedPhone = phone;
 
-  // Actualizar el teléfono en el BrowserView para el script de captura
+  // Solo actualizar estado — NO re-bloquear (el overlay ya está visible)
+  chatBlockState.expectedPhone = phone;
+  chatBlockState.waitingForManualExtraction = false;
+
   updateChatPhoneInWhatsApp(phone, lastDetectedName || '');
 
-  // El chat ya está bloqueado con el mensaje "necesita número"
-  // Ahora lo actualizamos al estado normal de "cargando"
-  blockWhatsAppChat(phone);
-
-  // Enviar evento a Angular con el número encontrado
   mainWindow.webContents.send('chat-selected', {
     phone,
     name: lastDetectedName || null,
@@ -1382,23 +1386,38 @@ async function scanChat(): Promise<void> {
         const nameChanged = result.chatName !== lastDetectedName;
         console.log('[MWS Debug] no_phone_found - chatName:', result.chatName, 'nameChanged:', nameChanged, 'isBlocked:', chatBlockState.isBlocked);
         if (nameChanged) {
-          console.log('[MWS] Chat sin número detectado:', result.chatName);
-          lastDetectedName = result.chatName;
-          lastDetectedPhone = ''; // Limpiar teléfono anterior
+          // Guard 1: Si ya extrajimos el teléfono y esperamos respuesta del CRM,
+          // no re-bloquear — solo actualizar el nombre
+          if (chatBlockState.expectedPhone) {
+            lastDetectedName = result.chatName;
+            console.log('[MWS] Nombre actualizado sin re-bloquear (esperando CRM para:', chatBlockState.expectedPhone + ')');
+          }
+          // Guard 2: Si el ciclo de extracción ya completó (tenemos teléfono, no hay bloqueo),
+          // es solo una variación del header — no re-bloquear
+          else if (lastDetectedPhone && !chatBlockState.isBlocked) {
+            lastDetectedName = result.chatName;
+            console.log('[MWS] Nombre actualizado sin re-bloquear (ciclo completado, teléfono:', lastDetectedPhone + ')');
+          }
+          // Caso normal: chat nuevo sin teléfono → mostrar overlay
+          else {
+            console.log('[MWS] Chat sin número detectado:', result.chatName);
+            lastDetectedName = result.chatName;
+            lastDetectedPhone = ''; // Limpiar teléfono anterior
 
-          // Limpiar número extraído del panel anterior y establecer nombre actual
-          await clearExtractedPhoneInWhatsApp();
-          await setCurrentChatNameInWhatsApp(result.chatName);
+            // Limpiar número extraído del panel anterior y establecer nombre actual
+            await clearExtractedPhoneInWhatsApp();
+            await setCurrentChatNameInWhatsApp(result.chatName);
 
-          // Mostrar blocker con instrucciones
-          showPhoneNeededInWhatsApp();
+            // Mostrar blocker con instrucciones
+            showPhoneNeededInWhatsApp();
 
-          // Enviar evento a Angular con solo el nombre (sin teléfono)
-          mainWindow.webContents.send('chat-selected', {
-            phone: null,
-            name: result.chatName,
-            isPhone: false
-          });
+            // Enviar evento a Angular con solo el nombre (sin teléfono)
+            mainWindow.webContents.send('chat-selected', {
+              phone: null,
+              name: result.chatName,
+              isPhone: false
+            });
+          }
         }
       }
       // NO hacer return aquí - continuar para programar siguiente scan
