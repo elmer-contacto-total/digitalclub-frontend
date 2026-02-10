@@ -1314,14 +1314,18 @@ const MEDIA_CAPTURE_SCRIPT = `
     return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  // Helper: Convert local datetime to UTC ISO string
-  // WhatsApp shows times in local timezone, but we store in UTC
+  // Helper: Format local datetime components as ISO string (no UTC conversion)
+  // WhatsApp shows times in local timezone; DB column is TIMESTAMP without timezone
   function localToUtcIso(year, month, day, hours, minutes) {
-    // Create Date object with local time (month is 0-indexed)
-    const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes), 0);
-    // toISOString() converts to UTC and returns format: 2025-01-15T14:30:00.000Z
-    // Remove the 'Z' and milliseconds to match expected format: 2025-01-15T14:30:00
-    return localDate.toISOString().replace(/\\.\\d{3}Z$/, '');
+    // Build ISO string directly from local time components — do NOT convert to UTC.
+    // The DB column is TIMESTAMP (without timezone) and backend uses LocalDateTime,
+    // so the value is stored as-is. Converting to UTC would add a +5h offset for Colombia.
+    const y = String(parseInt(year)).padStart(4, '0');
+    const mo = String(parseInt(month)).padStart(2, '0');
+    const d = String(parseInt(day)).padStart(2, '0');
+    const h = String(parseInt(hours)).padStart(2, '0');
+    const mi = String(parseInt(minutes)).padStart(2, '0');
+    return y + '-' + mo + '-' + d + 'T' + h + ':' + mi + ':00';
   }
 
   // Extract message timestamp from WhatsApp DOM element
@@ -1386,7 +1390,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           lastKnownMessageTimestamp = messageSentAt;
           lastKnownWhatsappMessageId = whatsappMessageId;
           lastContextCaptureTime = Date.now();
-          console.log('[MWS Debug] extractMessageTimestamp: encontrado via data-pre-plain-text (UTC):', messageSentAt);
+          console.log('[MWS Debug] extractMessageTimestamp: encontrado via data-pre-plain-text (local):', messageSentAt);
 
           return { messageSentAt, whatsappMessageId };
         }
@@ -1421,7 +1425,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           lastKnownMessageTimestamp = messageSentAt;
           lastKnownWhatsappMessageId = whatsappMessageId;
           lastContextCaptureTime = Date.now();
-          console.log('[MWS Debug] extractMessageTimestamp: encontrado via span (UTC):', messageSentAt, '(from:', text, ')');
+          console.log('[MWS Debug] extractMessageTimestamp: encontrado via span (local):', messageSentAt, '(from:', text, ')');
 
           return { messageSentAt, whatsappMessageId };
         }
@@ -1509,7 +1513,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           const [hours, mins] = time.split(':');
           // Convert local time to UTC
           lastKnownMessageTimestamp = localToUtcIso(year, month, day, hours, mins);
-          console.log('[MWS Debug] MÉTODO 1 OK: timestamp (UTC)=' + lastKnownMessageTimestamp);
+          console.log('[MWS Debug] MÉTODO 1 OK: timestamp (local)=' + lastKnownMessageTimestamp);
           return;
         }
       }
@@ -1539,7 +1543,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             hours,
             minutes
           );
-          console.log('[MWS Debug] MÉTODO 2 OK: timestamp (UTC)=' + lastKnownMessageTimestamp + ' (from span: ' + text + ')');
+          console.log('[MWS Debug] MÉTODO 2 OK: timestamp (local)=' + lastKnownMessageTimestamp + ' (from span: ' + text + ')');
           return;
         }
       }
@@ -1566,7 +1570,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             metaMatch[1],
             metaMatch[2]
           );
-          console.log('[MWS Debug] MÉTODO 4 OK: timestamp (UTC)=' + lastKnownMessageTimestamp);
+          console.log('[MWS Debug] MÉTODO 4 OK: timestamp (local)=' + lastKnownMessageTimestamp);
           return;
         }
       }
