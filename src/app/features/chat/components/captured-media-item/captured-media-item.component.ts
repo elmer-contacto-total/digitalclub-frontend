@@ -14,7 +14,7 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
   imports: [CommonModule, ImagePreviewComponent],
   styleUrl: './captured-media-item.component.scss',
   template: `
-    <div class="message-item incoming captured-media" [class.deleted-bubble]="media().deleted">
+    <div class="message-item incoming captured-media">
       <!-- Avatar (primero para alineación izquierda) -->
       <div class="avatar incoming-avatar">
         <i class="ph-fill ph-user"></i>
