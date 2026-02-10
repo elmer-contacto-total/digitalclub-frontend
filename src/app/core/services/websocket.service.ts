@@ -1,12 +1,11 @@
 /**
- * WebSocket Service using STOMP over SockJS
- * PARIDAD SPRING BOOT: WebSocketConfig.java (STOMP endpoint /ws)
+ * WebSocket Service using STOMP over native WebSocket
+ * PARIDAD SPRING BOOT: WebSocketConfig.java (STOMP endpoint /websocket)
  *
  * Provides real-time messaging capabilities for chat functionality.
  */
 import { Injectable, inject, signal, computed, OnDestroy } from '@angular/core';
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
 import { Message } from '../models/message.model';
@@ -125,10 +124,10 @@ export class WebSocketService implements OnDestroy {
 
     try {
       this.stompClient = new Client({
-        // Use SockJS for fallback support
-        webSocketFactory: () => new SockJS(`${environment.apiUrl}/ws`),
+        // Native WebSocket (no SockJS fallback needed - runs in Electron/Chromium)
+        brokerURL: `${environment.wsUrl}?token=${token}`,
 
-        // Connection headers with auth token
+        // Connection headers with auth token (sent at STOMP level after handshake)
         connectHeaders: {
           Authorization: `Bearer ${token}`
         },
