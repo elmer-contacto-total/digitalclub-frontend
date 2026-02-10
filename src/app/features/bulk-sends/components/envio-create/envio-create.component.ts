@@ -3,10 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
-import { BulkSendService, CsvPreviewResponse } from '../../../../core/services/bulk-send.service';
+import { BulkSendService, CsvPreviewResponse, AssignableAgent } from '../../../../core/services/bulk-send.service';
 import { ElectronService } from '../../../../core/services/electron.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { UserRole, RoleUtils } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
 interface ParsedCsv {
@@ -203,10 +204,40 @@ interface ParsedCsv {
         </div>
       </div>
 
-      <!-- STEP 4: Actions -->
+      <!-- STEP 4: Agent Assignment (supervisors only) -->
+      @if (isSupervisor()) {
+        <div class="card">
+          <div class="card-header">
+            <span class="step-badge">4</span>
+            <h3>Asignar Agente</h3>
+            @if (selectedAgentId()) {
+              <span class="check-badge"><i class="ph-check-circle-fill"></i></span>
+            }
+          </div>
+          <div class="agent-section">
+            @if (isLoadingAgents()) {
+              <p class="help-text">Cargando agentes...</p>
+            } @else if (assignableAgents().length === 0) {
+              <p class="help-text">No hay agentes disponibles para asignar</p>
+            } @else {
+              <label>Selecciona el agente que ejecutará el envío:</label>
+              <select [(ngModel)]="selectedAgentIdValue"
+                      (ngModelChange)="onAgentSelected($event)"
+                      class="form-select">
+                <option [value]="0">— Seleccionar agente —</option>
+                @for (agent of assignableAgents(); track agent.id) {
+                  <option [value]="agent.id">{{ agent.name }} ({{ agent.email }})</option>
+                }
+              </select>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- STEP 5: Actions -->
       <div class="card">
         <div class="card-header">
-          <span class="step-badge">4</span>
+          <span class="step-badge">{{ isSupervisor() ? '5' : '4' }}</span>
           <h3>Enviar</h3>
         </div>
 
@@ -218,7 +249,9 @@ interface ParsedCsv {
               <i class="ph-check-square"></i> Preparar Envío
             </button>
             @if (!canPrepare()) {
-              <span class="help-text">Sube un CSV y escribe un mensaje para continuar</span>
+              <span class="help-text">
+                {{ isSupervisor() ? 'Sube un CSV, escribe un mensaje y selecciona un agente para continuar' : 'Sube un CSV y escribe un mensaje para continuar' }}
+              </span>
             }
           </div>
         } @else {
@@ -229,6 +262,12 @@ interface ParsedCsv {
                 <span class="stat-label">Destinatarios</span>
                 <span class="stat-value">{{ csv()!.totalRows }}</span>
               </div>
+              @if (getSelectedAgentName()) {
+                <div class="stat">
+                  <span class="stat-label">Agente</span>
+                  <span class="stat-value">{{ getSelectedAgentName() }}</span>
+                </div>
+              }
               @if (attachmentFile()) {
                 <div class="stat">
                   <span class="stat-label">Adjunto</span>
@@ -376,6 +415,11 @@ interface ParsedCsv {
       .attach-info { flex: 1; .file-name { display: block; font-weight: 500; } .file-size { font-size: 12px; color: #999; } }
     }
 
+    .agent-section {
+      padding: 16px 20px;
+      label { font-size: 14px; font-weight: 500; margin-bottom: 8px; display: block; }
+    }
+
     .action-section { padding: 20px; text-align: center; }
     .confirmation-panel { padding: 20px; }
     .confirmation-panel h4 {
@@ -440,6 +484,49 @@ export class EnvioCreateComponent implements OnDestroy {
   errors = signal<string[]>([]);
   selectedPhoneColumn = 0;
   selectedNameColumn = -1;
+
+  // Agent assignment
+  assignableAgents = signal<AssignableAgent[]>([]);
+  isLoadingAgents = signal(false);
+  selectedAgentId = signal<number>(0);
+  selectedAgentIdValue = 0;
+
+  constructor() {
+    if (this.isSupervisor()) {
+      this.loadAssignableAgents();
+    }
+  }
+
+  isSupervisor(): boolean {
+    const user = this.authService.currentUser();
+    if (!user) return false;
+    return RoleUtils.isAdmin(user.role) || RoleUtils.isManager(user.role);
+  }
+
+  private loadAssignableAgents(): void {
+    this.isLoadingAgents.set(true);
+    this.bulkSendService.getAssignableAgents().pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (res) => {
+        this.assignableAgents.set(res.agents);
+        this.isLoadingAgents.set(false);
+      },
+      error: () => this.isLoadingAgents.set(false)
+    });
+  }
+
+  onAgentSelected(value: string | number): void {
+    const id = +value;
+    this.selectedAgentId.set(id);
+  }
+
+  getSelectedAgentName(): string {
+    const id = this.selectedAgentId();
+    if (!id) return '';
+    const agent = this.assignableAgents().find(a => a.id === id);
+    return agent?.name || '';
+  }
 
   ngOnDestroy(): void {
     this.destroy$.next();
@@ -593,7 +680,11 @@ export class EnvioCreateComponent implements OnDestroy {
   }
 
   canPrepare(): boolean {
-    return !!this.csv() && this.messageContent().length > 0;
+    const hasBasics = !!this.csv() && this.messageContent().length > 0;
+    if (this.isSupervisor()) {
+      return hasBasics && this.selectedAgentId() > 0;
+    }
+    return hasBasics;
   }
 
   prepare(): void {
@@ -612,19 +703,24 @@ export class EnvioCreateComponent implements OnDestroy {
     this.isSending.set(true);
     this.errors.set([]);
 
+    const agentId = this.isSupervisor() ? this.selectedAgentId() || undefined : undefined;
+
     this.bulkSendService.createFromCsv(
       file,
       this.messageContent(),
       +this.selectedPhoneColumn,
       +this.selectedNameColumn,
-      this.attachmentFile() || undefined
+      this.attachmentFile() || undefined,
+      agentId
     ).pipe(takeUntil(this.destroy$)).subscribe({
       next: async (res) => {
         this.toast.success('Envío masivo creado');
         const bulkSendId = res.bulk_send.id;
+        const currentUserId = this.authService.currentUser()?.id;
+        const assignedToSelf = !agentId || agentId === currentUserId;
 
-        // Start via Electron if available
-        if (this.electronService.isElectron) {
+        // Auto-start via Electron only if assigned to self
+        if (assignedToSelf && this.electronService.isElectron) {
           const token = this.authService.getToken();
           if (token) {
             await this.electronService.startBulkSend(bulkSendId, token);

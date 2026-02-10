@@ -31,6 +31,8 @@ export interface BulkSend {
   client_id: number | null;
   user_id: number | null;
   user_name: string | null;
+  assigned_agent_id: number | null;
+  assigned_agent_name: string | null;
 }
 
 export interface BulkSendRecipient {
@@ -78,6 +80,13 @@ export interface BulkSendRules {
   enabled: boolean;
 }
 
+export interface AssignableAgent {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+}
+
 export interface NextRecipientResponse {
   has_next: boolean;
   recipient_id?: number;
@@ -110,16 +119,27 @@ export class BulkSendService {
    * Create bulk send from CSV
    */
   createFromCsv(csvFile: File, messageContent: string, phoneColumn: number,
-                nameColumn: number, attachment?: File): Observable<{ result: string; bulk_send: BulkSend; message: string }> {
+                nameColumn: number, attachment?: File,
+                assignedAgentId?: number): Observable<{ result: string; bulk_send: BulkSend; message: string }> {
     const formData = new FormData();
     formData.append('csv', csvFile);
     formData.append('message_content', messageContent);
     formData.append('phone_column', phoneColumn.toString());
     formData.append('name_column', nameColumn.toString());
+    if (assignedAgentId) {
+      formData.append('assigned_agent_id', assignedAgentId.toString());
+    }
     if (attachment) {
       formData.append('attachment', attachment);
     }
     return this.http.post<{ result: string; bulk_send: BulkSend; message: string }>(`${this.baseUrl}/csv`, formData);
+  }
+
+  /**
+   * Get agents assignable for bulk sends (based on current user role)
+   */
+  getAssignableAgents(): Observable<{ agents: AssignableAgent[] }> {
+    return this.http.get<{ agents: AssignableAgent[] }>(`${this.baseUrl}/assignable_agents`);
   }
 
   /**

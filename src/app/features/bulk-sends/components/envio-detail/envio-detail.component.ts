@@ -26,6 +26,16 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
             </span>
           }
         </div>
+        @if (detail()) {
+          <div class="agent-info-row">
+            @if (detail()!.assigned_agent_name) {
+              <span class="info-tag"><i class="ph-user"></i> Agente: <strong>{{ detail()!.assigned_agent_name }}</strong></span>
+            }
+            @if (detail()!.user_name && detail()!.user_name !== detail()!.assigned_agent_name) {
+              <span class="info-tag"><i class="ph-user-circle"></i> Creado por: <strong>{{ detail()!.user_name }}</strong></span>
+            }
+          </div>
+        }
       </div>
 
       @if (isLoading()) {
@@ -73,7 +83,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                 <i class="ph-play"></i> Reanudar
               </button>
             }
-            @if (detail()!.status === 'PENDING' && electronService.isElectron) {
+            @if (detail()!.status === 'PENDING' && electronService.isElectron && isAssignedAgent()) {
               <button class="btn btn-primary" (click)="startSending()">
                 <i class="ph-paper-plane-tilt"></i> Iniciar Envío
               </button>
@@ -163,6 +173,16 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     .header-row {
       display: flex; align-items: center; gap: 12px;
       h1 { font-size: 24px; font-weight: 600; margin: 0; color: #1a1a2e; }
+    }
+    .agent-info-row {
+      display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap;
+      .info-tag {
+        display: inline-flex; align-items: center; gap: 4px;
+        font-size: 13px; color: #495057; background: #f0f3ff;
+        padding: 4px 10px; border-radius: 6px;
+        i { color: #4361ee; }
+        strong { color: #1a1a2e; }
+      }
     }
 
     .progress-section {
@@ -267,6 +287,15 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
   isLoading = signal(false);
   detail = signal<BulkSendDetail | null>(null);
   recipientPage = signal(0);
+
+  isAssignedAgent(): boolean {
+    const d = this.detail();
+    const user = this.authService.currentUser();
+    if (!d || !user) return false;
+    // If no assigned agent, fall back to creator (backward compat)
+    const agentId = d.assigned_agent_id ?? d.user_id;
+    return agentId === user.id;
+  }
 
   ngOnInit(): void {
     this.bulkSendId = Number(this.route.snapshot.paramMap.get('id'));

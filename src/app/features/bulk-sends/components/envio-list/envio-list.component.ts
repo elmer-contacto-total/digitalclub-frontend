@@ -58,6 +58,10 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
               <tr>
                 <th>ID</th>
                 <th>Mensaje</th>
+                <th>Agente</th>
+                @if (isSupervisor()) {
+                  <th>Creador</th>
+                }
                 <th>Destinatarios</th>
                 <th>Progreso</th>
                 <th>Estado</th>
@@ -75,6 +79,10 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                       <span class="attach-badge"><i class="ph-paperclip"></i> {{ bs.attachment_original_name }}</span>
                     }
                   </td>
+                  <td class="agent-cell">{{ bs.assigned_agent_name || '—' }}</td>
+                  @if (isSupervisor()) {
+                    <td class="agent-cell">{{ bs.user_name || '—' }}</td>
+                  }
                   <td class="num-cell">{{ bs.total_recipients }}</td>
                   <td class="progress-cell">
                     <div class="progress-bar">
@@ -175,6 +183,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         background: #f0f0f0; padding: 2px 6px; border-radius: 4px; margin-top: 4px;
       }
     }
+    .agent-cell { font-size: 13px; color: #495057; white-space: nowrap; }
     .num-cell { font-weight: 600; text-align: center; }
     .progress-cell { min-width: 120px; }
     .progress-bar {
