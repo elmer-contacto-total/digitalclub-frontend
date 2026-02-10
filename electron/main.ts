@@ -77,8 +77,23 @@ const MEDIA_API_URL = process.env.MEDIA_API_URL || 'http://digitalclub.contactot
 // Estado dinámico del layout
 let sidebarCollapsed = false;
 
+// Cola de eliminaciones pendientes por reintentar (si el backend falló)
+const pendingDeletions: string[] = [];
+
+// Token JWT para autenticación en API calls de media
+let mediaAuthToken: string | null = null;
+
 
 // ==================== FUNCIONES DE ENVÍO AL BACKEND ====================
+
+/** Build headers for media API calls (includes auth token if available) */
+function getMediaApiHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (mediaAuthToken) {
+    headers['Authorization'] = `Bearer ${mediaAuthToken}`;
+  }
+  return headers;
+}
 
 /**
  * Envía un log de auditoría al backend
@@ -87,9 +102,7 @@ async function sendAuditLog(payload: AuditLogPayload): Promise<void> {
   try {
     const response = await fetch(`${MEDIA_API_URL}/audit`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: getMediaApiHeaders(),
       body: JSON.stringify(payload)
     });
 
@@ -111,9 +124,7 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
   try {
     const response = await fetch(`${MEDIA_API_URL}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: getMediaApiHeaders(),
       body: JSON.stringify(payload)
     });
 
@@ -153,25 +164,56 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
  * Notifica al backend que un mensaje de WhatsApp fue eliminado
  */
 async function sendMediaDeletionToServer(whatsappMessageId: string): Promise<void> {
-  try {
-    const response = await fetch(`${MEDIA_API_URL}/mark-deleted`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ whatsappMessageId })
-    });
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(`${MEDIA_API_URL}/mark-deleted`, {
+        method: 'POST',
+        headers: getMediaApiHeaders(),
+        body: JSON.stringify({ whatsappMessageId })
+      });
 
-    if (!response.ok) {
-      console.error('[MWS Deleted] Error notificando eliminación:', response.status);
-    } else {
-      const result = await response.json();
-      console.log('[MWS Deleted] Eliminación notificada:', whatsappMessageId, 'status:', result.status);
+      if (response.ok) {
+        const result = await response.json();
+        console.log('[MWS Deleted] Eliminación notificada:', whatsappMessageId, 'status:', result.status);
+        return;
+      }
+      console.error(`[MWS Deleted] Error notificando eliminación (intento ${attempt}/3):`, response.status);
+    } catch (err) {
+      console.error(`[MWS Deleted] Error de conexión (intento ${attempt}/3):`, err);
     }
-  } catch (err) {
-    console.error('[MWS Deleted] Error de conexión:', err);
+    if (attempt < 3) {
+      await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+    }
+  }
+  // All retries failed — queue for periodic retry
+  console.warn('[MWS Deleted] Todos los reintentos fallaron, agregando a cola pendiente:', whatsappMessageId);
+  if (!pendingDeletions.includes(whatsappMessageId)) {
+    pendingDeletions.push(whatsappMessageId);
   }
 }
+
+// Retry pending deletions every 60 seconds
+setInterval(async () => {
+  if (pendingDeletions.length === 0) return;
+  console.log(`[MWS Deleted] Reintentando ${pendingDeletions.length} eliminaciones pendientes`);
+  const toRetry = pendingDeletions.splice(0, pendingDeletions.length);
+  for (const id of toRetry) {
+    try {
+      const response = await fetch(`${MEDIA_API_URL}/mark-deleted`, {
+        method: 'POST',
+        headers: getMediaApiHeaders(),
+        body: JSON.stringify({ whatsappMessageId: id })
+      });
+      if (response.ok) {
+        console.log('[MWS Deleted] Reintento exitoso:', id);
+      } else {
+        pendingDeletions.push(id);
+      }
+    } catch {
+      pendingDeletions.push(id);
+    }
+  }
+}, 60000);
 
 /**
  * Callback para manejar medios capturados desde el BrowserView
@@ -1808,10 +1850,16 @@ function setupIPC(): void {
     console.log('[MWS] userName:', loggedInUserName);
   });
 
+  ipcMain.on('set-auth-token', (_, token: string) => {
+    mediaAuthToken = token;
+    console.log('[MWS] Auth token actualizado para API de media');
+  });
+
   ipcMain.on('clear-logged-in-user', () => {
     console.log('[MWS] Usuario deslogueado:', loggedInUserId);
     loggedInUserId = null;
     loggedInUserName = null;
+    mediaAuthToken = null;
   });
 
   // === Active Client (para asociar medios al cliente del chat) ===

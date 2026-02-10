@@ -720,6 +720,35 @@ const MEDIA_CAPTURE_SCRIPT = `
   const messageLastSeen = new Map();     // messageId → scan count when last seen in DOM
   const messageChatName = new Map();     // messageId → chat header name at capture time
   const messageNeighbor = new Map();     // messageId → data-id of closest neighbor (for scroll disambiguation)
+  const messageNoMediaScans = new Map(); // messageId → consecutive scans without media elements (for Method 3)
+
+  // Restore persisted tracking state from previous sessions
+  try {
+    var savedMedia = localStorage.getItem('__hablapeMessagesWithMedia');
+    if (savedMedia) {
+      var parsed = JSON.parse(savedMedia);
+      if (parsed.messages) parsed.messages.forEach(function(id) { messagesWithMedia.add(id); });
+      if (parsed.chatNames) {
+        for (var k in parsed.chatNames) {
+          if (parsed.chatNames.hasOwnProperty(k)) messageChatName.set(k, parsed.chatNames[k]);
+        }
+      }
+      console.log('[MWS Deleted] Restored', messagesWithMedia.size, 'tracked messages from localStorage');
+    }
+  } catch (e) {}
+
+  function persistMessagesWithMedia() {
+    try {
+      var msgs = Array.from(messagesWithMedia);
+      if (msgs.length > 500) msgs = msgs.slice(-500);
+      var names = {};
+      for (var i = 0; i < msgs.length; i++) {
+        var n = messageChatName.get(msgs[i]);
+        if (n) names[msgs[i]] = n;
+      }
+      localStorage.setItem('__hablapeMessagesWithMedia', JSON.stringify({ messages: msgs, chatNames: names }));
+    } catch (e) {}
+  }
 
   // Get current chat name (set by main.ts via __hablapeCurrentChatName)
   function getCurrentChatHeaderName() {
@@ -746,7 +775,6 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // Configuración
-  const MIN_IMAGE_SIZE = 10000;          // Mínimo 10KB para evitar thumbnails
   const CAPTURE_DELAY = 500;             // Delay antes de capturar (para que cargue)
 
   // =========================================================================
@@ -1583,80 +1611,6 @@ const MEDIA_CAPTURE_SCRIPT = `
     }
   }
 
-  async function captureImage(element, source = 'PREVIEW') {
-    try {
-      let imageData, mimeType, size;
-
-      if (element.tagName === 'CANVAS') {
-        imageData = element.toDataURL('image/jpeg', 0.9);
-        mimeType = 'image/jpeg';
-        size = Math.round((imageData.length * 3) / 4);
-      } else if (element.tagName === 'IMG' && element.src) {
-        const hash = await simpleHash(element.src + element.naturalWidth);
-        if (capturedHashes.has(hash)) return;
-        capturedHashes.add(hash);
-
-        if (element.src.startsWith('blob:')) {
-          const response = await fetch(element.src);
-          const blob = await response.blob();
-          mimeType = blob.type || 'image/jpeg';
-          size = blob.size;
-
-          const reader = new FileReader();
-          imageData = await new Promise((resolve, reject) => {
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-        } else if (element.src.startsWith('data:')) {
-          imageData = element.src;
-          mimeType = element.src.split(';')[0].split(':')[1] || 'image/jpeg';
-          size = Math.round((imageData.length * 3) / 4);
-        } else {
-          return;
-        }
-      } else {
-        return;
-      }
-
-      // Ignorar imágenes muy pequeñas (thumbnails/miniaturas del chat)
-      // Mínimo 10KB - reducido para capturar más imágenes válidas
-      if (!imageData || size < 10000) {
-        console.log('[MWS Debug] Imagen ignorada por tamaño:', size, 'bytes');
-        return;
-      }
-      console.log('[MWS Debug] Imagen aceptada, tamaño:', size, 'bytes');
-
-      // Extract message timestamp
-      const { messageSentAt, whatsappMessageId } = extractMessageTimestamp(element);
-
-      // Obtener teléfono y nombre del chat
-      const chatPhone = getCurrentChatPhone();
-      const chatName = window.__hablapeCurrentChatName || null;
-
-      console.log('[MWS Debug] Agregando a cola - chatPhone:', chatPhone, 'chatName:', chatName);
-
-      window.__hablapeMediaQueue.push({
-        data: imageData,
-        type: mimeType,
-        size: size,
-        chatPhone: chatPhone,
-        chatName: chatName,
-        timestamp: new Date().toISOString(),
-        messageSentAt: messageSentAt,
-        whatsappMessageId: whatsappMessageId,
-        source: source,
-        mediaType: 'IMAGE'
-      });
-      if (whatsappMessageId) {
-        messagesWithMedia.add(whatsappMessageId);
-        messageChatName.set(whatsappMessageId, getCurrentChatHeaderName());
-      }
-    } catch (err) {
-      console.log('[MWS Debug] Error en captureImage:', err.message);
-    }
-  }
-
   // ==========================================================================
   // NUEVA ESTRATEGIA: Captura automática cuando imágenes llegan al chat
   // ==========================================================================
@@ -1883,12 +1837,6 @@ const MEDIA_CAPTURE_SCRIPT = `
       const mimeType = blob.type || 'image/jpeg';
       const size = blob.size;
 
-      // Filtrar imágenes muy pequeñas
-      if (size < MIN_IMAGE_SIZE) {
-        console.log('[MWS Auto] Imagen muy pequeña:', size, 'bytes, ignorando');
-        return;
-      }
-
       // Convertir a base64
       const reader = new FileReader();
       const imageData = await new Promise((resolve, reject) => {
@@ -1944,6 +1892,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       if (messageId) {
         messagesWithMedia.add(messageId);
         messageChatName.set(messageId, getCurrentChatHeaderName());
+        persistMessagesWithMedia();
       }
 
     } catch (err) {
@@ -2317,6 +2266,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             if (whatsappMessageId) {
               messagesWithMedia.add(whatsappMessageId);
               messageChatName.set(whatsappMessageId, getCurrentChatHeaderName());
+              persistMessagesWithMedia();
             }
           };
           reader.readAsDataURL(blob);
@@ -2336,7 +2286,8 @@ const MEDIA_CAPTURE_SCRIPT = `
   // Solo verifica mensajes en messagesWithMedia (capturados en esta sesión).
   // ==========================================================================
 
-  function isMessageDeleted(messageEl) {
+  // Detects deletion via WhatsApp markers (Methods 1-2: high confidence, instant)
+  function isMessageDeletedByMarker(messageEl) {
     if (!messageEl) return false;
 
     // Method 1: data-testid/data-icon for revoked/recalled
@@ -2345,32 +2296,32 @@ const MEDIA_CAPTURE_SCRIPT = `
     }
 
     // Method 2: deletion text phrases (Spanish and English)
-    const textContent = messageEl.textContent || '';
-    const deletionPhrases = [
+    // NOTE: "Eliminaste este mensaje" / "You deleted this message" are EXCLUDED
+    // because they mean the AGENT deleted it — media still exists for the other party.
+    var textContent = messageEl.textContent || '';
+    var deletionPhrases = [
       'Se elimin\u00f3 este mensaje',
-      'Eliminaste este mensaje',
       'This message was deleted',
-      'You deleted this message',
       'Este mensaje fue eliminado'
     ];
-    for (const phrase of deletionPhrases) {
-      if (textContent.includes(phrase)) return true;
-    }
-
-    // Method 3: message HAD media but no longer has any media elements
-    // A captured message should have img[src^="blob:"] or audio or
-    // at least an image container. If all are gone, media was deleted.
-    const hasImage = messageEl.querySelector('img[src^="blob:"], img[src^="http"], [data-testid="image-thumb"], [data-testid="media-canvas"]');
-    const hasAudio = messageEl.querySelector('audio, [data-testid*="audio"], [data-testid*="ptt"]');
-    if (!hasImage && !hasAudio) {
-      return true;
+    for (var i = 0; i < deletionPhrases.length; i++) {
+      if (textContent.includes(deletionPhrases[i])) return true;
     }
 
     return false;
   }
 
+  // Checks if message still has media elements in DOM
+  function hasMediaElements(messageEl) {
+    if (!messageEl) return false;
+    var hasImage = messageEl.querySelector('img[src^="blob:"], img[src^="http"], [data-testid="image-thumb"], [data-testid="media-canvas"]');
+    var hasAudio = messageEl.querySelector('audio, [data-testid*="audio"], [data-testid*="ptt"]');
+    return !!(hasImage || hasAudio);
+  }
+
   let deletionScanCount = 0;
   let viewWasHidden = false; // Track if view was hidden to refresh lastSeen on return
+  var previousChatName = null; // Track chat changes for re-baseline
   // Expose debug state for TypeScript polling to read
   window.__hablapeDeletedDebug = null;
 
@@ -2378,6 +2329,29 @@ const MEDIA_CAPTURE_SCRIPT = `
     deletionScanCount++;
     const debugEntries = [];
     const currentChat = getCurrentChatHeaderName();
+
+    // When chat changes, re-baseline tracked messages for the new chat.
+    // This ensures messages restored from localStorage get fresh lastSeen/neighbor
+    // so absence detection works when they're later deleted.
+    if (currentChat && currentChat !== previousChatName) {
+      previousChatName = currentChat;
+      for (var rebaseId of messagesWithMedia) {
+        if (detectedDeletions.has(rebaseId)) continue;
+        if (messageChatName.get(rebaseId) !== currentChat) continue;
+        var rebaseEl = document.querySelector('[data-id="' + rebaseId + '"]');
+        if (rebaseEl) {
+          messageLastSeen.set(rebaseId, deletionScanCount);
+          // Record neighbor for future absence checks
+          var nb = rebaseEl.nextElementSibling;
+          while (nb && !nb.getAttribute('data-id')) nb = nb.nextElementSibling;
+          if (!nb) {
+            nb = rebaseEl.previousElementSibling;
+            while (nb && !nb.getAttribute('data-id')) nb = nb.previousElementSibling;
+          }
+          if (nb) messageNeighbor.set(rebaseId, nb.getAttribute('data-id'));
+        }
+      }
+    }
 
     // When view transitions from hidden → visible, selectively refresh lastSeen
     // using neighbor check to distinguish deletion from scroll displacement
@@ -2429,16 +2403,28 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       if (!messageEl) {
         // Message not in DOM. Could be: deleted, scrolled away, or chat switched.
-        // Treat as deleted if:
-        // 1. Was recently in DOM (within last 3 scans = ~9 seconds)
-        // 2. We're still in the same chat (header name matches)
-        if (lastSeen && (deletionScanCount - lastSeen) <= 3 &&
-            capturedChat && currentChat && capturedChat === currentChat) {
-          detectedDeletions.add(messageId);
-          window.__hablapeDeletedQueue.push({
-            whatsappMessageId: messageId,
-            detectedAt: new Date().toISOString()
-          });
+        // Use neighbor check: if neighbor is still in DOM, message was likely deleted.
+        // If neighbor is also gone → scroll displacement → do NOT flag.
+        if (lastSeen && capturedChat && currentChat && capturedChat === currentChat) {
+          var neighborId = messageNeighbor.get(messageId);
+          var neighborInDOM = neighborId && document.querySelector('[data-id="' + neighborId + '"]');
+          var scansSinceSeen = deletionScanCount - lastSeen;
+
+          // Only flag if neighbor stayed in DOM (message vanished but surroundings intact)
+          if (neighborInDOM && scansSinceSeen <= 5) {
+            detectedDeletions.add(messageId);
+            window.__hablapeDeletedQueue.push({
+              whatsappMessageId: messageId,
+              detectedAt: new Date().toISOString()
+            });
+            // Cleanup tracked state
+            messagesWithMedia.delete(messageId);
+            messageChatName.delete(messageId);
+            messageNoMediaScans.delete(messageId);
+            messageNeighbor.delete(messageId);
+            messageLastSeen.delete(messageId);
+            persistMessagesWithMedia();
+          }
         }
         continue;
       }
@@ -2456,12 +2442,42 @@ const MEDIA_CAPTURE_SCRIPT = `
         messageNeighbor.set(messageId, neighborEl.getAttribute('data-id'));
       }
 
-      if (isMessageDeleted(messageEl)) {
+      // Check for deletion markers (Methods 1-2: instant, high confidence)
+      if (isMessageDeletedByMarker(messageEl)) {
         detectedDeletions.add(messageId);
         window.__hablapeDeletedQueue.push({
           whatsappMessageId: messageId,
           detectedAt: new Date().toISOString()
         });
+        // Cleanup tracked state
+        messagesWithMedia.delete(messageId);
+        messageChatName.delete(messageId);
+        messageNoMediaScans.delete(messageId);
+        messageNeighbor.delete(messageId);
+        messageLastSeen.delete(messageId);
+        persistMessagesWithMedia();
+      } else if (!hasMediaElements(messageEl)) {
+        // Method 3: media gone but message still in DOM
+        // Require 3 consecutive scans (~9s) to avoid lazy loading false positives
+        var noMediaCount = (messageNoMediaScans.get(messageId) || 0) + 1;
+        messageNoMediaScans.set(messageId, noMediaCount);
+        if (noMediaCount >= 3) {
+          detectedDeletions.add(messageId);
+          window.__hablapeDeletedQueue.push({
+            whatsappMessageId: messageId,
+            detectedAt: new Date().toISOString()
+          });
+          // Cleanup tracked state
+          messagesWithMedia.delete(messageId);
+          messageChatName.delete(messageId);
+          messageNoMediaScans.delete(messageId);
+          messageNeighbor.delete(messageId);
+          messageLastSeen.delete(messageId);
+          persistMessagesWithMedia();
+        }
+      } else {
+        // Media still present — reset counter
+        messageNoMediaScans.delete(messageId);
       }
     }
 

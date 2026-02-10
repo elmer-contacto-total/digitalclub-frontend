@@ -36,6 +36,7 @@ interface ElectronAPI {
 
   // User login/logout (for media capture association)
   setLoggedInUser?(userId: number, userName: string): void;
+  setAuthToken?(token: string): void;
   clearLoggedInUser?(): void;
 
   // Active client (for media capture association with CRM contact)
@@ -360,6 +361,15 @@ export class ElectronService {
   setLoggedInUser(userId: number, userName: string): void {
     if (window.electronAPI?.setLoggedInUser) {
       window.electronAPI.setLoggedInUser(userId, userName);
+    }
+  }
+
+  /**
+   * Send auth token to Electron for media API calls
+   */
+  setAuthToken(token: string): void {
+    if (window.electronAPI?.setAuthToken) {
+      window.electronAPI.setAuthToken(token);
     }
   }
 

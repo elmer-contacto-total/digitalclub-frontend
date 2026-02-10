@@ -165,6 +165,11 @@ const electronAPI = {
     ipcRenderer.send('set-logged-in-user', { userId, userName });
   },
 
+  // Actualizar token de autenticación (para API calls de media)
+  setAuthToken: (token: string) => {
+    ipcRenderer.send('set-auth-token', token);
+  },
+
   // Limpiar usuario al hacer logout
   clearLoggedInUser: () => {
     ipcRenderer.send('clear-logged-in-user');
@@ -323,6 +328,7 @@ declare global {
       };
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
       setLoggedInUser: (userId: number, userName: string) => void;
+      setAuthToken: (token: string) => void;
       clearLoggedInUser: () => void;
       setActiveClient: (data: { clientUserId: number | null; chatPhone: string; chatName: string }) => void;
       clearActiveClient: () => void;

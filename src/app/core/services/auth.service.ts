@@ -453,6 +453,10 @@ export class AuthService {
   private storeToken(token: string): void {
     this._token.set(token);
     this.storage.setString(TOKEN_KEY, token);
+    // Sync with Electron for authenticated media API calls
+    if (this.electronService.isElectron) {
+      this.electronService.setAuthToken(token);
+    }
   }
 
   /**
@@ -479,6 +483,11 @@ export class AuthService {
         setTimeout(() => {
           if (this.electronService.isElectron) {
             this.electronService.setLoggedInUser(user.id, user.fullName);
+            // Also sync auth token for media API calls
+            const token = this.storage.getString(TOKEN_KEY);
+            if (token) {
+              this.electronService.setAuthToken(token);
+            }
           }
         }, 100);
         return user;
