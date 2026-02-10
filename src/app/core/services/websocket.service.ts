@@ -273,7 +273,9 @@ export class WebSocketService implements OnDestroy {
 
   /**
    * Subscribe to captured media notifications
-   * PARIDAD SPRING BOOT: /user/{userId}/queue/captured_media
+   * Subscribes to both:
+   * - /topic/captured_media (broadcast: any user viewing the conversation)
+   * - /user/{userId}/queue/captured_media (personal: for the capturing agent)
    */
   subscribeToCapturedMedia(userId: number): void {
     if (!this.stompClient?.active) {
@@ -281,23 +283,30 @@ export class WebSocketService implements OnDestroy {
       return;
     }
 
-    const sub = this.stompClient.subscribe(
-      `/user/${userId}/queue/captured_media`,
-      (message: IMessage) => {
-        try {
-          const data = JSON.parse(message.body);
-          const payload = (data.payload || data) as WsCapturedMediaPayload;
-          if (data.type === 'CAPTURED_MEDIA_DELETED') {
-            this.capturedMediaDeletedSubject.next(payload);
-          } else {
-            this.capturedMediaSubject.next(payload);
-          }
-        } catch (e) {
-          console.error('Failed to parse captured media message:', e);
+    const handler = (message: IMessage) => {
+      try {
+        const data = JSON.parse(message.body);
+        const payload = (data.payload || data) as WsCapturedMediaPayload;
+        if (data.type === 'CAPTURED_MEDIA_DELETED') {
+          this.capturedMediaDeletedSubject.next(payload);
+        } else {
+          this.capturedMediaSubject.next(payload);
         }
+      } catch (e) {
+        console.error('Failed to parse captured media message:', e);
       }
+    };
+
+    // Topic subscription (broadcast to all connected users)
+    const topicSub = this.stompClient.subscribe('/topic/captured_media', handler);
+    this.subscriptions.push(topicSub);
+
+    // Personal queue subscription (for the capturing agent in Electron)
+    const userSub = this.stompClient.subscribe(
+      `/user/${userId}/queue/captured_media`,
+      handler
     );
-    this.subscriptions.push(sub);
+    this.subscriptions.push(userSub);
   }
 
   /**
