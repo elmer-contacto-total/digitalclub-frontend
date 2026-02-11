@@ -608,7 +608,6 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
     { value: 'role', label: 'Rol', dbField: 'role', required: false },
     { value: 'phone_code', label: 'Cód. País', dbField: 'phone_code', required: false },
     { value: 'manager_email', label: 'Vinculador de agente', dbField: 'manager_email', required: false, category: 'linker' },
-    { value: 'agent_name', label: 'Vinculador de agente (FOH)', dbField: 'agent_name', required: false, category: 'linker' },
     { value: 'phone_order', label: 'Orden teléfono', dbField: 'phone_order', required: false },
     { value: 'crm', label: 'Campo CRM', dbField: 'crm_info', required: false },
     { value: 'custom_field', label: 'Campo personalizado', dbField: 'custom_fields', required: false },
