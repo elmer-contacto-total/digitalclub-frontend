@@ -9,6 +9,7 @@ import {
   session
 } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 import { getOrCreateFingerprint, generateEvasionScript, UserFingerprint } from './fingerprint-generator';
 import {
   initializeMediaSecurity,
@@ -77,8 +78,116 @@ const MEDIA_API_URL = process.env.MEDIA_API_URL || 'http://digitalclub.contactot
 // Estado dinámico del layout
 let sidebarCollapsed = false;
 
+// ==================== BACKUP DE MEDIA IDs CAPTURADOS ====================
+// Persiste los whatsappMessageId de medias capturadas para sobrevivir cierres de sesión de WhatsApp
+// (WhatsApp Web borra localStorage al cerrar sesión, perdiendo el tracking del IIFE)
+const CAPTURED_MEDIA_IDS_FILE = path.join(app.getPath('userData'), 'captured-media-ids.json');
+
+interface CapturedMediaEntry {
+  chatName: string;
+  capturedAt: string;
+}
+
+function loadCapturedMediaIds(): Map<string, CapturedMediaEntry> {
+  try {
+    if (fs.existsSync(CAPTURED_MEDIA_IDS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CAPTURED_MEDIA_IDS_FILE, 'utf-8'));
+      const map = new Map<string, CapturedMediaEntry>();
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 días
+      for (const [key, value] of Object.entries(data)) {
+        const entry = value as CapturedMediaEntry;
+        // Podar entradas de más de 30 días
+        if (new Date(entry.capturedAt).getTime() >= cutoff) {
+          map.set(key, entry);
+        }
+      }
+      console.log(`[MWS Deleted] Cargados ${map.size} media IDs capturados de disco`);
+      return map;
+    }
+  } catch (e) {
+    console.error('[MWS Deleted] Error cargando captured media IDs:', e);
+  }
+  return new Map();
+}
+
+function saveCapturedMediaIds(): void {
+  try {
+    const obj: Record<string, CapturedMediaEntry> = {};
+    // Limitar a 500 entradas (las más recientes)
+    const entries = Array.from(capturedMediaIds.entries());
+    const toSave = entries.length > 500 ? entries.slice(-500) : entries;
+    for (const [key, value] of toSave) {
+      obj[key] = value;
+    }
+    fs.writeFileSync(CAPTURED_MEDIA_IDS_FILE, JSON.stringify(obj));
+  } catch (e) {
+    console.error('[MWS Deleted] Error guardando captured media IDs:', e);
+  }
+}
+
+const capturedMediaIds: Map<string, CapturedMediaEntry> = loadCapturedMediaIds();
+
+// ==================== BACKUP DE MENSAJES REVELADOS ====================
+// Persiste los whatsappMessageId de imágenes ya reveladas (overlay "Presionar para mostrar" removido)
+// Evita que el overlay reaparezca tras cierre de sesión de WhatsApp
+const REVEALED_MESSAGES_FILE = path.join(app.getPath('userData'), 'revealed-messages.json');
+
+function loadRevealedMessageIds(): Set<string> {
+  try {
+    if (fs.existsSync(REVEALED_MESSAGES_FILE)) {
+      const data = JSON.parse(fs.readFileSync(REVEALED_MESSAGES_FILE, 'utf-8'));
+      if (Array.isArray(data)) {
+        console.log(`[MWS Overlay] Cargados ${data.length} mensajes revelados de disco`);
+        return new Set(data);
+      }
+    }
+  } catch (e) {
+    console.error('[MWS Overlay] Error cargando revealed messages:', e);
+  }
+  return new Set();
+}
+
+function saveRevealedMessageIds(): void {
+  try {
+    // Limitar a 500 entradas (las más recientes)
+    const arr = Array.from(revealedMessageIds);
+    const toSave = arr.length > 500 ? arr.slice(-500) : arr;
+    fs.writeFileSync(REVEALED_MESSAGES_FILE, JSON.stringify(toSave));
+  } catch (e) {
+    console.error('[MWS Overlay] Error guardando revealed messages:', e);
+  }
+}
+
+const revealedMessageIds: Set<string> = loadRevealedMessageIds();
+
 // Cola de eliminaciones pendientes por reintentar (si el backend falló)
-const pendingDeletions: string[] = [];
+// Persistida en disco para sobrevivir reinicios de la app
+const PENDING_DELETIONS_FILE = path.join(app.getPath('userData'), 'pending-deletions.json');
+
+function loadPendingDeletions(): string[] {
+  try {
+    if (fs.existsSync(PENDING_DELETIONS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(PENDING_DELETIONS_FILE, 'utf-8'));
+      if (Array.isArray(data)) {
+        console.log(`[MWS Deleted] Cargadas ${data.length} eliminaciones pendientes de disco`);
+        return data;
+      }
+    }
+  } catch (e) {
+    console.error('[MWS Deleted] Error cargando eliminaciones pendientes:', e);
+  }
+  return [];
+}
+
+function savePendingDeletions(): void {
+  try {
+    fs.writeFileSync(PENDING_DELETIONS_FILE, JSON.stringify(pendingDeletions));
+  } catch (e) {
+    console.error('[MWS Deleted] Error guardando eliminaciones pendientes:', e);
+  }
+}
+
+const pendingDeletions: string[] = loadPendingDeletions();
 
 // Token JWT para autenticación en API calls de media
 let mediaAuthToken: string | null = null;
@@ -163,18 +272,21 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
 /**
  * Notifica al backend que un mensaje de WhatsApp fue eliminado
  */
-async function sendMediaDeletionToServer(whatsappMessageId: string): Promise<void> {
+async function sendMediaDeletionToServer(whatsappMessageId: string, isDisappearing: boolean = false): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const response = await fetch(`${MEDIA_API_URL}/mark-deleted`, {
         method: 'POST',
         headers: getMediaApiHeaders(),
-        body: JSON.stringify({ whatsappMessageId })
+        body: JSON.stringify({ whatsappMessageId, isDisappearing })
       });
 
       if (response.ok) {
         const result = await response.json();
         console.log('[MWS Deleted] Eliminación notificada:', whatsappMessageId, 'status:', result.status);
+        // Limpiar del backup en disco — ya no necesitamos trackear este mensaje
+        capturedMediaIds.delete(whatsappMessageId);
+        saveCapturedMediaIds();
         return;
       }
       console.error(`[MWS Deleted] Error notificando eliminación (intento ${attempt}/3):`, response.status);
@@ -189,6 +301,7 @@ async function sendMediaDeletionToServer(whatsappMessageId: string): Promise<voi
   console.warn('[MWS Deleted] Todos los reintentos fallaron, agregando a cola pendiente:', whatsappMessageId);
   if (!pendingDeletions.includes(whatsappMessageId)) {
     pendingDeletions.push(whatsappMessageId);
+    savePendingDeletions();
   }
 }
 
@@ -206,6 +319,7 @@ setInterval(async () => {
       });
       if (response.ok) {
         console.log('[MWS Deleted] Reintento exitoso:', id);
+        capturedMediaIds.delete(id);
       } else {
         pendingDeletions.push(id);
       }
@@ -213,6 +327,8 @@ setInterval(async () => {
       pendingDeletions.push(id);
     }
   }
+  savePendingDeletions();
+  saveCapturedMediaIds();
 }, 60000);
 
 /**
@@ -307,6 +423,21 @@ function handleMediaCaptured(data: RawMediaCaptureData): void {
   console.log('[MWS Media]   messageSentAt:', payload.messageSentAt);
   console.log('[MWS Media] ========== SENDING TO SERVER ==========');
   sendMediaToServer(payload);
+
+  // Persistir el whatsappMessageId en disco para sobrevivir cierres de sesión de WhatsApp
+  if (data.whatsappMessageId) {
+    capturedMediaIds.set(data.whatsappMessageId, {
+      chatName: effectiveChatName || '',
+      capturedAt: new Date().toISOString()
+    });
+    saveCapturedMediaIds();
+
+    // También marcar como revelado (para que el overlay no reaparezca)
+    if (!revealedMessageIds.has(data.whatsappMessageId)) {
+      revealedMessageIds.add(data.whatsappMessageId);
+      saveRevealedMessageIds();
+    }
+  }
 }
 
 // Estado para animación suave
@@ -760,10 +891,10 @@ function createWhatsAppView(): void {
       });
     },
     onMediaDeleted: (data) => {
-      console.log('[MWS Deleted] Mensaje eliminado detectado:', data.whatsappMessageId);
-      sendMediaDeletionToServer(data.whatsappMessageId);
+      console.log('[MWS Deleted] Mensaje eliminado detectado:', data.whatsappMessageId, data.isDisappearing ? '(disappearing)' : '');
+      sendMediaDeletionToServer(data.whatsappMessageId, data.isDisappearing || false);
     }
-  });
+  }, capturedMediaIds, revealedMessageIds);
 
   // User-Agent dinámico basado en fingerprint único
   whatsappView.webContents.setUserAgent(userFingerprint.userAgent);
