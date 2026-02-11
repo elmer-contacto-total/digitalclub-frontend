@@ -8,7 +8,7 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
-import { ImportService, MappingColumn, MappingData } from '../../../../core/services/import.service';
+import { ImportService, MappingColumn, MappingData, MappingTemplate } from '../../../../core/services/import.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
@@ -48,6 +48,16 @@ interface FieldOption {
           <span>{{ error() }}</span>
         </div>
       } @else {
+        <!-- Template match banner -->
+        @if (matchedTemplate() && !templateDismissed()) {
+          <div class="template-banner">
+            <i class="ph ph-lightning"></i>
+            <span>Se encontró el template <strong>{{ matchedTemplate()!.name }}</strong></span>
+            <button class="btn-sm btn-accent" (click)="applyTemplate()">Usar</button>
+            <button class="btn-sm btn-ghost-sm" (click)="dismissTemplate()">Ignorar</button>
+          </div>
+        }
+
         <!-- Info banner -->
         <div class="info-banner">
           <i class="ph ph-info"></i>
@@ -121,6 +131,13 @@ interface FieldOption {
         <div class="form-actions">
           <a routerLink="/app/imports" class="btn-ghost">Cancelar</a>
           <button type="button"
+                  class="btn-outline"
+                  [disabled]="!allRequiredMapped()"
+                  (click)="showSaveTemplate()">
+            <i class="ph ph-floppy-disk"></i>
+            Guardar como template
+          </button>
+          <button type="button"
                   class="btn-primary"
                   [disabled]="!allRequiredMapped() || isConfirming()"
                   (click)="onConfirm()">
@@ -132,6 +149,34 @@ interface FieldOption {
               Confirmar y validar
             }
           </button>
+        </div>
+      }
+
+      <!-- Save Template Modal -->
+      @if (showSaveModal()) {
+        <div class="modal-overlay" (click)="closeSaveModal()">
+          <div class="modal-content" (click)="$event.stopPropagation()">
+            <h3>Guardar template de mapeo</h3>
+            <p class="modal-desc">El template se aplicará automáticamente cuando suba un CSV con las mismas columnas.</p>
+            <input type="text"
+                   class="modal-input"
+                   placeholder="Nombre del template"
+                   [ngModel]="templateName()"
+                   (ngModelChange)="templateName.set($event)"
+                   (keydown.enter)="onSaveTemplate()" />
+            <div class="modal-actions">
+              <button class="btn-ghost" (click)="closeSaveModal()">Cancelar</button>
+              <button class="btn-primary"
+                      [disabled]="!templateName() || isSavingTemplate()"
+                      (click)="onSaveTemplate()">
+                @if (isSavingTemplate()) {
+                  <span class="spinner"></span>
+                } @else {
+                  Guardar
+                }
+              </button>
+            </div>
+          </div>
         </div>
       }
 
@@ -411,6 +456,105 @@ interface FieldOption {
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Template Banner */
+    .template-banner {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      background: var(--success-subtle);
+      border: 1px solid var(--success-default);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--space-4);
+      font-size: var(--text-sm);
+      color: var(--fg-default);
+      > i { font-size: 18px; color: var(--success-default); }
+    }
+
+    .btn-sm {
+      padding: 4px 12px;
+      font-size: var(--text-xs);
+      font-weight: var(--font-medium);
+      border-radius: var(--radius-md);
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-accent {
+      background: var(--accent-default);
+      color: #fff;
+      &:hover { background: var(--accent-emphasis); }
+    }
+
+    .btn-ghost-sm {
+      background: transparent;
+      color: var(--fg-muted);
+      &:hover { color: var(--fg-default); background: var(--bg-subtle); }
+    }
+
+    .btn-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      height: var(--btn-height);
+      background: transparent;
+      color: var(--fg-default);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      font-size: var(--text-base);
+      cursor: pointer;
+      &:hover:not(:disabled) { border-color: var(--accent-default); color: var(--accent-default); }
+      &:disabled { opacity: 0.5; cursor: not-allowed; }
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      width: 400px;
+      max-width: 90vw;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+
+      h3 { margin: 0 0 var(--space-2); font-size: var(--text-lg); color: var(--fg-default); }
+    }
+
+    .modal-desc {
+      margin: 0 0 var(--space-4);
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+
+    .modal-input {
+      width: 100%;
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      color: var(--fg-default);
+      background: var(--card-bg);
+      margin-bottom: var(--space-4);
+      box-sizing: border-box;
+      &:focus { outline: none; border-color: var(--accent-default); box-shadow: 0 0 0 2px var(--accent-subtle); }
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-3);
+    }
+
     @media (max-width: 768px) {
       .mapping-page { padding: var(--space-4); }
       .mapping-row { grid-template-columns: 1fr; gap: var(--space-2); }
@@ -437,6 +581,13 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
   // Mapping: column index -> field value
   mappings = signal<Record<number, string>>({});
 
+  // Template state
+  matchedTemplate = signal<MappingTemplate | null>(null);
+  templateDismissed = signal(false);
+  showSaveModal = signal(false);
+  templateName = signal('');
+  isSavingTemplate = signal(false);
+
   // Available field options for dropdowns
   availableFields: FieldOption[] = [
     { value: 'phone', label: 'Teléfono', dbField: 'phone', required: true },
@@ -452,6 +603,7 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
     { value: 'agent_name', label: 'Agente (FOH)', dbField: 'agent_name', required: false },
     { value: 'phone_order', label: 'Orden teléfono', dbField: 'phone_order', required: false },
     { value: 'crm', label: 'Campo CRM', dbField: 'crm_info', required: false },
+    { value: 'custom_field', label: 'Campo personalizado', dbField: 'custom_fields', required: false },
     { value: 'ignore', label: 'Ignorar', dbField: null, required: false },
   ];
 
@@ -511,6 +663,19 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
         }
         this.mappings.set(initial);
         this.loading.set(false);
+
+        // Search for matching template
+        const headers = data.columns.map(c => c.header);
+        this.importService.findMatchingTemplate(headers, this.isFoh()).pipe(
+          takeUntil(this.destroy$)
+        ).subscribe({
+          next: (res) => {
+            if (res.found && res.template) {
+              this.matchedTemplate.set(res.template);
+            }
+          },
+          error: () => { /* ignore template match errors */ }
+        });
       },
       error: (err) => {
         console.error('Error loading mapping data:', err);
@@ -531,8 +696,8 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
   }
 
   isFieldUsed(fieldValue: string, currentIndex: number): boolean {
-    // 'ignore' and 'crm' can be used multiple times
-    if (fieldValue === 'ignore' || fieldValue === 'crm') return false;
+    // 'ignore', 'crm', and 'custom_field' can be used multiple times
+    if (fieldValue === 'ignore' || fieldValue === 'crm' || fieldValue === 'custom_field') return false;
     const m = this.mappings();
     return Object.entries(m).some(
       ([idx, val]) => val === fieldValue && Number(idx) !== currentIndex
@@ -555,10 +720,17 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
     this.isConfirming.set(true);
 
     // Build columnMapping as Record<string, string> (stringified index keys)
+    // For custom_field columns, send "custom_field:HEADER" so backend knows the key
     const m = this.mappings();
+    const cols = this.columns();
     const columnMapping: Record<string, string> = {};
     for (const [idx, val] of Object.entries(m)) {
-      columnMapping[idx.toString()] = val;
+      if (val === 'custom_field') {
+        const col = cols.find(c => c.index === Number(idx));
+        columnMapping[idx.toString()] = col ? `custom_field:${col.header}` : val;
+      } else {
+        columnMapping[idx.toString()] = val;
+      }
     }
 
     this.importService.confirmMapping(this.importId(), columnMapping, this.isFoh()).pipe(
@@ -573,6 +745,77 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
         console.error('Error confirming mapping:', err);
         this.isConfirming.set(false);
         this.toast.error(err.error?.message || 'Error al confirmar el mapeo.');
+      }
+    });
+  }
+
+  // ========== Template Methods ==========
+
+  applyTemplate(): void {
+    const template = this.matchedTemplate();
+    if (!template) return;
+
+    const cols = this.columns();
+    const newMappings: Record<number, string> = {};
+
+    for (const col of cols) {
+      const field = template.columnMapping[col.header];
+      if (field) {
+        // For custom_field:X format, display as 'custom_field' in the dropdown
+        newMappings[col.index] = field.startsWith('custom_field:') ? 'custom_field' : field;
+      }
+    }
+
+    this.mappings.set(newMappings);
+    this.templateDismissed.set(true);
+    this.toast.success(`Template "${template.name}" aplicado.`);
+  }
+
+  dismissTemplate(): void {
+    this.templateDismissed.set(true);
+  }
+
+  showSaveTemplate(): void {
+    this.showSaveModal.set(true);
+    this.templateName.set('');
+  }
+
+  closeSaveModal(): void {
+    this.showSaveModal.set(false);
+  }
+
+  onSaveTemplate(): void {
+    const name = this.templateName().trim();
+    if (!name) return;
+
+    this.isSavingTemplate.set(true);
+
+    // Build the mapping with header names as keys (not column indices)
+    // For custom_field columns, save as "custom_field:HEADER"
+    const m = this.mappings();
+    const cols = this.columns();
+    const columnMapping: Record<string, string> = {};
+    const headers: string[] = [];
+
+    for (const col of cols) {
+      headers.push(col.header);
+      const field = m[col.index];
+      if (field) {
+        columnMapping[col.header] = field === 'custom_field' ? `custom_field:${col.header}` : field;
+      }
+    }
+
+    this.importService.saveMappingTemplate(name, this.isFoh(), columnMapping, headers).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: () => {
+        this.isSavingTemplate.set(false);
+        this.showSaveModal.set(false);
+        this.toast.success(`Template "${name}" guardado.`);
+      },
+      error: (err) => {
+        this.isSavingTemplate.set(false);
+        this.toast.error(err.error?.message || 'Error al guardar el template.');
       }
     });
   }

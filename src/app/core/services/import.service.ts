@@ -64,6 +64,20 @@ export interface MappingData {
   totalRows: number;
 }
 
+export interface MappingTemplate {
+  id: number;
+  name: string;
+  isFoh: boolean;
+  columnMapping: Record<string, string>;
+  headers: string[];
+  createdAt: string;
+}
+
+export interface MatchTemplateResponse {
+  found: boolean;
+  template?: MappingTemplate;
+}
+
 export interface CreateImportResponse {
   result: string;
   import: Import;
@@ -233,6 +247,42 @@ export class ImportService {
    */
   getErrors(id: number): Observable<{ id: number; errors_text: string }> {
     return this.http.get<{ id: number; errors_text: string }>(`${this.baseUrl}/${id}/errors`);
+  }
+
+  // ========== Mapping Templates ==========
+
+  /**
+   * List mapping templates for the current client
+   */
+  getMappingTemplates(): Observable<MappingTemplate[]> {
+    return this.http.get<MappingTemplate[]>(`${this.baseUrl}/mapping_templates`);
+  }
+
+  /**
+   * Find a matching template for given CSV headers
+   */
+  findMatchingTemplate(headers: string[], isFoh: boolean = false): Observable<MatchTemplateResponse> {
+    return this.http.post<MatchTemplateResponse>(
+      `${this.baseUrl}/mapping_templates/match`,
+      { headers, isFoh }
+    );
+  }
+
+  /**
+   * Save a new mapping template
+   */
+  saveMappingTemplate(name: string, isFoh: boolean, columnMapping: Record<string, string>, headers: string[]): Observable<{ result: string; template: MappingTemplate }> {
+    return this.http.post<{ result: string; template: MappingTemplate }>(
+      `${this.baseUrl}/mapping_templates`,
+      { name, isFoh, columnMapping, headers }
+    );
+  }
+
+  /**
+   * Delete a mapping template
+   */
+  deleteMappingTemplate(templateId: number): Observable<{ result: string; message: string }> {
+    return this.http.delete<{ result: string; message: string }>(`${this.baseUrl}/mapping_templates/${templateId}`);
   }
 
   /**
