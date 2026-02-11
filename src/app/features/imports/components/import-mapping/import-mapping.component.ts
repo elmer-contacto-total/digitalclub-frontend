@@ -17,6 +17,7 @@ interface FieldOption {
   label: string;
   dbField: string | null; // campo real de destino en BD (null para 'ignore')
   required: boolean;
+  category?: 'linker' | 'system'; // campos especiales con estilo diferenciado
 }
 
 @Component({
@@ -97,12 +98,13 @@ interface FieldOption {
                             (ngModelChange)="setMapping(col.index, $event)"
                             class="field-select"
                             [class.field-required]="isRequiredField(mappings()[col.index])"
-                            [class.field-ignore]="mappings()[col.index] === 'ignore'">
+                            [class.field-ignore]="mappings()[col.index] === 'ignore'"
+                            [class.field-linker]="isLinkerField(mappings()[col.index])">
                       <option value="">— Sin asignar —</option>
                       @for (opt of availableFields; track opt.value) {
                         <option [value]="opt.value"
                                 [disabled]="isFieldUsed(opt.value, col.index)">
-                          {{ opt.label }}{{ opt.dbField ? ' [' + opt.dbField + ']' : '' }}{{ opt.required ? ' *' : '' }}{{ isFieldUsed(opt.value, col.index) ? ' (ya asignado)' : '' }}
+                          {{ opt.category === 'linker' ? '\u{1F517} ' : '' }}{{ opt.label }}{{ opt.dbField ? ' [' + opt.dbField + ']' : '' }}{{ opt.required ? ' *' : '' }}{{ isFieldUsed(opt.value, col.index) ? ' (ya asignado)' : '' }}
                         </option>
                       }
                     </select>
@@ -370,6 +372,12 @@ interface FieldOption {
         color: var(--fg-subtle);
         font-style: italic;
       }
+
+      &.field-linker {
+        border-color: #8b5cf6;
+        background: rgba(139, 92, 246, 0.08);
+        color: #7c3aed;
+      }
     }
 
     /* Required Status */
@@ -599,8 +607,8 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
     { value: 'codigo', label: 'Código', dbField: 'codigo', required: false },
     { value: 'role', label: 'Rol', dbField: 'role', required: false },
     { value: 'phone_code', label: 'Cód. País', dbField: 'phone_code', required: false },
-    { value: 'manager_email', label: 'Ejecutivo', dbField: 'manager_email', required: false },
-    { value: 'agent_name', label: 'Agente (FOH)', dbField: 'agent_name', required: false },
+    { value: 'manager_email', label: 'Vinculador de agente', dbField: 'manager_email', required: false, category: 'linker' },
+    { value: 'agent_name', label: 'Vinculador de agente (FOH)', dbField: 'agent_name', required: false, category: 'linker' },
     { value: 'phone_order', label: 'Orden teléfono', dbField: 'phone_order', required: false },
     { value: 'crm', label: 'Campo CRM', dbField: 'crm_info', required: false },
     { value: 'custom_field', label: 'Campo personalizado', dbField: 'custom_fields', required: false },
@@ -707,6 +715,12 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
   isRequiredField(fieldValue: string | undefined): boolean {
     if (!fieldValue) return false;
     return this.requiredFieldValues.includes(fieldValue);
+  }
+
+  isLinkerField(fieldValue: string | undefined): boolean {
+    if (!fieldValue) return false;
+    const opt = this.availableFields.find(f => f.value === fieldValue);
+    return opt?.category === 'linker';
   }
 
   isRequiredMissing(colIndex: number): boolean {
