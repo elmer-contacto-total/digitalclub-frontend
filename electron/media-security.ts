@@ -2403,15 +2403,27 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       if (!messageEl) {
         // Message not in DOM. Could be: deleted, scrolled away, or chat switched.
-        // Use neighbor check: if neighbor is still in DOM, message was likely deleted.
-        // If neighbor is also gone → scroll displacement → do NOT flag.
         if (lastSeen && capturedChat && currentChat && capturedChat === currentChat) {
           var neighborId = messageNeighbor.get(messageId);
-          var neighborInDOM = neighborId && document.querySelector('[data-id="' + neighborId + '"]');
           var scansSinceSeen = deletionScanCount - lastSeen;
+          var isDeleted = false;
 
-          // Only flag if neighbor stayed in DOM (message vanished but surroundings intact)
-          if (neighborInDOM && scansSinceSeen <= 5) {
+          if (!neighborId) {
+            // No neighbor recorded (message was at edge of chat list).
+            // Edge messages rarely scroll out, so absence = likely deletion.
+            if (scansSinceSeen >= 2 && scansSinceSeen <= 15) {
+              isDeleted = true;
+            }
+          } else {
+            var neighborInDOM = !!document.querySelector('[data-id="' + neighborId + '"]');
+            if (neighborInDOM && scansSinceSeen <= 15) {
+              // Neighbor stayed in DOM, our message gone → deleted
+              isDeleted = true;
+            }
+            // Neighbor also gone → likely scroll → do NOT flag
+          }
+
+          if (isDeleted) {
             detectedDeletions.add(messageId);
             window.__hablapeDeletedQueue.push({
               whatsappMessageId: messageId,
