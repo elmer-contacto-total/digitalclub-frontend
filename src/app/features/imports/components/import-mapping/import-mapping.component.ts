@@ -15,6 +15,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 interface FieldOption {
   value: string;
   label: string;
+  dbField: string | null; // campo real de destino en BD (null para 'ignore')
   required: boolean;
 }
 
@@ -91,7 +92,7 @@ interface FieldOption {
                       @for (opt of availableFields; track opt.value) {
                         <option [value]="opt.value"
                                 [disabled]="isFieldUsed(opt.value, col.index)">
-                          {{ opt.label }} [{{ opt.value }}]{{ opt.required ? ' *' : '' }}{{ isFieldUsed(opt.value, col.index) ? ' (ya asignado)' : '' }}
+                          {{ opt.label }}{{ opt.dbField ? ' [' + opt.dbField + ']' : '' }}{{ opt.required ? ' *' : '' }}{{ isFieldUsed(opt.value, col.index) ? ' (ya asignado)' : '' }}
                         </option>
                       }
                     </select>
@@ -438,20 +439,20 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
 
   // Available field options for dropdowns
   availableFields: FieldOption[] = [
-    { value: 'phone', label: 'Teléfono', required: true },
-    { value: 'first_name', label: 'Nombre', required: true },
-    { value: 'last_name', label: 'Apellido', required: true },
-    { value: 'last_name_2', label: 'Apellido materno', required: false },
-    { value: 'first_name_2', label: 'Segundo nombre', required: false },
-    { value: 'email', label: 'Email', required: false },
-    { value: 'codigo', label: 'Código', required: false },
-    { value: 'role', label: 'Rol', required: false },
-    { value: 'phone_code', label: 'Cód. País', required: false },
-    { value: 'manager_email', label: 'Ejecutivo', required: false },
-    { value: 'agent_name', label: 'Agente (FOH)', required: false },
-    { value: 'phone_order', label: 'Orden teléfono', required: false },
-    { value: 'crm', label: 'Campo CRM', required: false },
-    { value: 'ignore', label: 'Ignorar', required: false },
+    { value: 'phone', label: 'Teléfono', dbField: 'phone', required: true },
+    { value: 'first_name', label: 'Nombre', dbField: 'first_name', required: true },
+    { value: 'last_name', label: 'Apellido', dbField: 'last_name', required: true },
+    { value: 'last_name_2', label: 'Apellido materno', dbField: 'last_name', required: false },
+    { value: 'first_name_2', label: 'Segundo nombre', dbField: 'first_name', required: false },
+    { value: 'email', label: 'Email', dbField: 'email', required: false },
+    { value: 'codigo', label: 'Código', dbField: 'codigo', required: false },
+    { value: 'role', label: 'Rol', dbField: 'role', required: false },
+    { value: 'phone_code', label: 'Cód. País', dbField: 'phone_code', required: false },
+    { value: 'manager_email', label: 'Ejecutivo', dbField: 'manager_email', required: false },
+    { value: 'agent_name', label: 'Agente (FOH)', dbField: 'agent_name', required: false },
+    { value: 'phone_order', label: 'Orden teléfono', dbField: 'phone_order', required: false },
+    { value: 'crm', label: 'Campo CRM', dbField: 'crm_info', required: false },
+    { value: 'ignore', label: 'Ignorar', dbField: null, required: false },
   ];
 
   // Required field names
