@@ -51,6 +51,7 @@ export interface ValidatedUsersResponse {
   validCount: number;
   invalidCount: number;
   status: ImportStatus;
+  tempUsers: TempImportUser[];
 }
 
 export interface TempImportUser {

@@ -403,6 +403,20 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
           this.isValidating.set(true);
           this.pollStatus();
         }
+
+        // Load temp users for preview when validation is complete
+        if (data.status === 'status_valid' || data.status === 'status_error') {
+          this.importService.getValidatedUsers(this.importId).pipe(
+            takeUntil(this.destroy$)
+          ).subscribe({
+            next: (result) => {
+              this.tempUsers.set(result.tempUsers || []);
+            },
+            error: (err) => {
+              console.error('Error loading temp users:', err);
+            }
+          });
+        }
       },
       error: (err) => {
         console.error('Error loading import:', err);
