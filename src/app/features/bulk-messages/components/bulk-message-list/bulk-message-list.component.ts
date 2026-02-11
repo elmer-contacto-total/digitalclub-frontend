@@ -5,7 +5,7 @@
  */
 import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { BulkMessageService, BulkMessage } from '../../../../core/services/bulk-message.service';
 import { AuthService } from '../../../../core/services/auth.service';
@@ -404,6 +404,7 @@ export class BulkMessageListComponent implements OnInit, OnDestroy {
   private bulkMessageService = inject(BulkMessageService);
   private authService = inject(AuthService);
   private toast = inject(ToastService);
+  private router = inject(Router);
   private destroy$ = new Subject<void>();
 
   // Data
@@ -467,8 +468,13 @@ export class BulkMessageListComponent implements OnInit, OnDestroy {
   }
 
   sendMessage(message: BulkMessage): void {
-    // TODO: Implement send confirmation and action
-    this.toast.info('Funcionalidad de envío en desarrollo');
+    if (!confirm('¿Desea crear un envío masivo con este mensaje?\n\nSe le redirigirá a la página de envío masivo para subir los destinatarios.')) {
+      return;
+    }
+    // Navigate to bulk send creation with the message text pre-filled
+    this.router.navigate(['/app/bulk_sends/new'], {
+      queryParams: { message: message.message, bulkMessageId: message.id }
+    });
   }
 
   confirmDelete(message: BulkMessage): void {

@@ -998,6 +998,9 @@ const MEDIA_CAPTURE_SCRIPT = `
 
     // Si encontramos un chat y es diferente al último clickeado
     if (chatElement) {
+      // Skip blocker during bulk send
+      if (window.__hablapeBulkSendActive) return;
+
       // Identificar el chat por nombre (span[title]) o data-id o posición
       const chatId = chatElement.getAttribute('data-id') ||
                      (chatElement.querySelector('span[title]')?.getAttribute('title')) ||

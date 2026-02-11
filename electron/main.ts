@@ -30,7 +30,10 @@ const APP_VERSION = app.getVersion();
 let pendingUpdateInfo: any = null;
 
 // Bulk sender for mass messaging
-const bulkSender = new BulkSender('http://localhost:8080');
+const BACKEND_BASE_URL = process.env.BACKEND_URL || 'http://digitalclub.contactototal.com.pe';
+const bulkSender = new BulkSender(BACKEND_BASE_URL);
+const BULK_SEND_STATE_FILE = path.join(app.getPath('userData'), 'bulk-send-state.json');
+bulkSender.setStateFile(BULK_SEND_STATE_FILE);
 
 // Fingerprint único para esta instalación
 let userFingerprint: UserFingerprint;
@@ -1983,7 +1986,8 @@ function setupIPC(): void {
 
   ipcMain.on('set-auth-token', (_, token: string) => {
     mediaAuthToken = token;
-    console.log('[MWS] Auth token actualizado para API de media');
+    bulkSender.setAuthToken(token);
+    console.log('[MWS] Auth token actualizado para API de media y bulk sender');
   });
 
   ipcMain.on('clear-logged-in-user', () => {
@@ -2354,8 +2358,8 @@ function setupIPC(): void {
     try {
       bulkSender.setWhatsAppView(whatsappView);
       bulkSender.setAuthToken(authToken);
-      bulkSender.start(bulkSendId);
-      return { success: true };
+      const result = await bulkSender.start(bulkSendId);
+      return result;
     } catch (err: any) {
       return { success: false, error: err.message };
     }
@@ -2382,6 +2386,15 @@ function setupIPC(): void {
   // Get bulk send status
   ipcMain.handle('bulk-send:status', async () => {
     return bulkSender.getStatus();
+  });
+
+  // Check for pending bulk send from previous session
+  ipcMain.handle('bulk-send:check-pending', async () => {
+    const state = bulkSender.getPersistedState();
+    if (state && (state.state === 'running' || state.state === 'paused')) {
+      return state;
+    }
+    return null;
   });
 
   // Restablecimiento completo - limpia TODOS los datos y reinicia

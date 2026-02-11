@@ -124,6 +124,12 @@ function handle401Error(
           const newToken = localStorage.getItem(AUTH_TOKEN_KEY);
           refreshTokenSubject.next(newToken);
           console.log('[Auth] Token refresh successful - retrying request');
+
+          // Notify Electron of refreshed token
+          if (newToken && (window as any).electronAPI?.setAuthToken) {
+            (window as any).electronAPI.setAuthToken(newToken);
+          }
+
           return next(addTokenToRequest(req, newToken));
         } else {
           // Refresh failed - logout and redirect

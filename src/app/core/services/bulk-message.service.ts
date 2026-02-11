@@ -88,4 +88,15 @@ export class BulkMessageService {
   deleteBulkMessage(id: number): Observable<{ result: string }> {
     return this.http.delete<{ result: string }>(`${this.baseUrl}/${id}`);
   }
+
+  /**
+   * Create a BulkSend from a BulkMessage template + recipients
+   * Recipients are provided as an array of {phone, name?}
+   */
+  createBulkSendFromMessage(bulkMessageId: number, recipients: { phone: string; name?: string }[], assignedAgentId?: number): Observable<{ result: string; bulk_send: any }> {
+    return this.http.post<{ result: string; bulk_send: any }>(`${environment.apiUrl}/app/bulk_sends/from-bulk-message/${bulkMessageId}`, {
+      recipients,
+      assignedAgentId: assignedAgentId || null
+    });
+  }
 }

@@ -5,6 +5,8 @@
  */
 
 import { BrowserView } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface BulkSendRules {
   min_delay_seconds: number;
@@ -61,9 +63,46 @@ export class BulkSender {
   private lastError: string | null = null;
   private isPaused = false;
   private isCancelled = false;
+  private stateFile: string | null = null;
 
   constructor(apiBaseUrl: string) {
     this.apiBaseUrl = apiBaseUrl;
+  }
+
+  setStateFile(filePath: string): void {
+    this.stateFile = filePath;
+  }
+
+  getPersistedState(): { bulkSendId: number; state: string; sentCount: number; failedCount: number; totalRecipients: number } | null {
+    if (!this.stateFile) return null;
+    try {
+      if (fs.existsSync(this.stateFile)) {
+        return JSON.parse(fs.readFileSync(this.stateFile, 'utf-8'));
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  private persistState(): void {
+    if (!this.stateFile || !this.bulkSendId) return;
+    try {
+      fs.writeFileSync(this.stateFile, JSON.stringify({
+        bulkSendId: this.bulkSendId,
+        state: this._state,
+        sentCount: this.sentCount,
+        failedCount: this.failedCount,
+        totalRecipients: this.totalRecipients
+      }));
+    } catch { /* ignore */ }
+  }
+
+  private clearPersistedState(): void {
+    if (!this.stateFile) return;
+    try {
+      if (fs.existsSync(this.stateFile)) {
+        fs.unlinkSync(this.stateFile);
+      }
+    } catch { /* ignore */ }
   }
 
   setOverlayCallback(cb: OverlayUpdateCallback): void {
@@ -80,6 +119,7 @@ export class BulkSender {
         currentPhone: this.currentPhone
       });
     }
+    this.persistState();
     this.updateOverlay();
   }
 
@@ -103,10 +143,10 @@ export class BulkSender {
     };
   }
 
-  async start(bulkSendId: number): Promise<void> {
+  async start(bulkSendId: number): Promise<{ success: boolean; error?: string; activeBulkSendId?: number | null }> {
     if (this._state === 'running') {
       console.log('[BulkSender] Already running bulk send', this.bulkSendId);
-      return;
+      return { success: false, error: 'already_running', activeBulkSendId: this.bulkSendId };
     }
 
     this.bulkSendId = bulkSendId;
@@ -122,6 +162,9 @@ export class BulkSender {
 
     console.log(`[BulkSender] Starting bulk send ${bulkSendId}`);
 
+    // Disable chat blocker during bulk send
+    await this.setBulkSendActiveFlag(true);
+
     // Show overlay
     await this.showOverlay();
 
@@ -133,6 +176,11 @@ export class BulkSender {
 
     // Hide overlay when done
     await this.hideOverlay();
+
+    // Re-enable chat blocker
+    await this.setBulkSendActiveFlag(false);
+
+    return { success: true };
   }
 
   pause(): void {
@@ -160,7 +208,9 @@ export class BulkSender {
     this._state = 'cancelled';
     this.notifyBackend('cancel');
     this.emitOverlayUpdate();
+    this.clearPersistedState();
     this.hideOverlay();
+    this.setBulkSendActiveFlag(false);
   }
 
   private async processLoop(): Promise<void> {
@@ -182,6 +232,17 @@ export class BulkSender {
         return;
       }
 
+      // Check WhatsApp session
+      const sessionOk = await this.checkWhatsAppSession();
+      if (!sessionOk) {
+        console.warn('[BulkSender] WhatsApp disconnected - auto-pausing');
+        this.isPaused = true;
+        this._state = 'paused';
+        this.lastError = 'WhatsApp desconectado - escanee el código QR y reanude';
+        this.emitOverlayUpdate();
+        return;
+      }
+
       // Check send hours
       if (!this.isWithinSendHours()) {
         console.log('[BulkSender] Outside send hours, waiting 60s...');
@@ -194,6 +255,7 @@ export class BulkSender {
       if (!next || !next.has_next) {
         this._state = 'completed';
         this.emitOverlayUpdate();
+        this.clearPersistedState();
         console.log(`[BulkSender] Bulk send ${this.bulkSendId} completed: ${this.sentCount} sent, ${this.failedCount} failed`);
         return;
       }
@@ -299,9 +361,12 @@ export class BulkSender {
         (async function() {
           try {
             // Click search box
-            const searchBox = document.querySelector('[data-testid="chat-list-search"]') ||
-                              document.querySelector('[data-icon="search"]')?.closest('button') ||
-                              document.querySelector('#side [contenteditable="true"]');
+            let searchBox = document.querySelector('[data-testid="chat-list-search"]');
+            if (!searchBox) {
+              console.warn('[BulkSender] Primary search selector failed, trying fallback');
+              searchBox = document.querySelector('[data-icon="search"]')?.closest('button') ||
+                          document.querySelector('#side [contenteditable="true"]');
+            }
 
             if (!searchBox) {
               return { success: false, error: 'search_not_found' };
@@ -314,9 +379,12 @@ export class BulkSender {
             await new Promise(r => setTimeout(r, 300));
 
             // Find the actual text input
-            const searchInput = document.querySelector('[data-testid="chat-list-search-input"]') ||
-                                document.querySelector('#side div[contenteditable="true"]') ||
-                                document.querySelector('[data-testid="search-input"]');
+            let searchInput = document.querySelector('[data-testid="chat-list-search-input"]');
+            if (!searchInput) {
+              console.warn('[BulkSender] Primary search-input selector failed, trying fallback');
+              searchInput = document.querySelector('#side div[contenteditable="true"]') ||
+                            document.querySelector('[data-testid="search-input"]');
+            }
 
             if (!searchInput) {
               return { success: false, error: 'search_input_not_found' };
@@ -333,9 +401,12 @@ export class BulkSender {
             await new Promise(r => setTimeout(r, 1500));
 
             // Click first result
-            const firstResult = document.querySelector('[data-testid="cell-frame-container"]') ||
-                                document.querySelector('#pane-side [role="row"]') ||
-                                document.querySelector('#pane-side [data-id]');
+            let firstResult = document.querySelector('[data-testid="cell-frame-container"]');
+            if (!firstResult) {
+              console.warn('[BulkSender] Primary cell-frame selector failed, trying fallback');
+              firstResult = document.querySelector('#pane-side [role="row"]') ||
+                            document.querySelector('#pane-side [data-id]');
+            }
 
             if (!firstResult) {
               return { success: false, error: 'no_search_result' };
@@ -377,9 +448,12 @@ export class BulkSender {
         (async function() {
           try {
             // Find compose box
-            const input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
-                          document.querySelector('div[contenteditable="true"][data-tab="10"]') ||
-                          document.querySelector('footer div[contenteditable="true"]');
+            let input = document.querySelector('[data-testid="conversation-compose-box-input"]');
+            if (!input) {
+              console.warn('[BulkSender] Primary compose-box selector failed, trying fallback');
+              input = document.querySelector('div[contenteditable="true"][data-tab="10"]') ||
+                      document.querySelector('footer div[contenteditable="true"]');
+            }
 
             if (!input) {
               return { success: false, error: 'input_not_found' };
@@ -395,9 +469,12 @@ export class BulkSender {
             await new Promise(r => setTimeout(r, ${500 + Math.random() * 1000}));
 
             // Click send button
-            const sendBtn = document.querySelector('[data-testid="send"]') ||
-                            document.querySelector('button[aria-label="Send"]') ||
-                            document.querySelector('span[data-icon="send"]')?.closest('button');
+            let sendBtn = document.querySelector('[data-testid="send"]');
+            if (!sendBtn) {
+              console.warn('[BulkSender] Primary send selector failed, trying fallback');
+              sendBtn = document.querySelector('button[aria-label="Send"]') ||
+                        document.querySelector('span[data-icon="send"]')?.closest('button');
+            }
 
             if (!sendBtn) {
               // Fallback: press Enter key
@@ -426,6 +503,20 @@ export class BulkSender {
 
   // --- Media Sending ---
 
+  private getMimeType(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+      '.gif': 'image/gif', '.webp': 'image/webp', '.mp4': 'video/mp4',
+      '.avi': 'video/x-msvideo', '.mov': 'video/quicktime',
+      '.pdf': 'application/pdf', '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.xls': 'application/vnd.ms-excel',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
+  }
+
   private async sendMediaWithCaption(
     filePath: string,
     caption: string,
@@ -436,30 +527,52 @@ export class BulkSender {
     }
 
     try {
-      // Use session to intercept file dialog and provide our file
-      const ses = this.whatsappView.webContents.session;
+      // Read file from disk in main process
+      if (!fs.existsSync(filePath)) {
+        return { success: false, error: `File not found: ${filePath}` };
+      }
+      const fileBuffer = fs.readFileSync(filePath);
+      const base64Data = fileBuffer.toString('base64');
+      const mimeType = this.getMimeType(filePath);
+      const fileName = path.basename(filePath);
 
-      // Set up file dialog intercept
-      const { dialog } = require('electron');
+      // Determine if this is image/video or document
+      const isMedia = mediaType === 'image' || mediaType === 'video';
 
+      // Step 1: Temporarily unhide the attach button, click it, click the menu option,
+      //         then inject the file via DataTransfer into the <input type="file">
       const result = await this.whatsappView.webContents.executeJavaScript(`
         (async function() {
           try {
-            // Click attach button
-            const attachBtn = document.querySelector('[data-testid="attach-menu-plus"]') ||
-                              document.querySelector('span[data-icon="attach-menu-plus"]')?.closest('button') ||
-                              document.querySelector('[data-testid="clip"]')?.closest('button');
+            // --- Temporarily disable CSS that hides attach button ---
+            var securityStyles = document.querySelectorAll('style');
+            var hiddenStyles = [];
+            securityStyles.forEach(function(s) {
+              if (s.textContent && s.textContent.indexOf('data-testid') !== -1 && s.textContent.indexOf('display: none') !== -1) {
+                hiddenStyles.push({ el: s, text: s.textContent });
+                s.textContent = s.textContent.replace(/\\[data-testid="clip"\\][^}]*display:\\s*none\\s*!important[^}]*/g, '');
+              }
+            });
+
+            await new Promise(function(r) { setTimeout(r, 100); });
+
+            // --- Click attach button ---
+            var attachBtn = document.querySelector('[data-testid="attach-menu-plus"]') ||
+                            document.querySelector('span[data-icon="attach-menu-plus"]')?.closest('button') ||
+                            document.querySelector('[data-testid="clip"]')?.closest('button');
 
             if (!attachBtn) {
+              // Restore styles before returning
+              hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
               return { success: false, error: 'attach_button_not_found' };
             }
 
             attachBtn.click();
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(function(r) { setTimeout(r, 600); });
 
-            // Click correct option based on type
-            let menuItem;
-            if ('${mediaType}' === 'image' || '${mediaType}' === 'video') {
+            // --- Click correct menu option ---
+            var menuItem;
+            if (${JSON.stringify(isMedia)}) {
               menuItem = document.querySelector('[data-testid="attach-image"]') ||
                          document.querySelector('li[data-testid="mi-attach-media"]') ||
                          document.querySelector('[aria-label*="photo"]') ||
@@ -470,68 +583,118 @@ export class BulkSender {
                          document.querySelector('[aria-label*="Document"]');
             }
 
-            if (menuItem) {
-              menuItem.click();
+            if (!menuItem) {
+              hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
+              return { success: false, error: 'attach_menu_item_not_found' };
             }
 
-            // The file input dialog will be intercepted by Electron
-            await new Promise(r => setTimeout(r, 1000));
+            // Before clicking menu item, set up input interception
+            var fileInjected = false;
+            var inputPromise = new Promise(function(resolve) {
+              // Watch for file input creation
+              var observer = new MutationObserver(function(mutations) {
+                for (var m = 0; m < mutations.length; m++) {
+                  var nodes = mutations[m].addedNodes;
+                  for (var n = 0; n < nodes.length; n++) {
+                    var node = nodes[n];
+                    if (node.tagName === 'INPUT' && node.type === 'file') {
+                      observer.disconnect();
+                      resolve(node);
+                      return;
+                    }
+                    if (node.querySelector) {
+                      var inp = node.querySelector('input[type="file"]');
+                      if (inp) {
+                        observer.disconnect();
+                        resolve(inp);
+                        return;
+                      }
+                    }
+                  }
+                }
+              });
+              observer.observe(document.body, { childList: true, subtree: true });
 
-            return { success: true, stage: 'menu_clicked' };
-          } catch(e) {
-            return { success: false, error: e.message || 'attach_error' };
-          }
-        })()
-      `, true);
+              // Also check existing inputs
+              var existing = document.querySelector('input[type="file"]:not([data-bulk-used])');
+              if (existing) {
+                observer.disconnect();
+                resolve(existing);
+              }
 
-      if (!result.success) {
-        return result;
-      }
+              // Timeout fallback
+              setTimeout(function() { observer.disconnect(); resolve(null); }, 3000);
+            });
 
-      // Wait for file input — use IPC file dialog intercept
-      // The webContents file-dialog-open event is triggered
-      // We provide our file path via the dialog override
-      await this.sleep(500);
+            menuItem.click();
 
-      // Input the file path via the file input element
-      const fileInputResult = await this.whatsappView.webContents.executeJavaScript(`
-        (async function() {
-          try {
-            // Wait for upload preview
-            await new Promise(r => setTimeout(r, 2000));
+            var fileInput = await inputPromise;
 
-            // Add caption text if present
-            const captionInput = document.querySelector('[data-testid="media-caption-input-container"] div[contenteditable="true"]') ||
+            // --- Restore CSS immediately after getting the input ---
+            hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
+
+            if (!fileInput) {
+              return { success: false, error: 'file_input_not_found' };
+            }
+
+            // --- Inject file via DataTransfer ---
+            var base64 = ${JSON.stringify(base64Data)};
+            var binaryStr = atob(base64);
+            var bytes = new Uint8Array(binaryStr.length);
+            for (var i = 0; i < binaryStr.length; i++) {
+              bytes[i] = binaryStr.charCodeAt(i);
+            }
+            var file = new File([bytes], ${JSON.stringify(fileName)}, { type: ${JSON.stringify(mimeType)} });
+
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+            fileInput.setAttribute('data-bulk-used', 'true');
+            fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+            // Wait for WhatsApp to process and show preview
+            await new Promise(function(r) { setTimeout(r, 3000); });
+
+            // --- Write caption if present ---
+            var captionText = ${JSON.stringify(caption)};
+            if (captionText) {
+              var captionInput = document.querySelector('[data-testid="media-caption-input-container"] div[contenteditable="true"]') ||
                                  document.querySelector('div[data-testid="media-caption-input"]') ||
                                  document.querySelector('.copyable-area div[contenteditable="true"][data-tab]');
-
-            if (captionInput && ${JSON.stringify(caption)}) {
-              captionInput.focus();
-              captionInput.textContent = '';
-              document.execCommand('insertText', false, ${JSON.stringify(caption)});
-              captionInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+              if (captionInput) {
+                captionInput.focus();
+                captionInput.textContent = '';
+                document.execCommand('insertText', false, captionText);
+                captionInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+                await new Promise(function(r) { setTimeout(r, 500); });
+              }
             }
 
-            await new Promise(r => setTimeout(r, 500));
+            // --- Click send ---
+            var sendBtn = document.querySelector('[data-testid="send"]') ||
+                          document.querySelector('span[data-icon="send"]')?.closest('button');
 
-            // Click send
-            const sendBtn = document.querySelector('[data-testid="send"]') ||
-                            document.querySelector('span[data-icon="send"]')?.closest('button');
-
-            if (sendBtn) {
-              sendBtn.click();
-              await new Promise(r => setTimeout(r, 2000));
-              return { success: true };
+            if (!sendBtn) {
+              return { success: false, error: 'send_button_not_found_after_media' };
             }
 
-            return { success: false, error: 'send_button_not_found_after_media' };
+            sendBtn.click();
+            await new Promise(function(r) { setTimeout(r, 2000); });
+
+            return { success: true };
           } catch(e) {
-            return { success: false, error: e.message || 'caption_send_error' };
+            // Restore styles on error
+            try {
+              if (typeof hiddenStyles !== 'undefined') {
+                hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
+              }
+            } catch(_) {}
+            return { success: false, error: e.message || 'media_send_error' };
           }
         })()
       `, true);
 
-      return fileInputResult;
+      return result;
     } catch (err: any) {
       return { success: false, error: err.message || 'media_send_error' };
     }
@@ -638,7 +801,11 @@ export class BulkSender {
         headers: this.getHeaders()
       });
       if (response.ok) {
-        return await response.json();
+        const data = await response.json();
+        if (data.total_recipients !== undefined) {
+          this.totalRecipients = data.total_recipients;
+        }
+        return data;
       }
       return null;
     } catch (err) {
@@ -667,6 +834,34 @@ export class BulkSender {
       });
     } catch (err) {
       console.error(`[BulkSender] Failed to notify backend (${action}):`, err);
+    }
+  }
+
+  // --- Bulk Send Active Flag (disables chat blocker) ---
+
+  private async setBulkSendActiveFlag(active: boolean): Promise<void> {
+    if (!this.whatsappView) return;
+    try {
+      await this.whatsappView.webContents.executeJavaScript(
+        `window.__hablapeBulkSendActive = ${active};`
+      );
+    } catch { /* ignore */ }
+  }
+
+  // --- Session Check ---
+
+  private async checkWhatsAppSession(): Promise<boolean> {
+    if (!this.whatsappView) return false;
+    try {
+      return await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          var qr = document.querySelector('[data-testid="qrcode"]') || document.querySelector('canvas[aria-label]');
+          var chatList = document.querySelector('#pane-side');
+          return !qr && !!chatList;
+        })()
+      `, true);
+    } catch {
+      return false;
     }
   }
 
