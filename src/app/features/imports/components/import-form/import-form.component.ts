@@ -421,7 +421,7 @@ export class ImportFormComponent implements OnDestroy {
   private destroy$ = new Subject<void>();
 
   // Form state
-  importType = 'users';
+  importType = 'user';
   selectedFile = signal<File | null>(null);
   isSubmitting = signal(false);
   errors = signal<string[]>([]);

@@ -8,7 +8,7 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil, interval, switchMap, takeWhile } from 'rxjs';
-import { ImportService, Import, ImportStatus, TempImportUser } from '../../../../core/services/import.service';
+import { ImportService, Import, ImportStatus, TempImportUser, UnmatchedColumn } from '../../../../core/services/import.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
@@ -66,6 +66,42 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         </div>
       }
 
+      <!-- Unmatched Columns Banner (Phase D) -->
+      @if (unmatchedColumns().length > 0) {
+        <div class="status-banner status-banner-warning">
+          <i class="ph ph-warning"></i>
+          <div class="unmatched-section">
+            <strong>Se encontraron {{ unmatchedColumns().length }} columna(s) no registradas como campos CRM</strong>
+            <p>Seleccione las columnas que desea agregar como campos CRM o ignórelas.</p>
+            <div class="unmatched-list">
+              @for (col of unmatchedColumns(); track col.name) {
+                <label class="checkbox-label">
+                  <input type="checkbox"
+                    [checked]="selectedColumns().has(col.name)"
+                    (change)="toggleColumn(col.name)" />
+                  <span>{{ col.name }}</span>
+                </label>
+              }
+            </div>
+            <div class="unmatched-actions">
+              <button type="button" class="btn-sm btn-outline" (click)="selectAllColumns()">
+                Seleccionar todas
+              </button>
+              <button type="button" class="btn-sm btn-outline" (click)="selectNoColumns()">
+                No agregar ninguna
+              </button>
+              <button type="button" class="btn-sm btn-primary-sm" (click)="confirmColumnSelection()"
+                [disabled]="isAcceptingColumns()">
+                @if (isAcceptingColumns()) {
+                  <span class="spinner spinner-sm"></span>
+                }
+                Confirmar selección
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- Table -->
       @if (!isLoading() && tempUsers().length > 0) {
         <div class="table-card">
@@ -76,7 +112,9 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                 <th>Apellido</th>
                 <th>Nombres</th>
                 <th>Teléfono</th>
+                <th>Cód. País</th>
                 <th>Email</th>
+                <th>Rol</th>
                 <th>Ejecutivo</th>
                 <th>CRM</th>
                 <th>Error</th>
@@ -89,9 +127,11 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                   <td>{{ user.lastName }}</td>
                   <td>{{ user.firstName }}</td>
                   <td>{{ user.phone }}</td>
+                  <td>{{ user.phoneCode }}</td>
                   <td>{{ user.email }}</td>
+                  <td>{{ user.role }}</td>
                   <td>{{ user.managerEmail }}</td>
-                  <td class="text-subtle">{{ user.crmFields || '' }}</td>
+                  <td class="text-subtle">{{ formatCrmFields(user.crmFields) }}</td>
                   <td class="error-cell">{{ user.errorMessage }}</td>
                 </tr>
               }
@@ -104,7 +144,8 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       <div class="form-actions">
         @if (importData()?.status === 'status_valid') {
           <a routerLink="/app/imports/new" [queryParams]="{import_type: 'users'}" class="btn-ghost">Cancelar</a>
-          <button type="button" class="btn-primary" (click)="confirmImport()" [disabled]="isProcessing()">
+          <button type="button" class="btn-primary" (click)="confirmImport()"
+            [disabled]="isProcessing() || unmatchedColumns().length > 0">
             @if (isProcessing()) {
               <span class="spinner spinner-sm"></span>
               Procesando...
@@ -186,6 +227,12 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       color: var(--error-text);
     }
 
+    .status-banner-warning {
+      background: var(--warning-subtle, #fff8e1);
+      border: 1px solid var(--warning-default, #f9a825);
+      color: var(--warning-text, #5d4037);
+    }
+
     .checkbox-label {
       display: flex;
       align-items: center;
@@ -213,6 +260,57 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       word-break: break-word;
       max-height: 200px;
       overflow-y: auto;
+    }
+
+    /* Unmatched columns section */
+    .unmatched-section {
+      flex: 1;
+    }
+
+    .unmatched-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+
+      .checkbox-label {
+        margin-top: 0;
+        padding: var(--space-1) var(--space-3);
+        background: rgba(0,0,0,0.05);
+        border-radius: var(--radius-md);
+      }
+    }
+
+    .unmatched-actions {
+      display: flex;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+    }
+
+    .btn-sm {
+      padding: var(--space-1) var(--space-3);
+      font-size: var(--text-xs);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border-default);
+      color: var(--fg-default);
+      &:hover { background: var(--bg-subtle); }
+    }
+
+    .btn-primary-sm {
+      background: var(--accent-default);
+      color: #fff;
+      border: none;
+      font-weight: var(--font-medium);
+      &:hover:not(:disabled) { background: var(--accent-emphasis); }
+      &:disabled { opacity: 0.5; cursor: not-allowed; }
     }
 
     /* Table */
@@ -350,7 +448,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     @media (max-width: 768px) {
       .imports-page { padding: var(--space-4); }
       .table-card { overflow-x: auto; }
-      .data-table { min-width: 800px; }
+      .data-table { min-width: 900px; }
     }
   `]
 })
@@ -365,11 +463,14 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
   importId = 0;
   importData = signal<Import | null>(null);
   tempUsers = signal<TempImportUser[]>([]);
+  unmatchedColumns = signal<UnmatchedColumn[]>([]);
+  selectedColumns = signal<Set<string>>(new Set());
 
   // State
   isLoading = signal(true);
   isValidating = signal(false);
   isProcessing = signal(false);
+  isAcceptingColumns = signal(false);
 
   // Options
   sendInvitationEmail = false;
@@ -411,6 +512,11 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
           ).subscribe({
             next: (result) => {
               this.tempUsers.set(result.tempUsers || []);
+              this.unmatchedColumns.set(result.unmatchedColumns || []);
+              // Pre-select all unmatched columns by default
+              if (result.unmatchedColumns && result.unmatchedColumns.length > 0) {
+                this.selectedColumns.set(new Set(result.unmatchedColumns.map(c => c.name)));
+              }
             },
             error: (err) => {
               console.error('Error loading temp users:', err);
@@ -463,6 +569,71 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Format CRM fields from object to readable string
+   * Phase F2: Converts {key: value} to "key: value, ..."
+   */
+  formatCrmFields(crmFields: Record<string, string> | null): string {
+    if (!crmFields || typeof crmFields !== 'object') return '';
+    return Object.entries(crmFields)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(', ');
+  }
+
+  /** Phase D: Toggle individual column selection */
+  toggleColumn(name: string): void {
+    this.selectedColumns.update(set => {
+      const newSet = new Set(set);
+      if (newSet.has(name)) {
+        newSet.delete(name);
+      } else {
+        newSet.add(name);
+      }
+      return newSet;
+    });
+  }
+
+  /** Phase D: Select all unmatched columns */
+  selectAllColumns(): void {
+    this.selectedColumns.set(new Set(this.unmatchedColumns().map(c => c.name)));
+  }
+
+  /** Phase D: Deselect all unmatched columns */
+  selectNoColumns(): void {
+    this.selectedColumns.set(new Set());
+  }
+
+  /** Phase D: Confirm column selection and send to backend */
+  confirmColumnSelection(): void {
+    const selected = Array.from(this.selectedColumns());
+    this.isAcceptingColumns.set(true);
+
+    if (selected.length === 0) {
+      // No columns selected — just dismiss the banner
+      this.unmatchedColumns.set([]);
+      this.isAcceptingColumns.set(false);
+      this.toast.success('Columnas descartadas');
+      return;
+    }
+
+    this.importService.acceptColumns(this.importId, selected).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: () => {
+        this.isAcceptingColumns.set(false);
+        this.unmatchedColumns.set([]);
+        this.toast.success(`${selected.length} columna(s) agregadas como campos CRM`);
+        // Reload data to reflect changes
+        this.loadImportData();
+      },
+      error: (err) => {
+        console.error('Error accepting columns:', err);
+        this.isAcceptingColumns.set(false);
+        this.toast.error('Error al aceptar columnas');
+      }
+    });
+  }
+
   confirmImport(): void {
     if (this.importData()?.status !== 'status_valid') {
       return;
@@ -470,7 +641,8 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
 
     this.isProcessing.set(true);
 
-    this.importService.confirmImport(this.importId).pipe(
+    // Phase F3: Send sendInvitationEmail parameter
+    this.importService.confirmImport(this.importId, this.sendInvitationEmail).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {

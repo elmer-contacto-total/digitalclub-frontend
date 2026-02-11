@@ -46,12 +46,18 @@ export interface ImportProgress {
   isComplete: boolean;
 }
 
+export interface UnmatchedColumn {
+  index: number;
+  name: string;
+}
+
 export interface ValidatedUsersResponse {
   id: number;
   validCount: number;
   invalidCount: number;
   status: ImportStatus;
   tempUsers: TempImportUser[];
+  unmatchedColumns?: UnmatchedColumn[];
 }
 
 export interface TempImportUser {
@@ -63,7 +69,7 @@ export interface TempImportUser {
   phoneCode: string;
   email: string;
   managerEmail: string;
-  crmFields: string;
+  crmFields: Record<string, string> | null;
   errorMessage: string | null;
   role: string;
 }
@@ -136,14 +142,18 @@ export class ImportService {
   /**
    * Confirmar y procesar importación validada
    * PARIDAD: Rails Admin::ImportsController#create_import_user
+   * Phase F3: Sends sendInvitationEmail parameter
    */
-  confirmImport(id: number): Observable<{ result: string; message: string }> {
-    return this.http.post<{ result: string; message: string }>(`${this.baseUrl}/${id}/confirm`, {});
+  confirmImport(id: number, sendInvitationEmail: boolean = false): Observable<{ result: string; message: string }> {
+    return this.http.post<{ result: string; message: string }>(`${this.baseUrl}/${id}/confirm`, {
+      sendInvitationEmail
+    });
   }
 
   /**
    * Obtener preview de usuarios validados
    * PARIDAD: Rails Admin::ImportsController#validated_import_user
+   * Phase D: Includes unmatchedColumns in response
    */
   getValidatedUsers(id: number, page: number = 0, size: number = 20): Observable<ValidatedUsersResponse> {
     const params = new HttpParams()
@@ -151,6 +161,17 @@ export class ImportService {
       .set('size', size.toString());
 
     return this.http.get<ValidatedUsersResponse>(`${this.baseUrl}/${id}/validated_users`, { params });
+  }
+
+  /**
+   * Aceptar columnas desconocidas como campos CRM
+   * Phase D: Interactive column selection
+   */
+  acceptColumns(importId: number, columns: string[]): Observable<{ result: string; message: string }> {
+    return this.http.post<{ result: string; message: string }>(
+      `${this.baseUrl}/${importId}/accept_columns`,
+      { columns }
+    );
   }
 
   /**
