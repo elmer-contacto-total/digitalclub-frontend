@@ -714,8 +714,20 @@ const MEDIA_CAPTURE_SCRIPT = `
   const auditedVideoUrls = new Set();    // Para evitar auditar el mismo video múltiples veces
 
   // Cola para notificar mensajes eliminados al backend
-  window.__hablapeDeletedQueue = window.__hablapeDeletedQueue || [];
+  // Restore pending queue from localStorage (survives WhatsApp Web reloads)
+  try {
+    var savedQueue = localStorage.getItem('__hablapeDeletedQueue');
+    window.__hablapeDeletedQueue = savedQueue ? JSON.parse(savedQueue) : [];
+  } catch (e) {
+    window.__hablapeDeletedQueue = [];
+  }
   const detectedDeletions = new Set();   // WhatsApp message IDs ya detectados como eliminados
+  // Restore previously detected deletions so we don't re-detect them
+  try {
+    window.__hablapeDeletedQueue.forEach(function(item) {
+      if (item && item.whatsappMessageId) detectedDeletions.add(item.whatsappMessageId);
+    });
+  } catch (e) {}
   const messagesWithMedia = new Set();   // Messages that had media content when captured
   const messageLastSeen = new Map();     // messageId → scan count when last seen in DOM
   const messageChatName = new Map();     // messageId → chat header name at capture time
@@ -750,9 +762,21 @@ const MEDIA_CAPTURE_SCRIPT = `
     } catch (e) {}
   }
 
-  // Get current chat name (set by main.ts via __hablapeCurrentChatName)
+  function persistDeletedQueue() {
+    try {
+      localStorage.setItem('__hablapeDeletedQueue', JSON.stringify(window.__hablapeDeletedQueue));
+    } catch (e) {}
+  }
+
+  // Get current chat name — prefer Angular IPC value, fallback to DOM header
   function getCurrentChatHeaderName() {
-    return window.__hablapeCurrentChatName || null;
+    if (window.__hablapeCurrentChatName) return window.__hablapeCurrentChatName;
+    // Fallback: read directly from WhatsApp chat header
+    try {
+      var headerEl = document.querySelector('#main header span[title]');
+      if (headerEl) return headerEl.getAttribute('title');
+    } catch (e) {}
+    return null;
   }
 
   // Cargar IDs de imágenes previamente reveladas desde localStorage
@@ -2064,12 +2088,13 @@ const MEDIA_CAPTURE_SCRIPT = `
           // A child was removed from a captured message - check if media is gone
           setTimeout(() => {
             const msgEl = document.querySelector('[data-id="' + dataId + '"]');
-            if (msgEl && isMessageDeleted(msgEl)) {
+            if (msgEl && (isMessageDeletedByMarker(msgEl) || !hasMediaElements(msgEl))) {
               detectedDeletions.add(dataId);
               window.__hablapeDeletedQueue.push({
                 whatsappMessageId: dataId,
                 detectedAt: new Date().toISOString()
               });
+              persistDeletedQueue();
               console.log('[MWS Deleted] Mensaje eliminado detectado (observer):', dataId);
             }
           }, 500);
@@ -2249,6 +2274,14 @@ const MEDIA_CAPTURE_SCRIPT = `
             console.log('[MWS Debug] Audio play: usando extractMessageTimestamp:', messageSentAt);
           }
 
+          // Track message for deletion detection BEFORE async blob read
+          // (ensures tracking even if FileReader fails)
+          if (whatsappMessageId && !messagesWithMedia.has(whatsappMessageId)) {
+            messagesWithMedia.add(whatsappMessageId);
+            messageChatName.set(whatsappMessageId, getCurrentChatHeaderName());
+            persistMessagesWithMedia();
+          }
+
           const reader = new FileReader();
           reader.onloadend = () => {
             window.__hablapeMediaQueue.push({
@@ -2263,11 +2296,6 @@ const MEDIA_CAPTURE_SCRIPT = `
               source: 'PLAYBACK',
               mediaType: 'AUDIO'
             });
-            if (whatsappMessageId) {
-              messagesWithMedia.add(whatsappMessageId);
-              messageChatName.set(whatsappMessageId, getCurrentChatHeaderName());
-              persistMessagesWithMedia();
-            }
           };
           reader.readAsDataURL(blob);
         } catch (err) {
@@ -2429,6 +2457,7 @@ const MEDIA_CAPTURE_SCRIPT = `
               whatsappMessageId: messageId,
               detectedAt: new Date().toISOString()
             });
+            persistDeletedQueue();
             // Cleanup tracked state
             messagesWithMedia.delete(messageId);
             messageChatName.delete(messageId);
@@ -2461,6 +2490,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           whatsappMessageId: messageId,
           detectedAt: new Date().toISOString()
         });
+        persistDeletedQueue();
         // Cleanup tracked state
         messagesWithMedia.delete(messageId);
         messageChatName.delete(messageId);
@@ -2479,6 +2509,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             whatsappMessageId: messageId,
             detectedAt: new Date().toISOString()
           });
+          persistDeletedQueue();
           // Cleanup tracked state
           messagesWithMedia.delete(messageId);
           messageChatName.delete(messageId);
@@ -2603,6 +2634,7 @@ export function setupMediaCapture(
           if (window.__hablapeDeletedQueue && window.__hablapeDeletedQueue.length > 0) {
             items = window.__hablapeDeletedQueue.slice();
             window.__hablapeDeletedQueue = [];
+            try { localStorage.removeItem('__hablapeDeletedQueue'); } catch(e) {}
           }
           return { items: items, debug: debug };
         })()
