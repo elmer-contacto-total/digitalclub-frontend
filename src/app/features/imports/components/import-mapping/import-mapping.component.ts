@@ -609,7 +609,6 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
     { value: 'phone_code', label: 'Cód. País', dbField: 'phone_code', required: false },
     { value: 'manager_email', label: 'Vinculador de agente', dbField: 'manager_email', required: false, category: 'linker' },
     { value: 'phone_order', label: 'Orden teléfono', dbField: 'phone_order', required: false },
-    { value: 'crm', label: 'Campo CRM', dbField: 'crm_info', required: false },
     { value: 'custom_field', label: 'Campo personalizado', dbField: 'custom_fields', required: false },
     { value: 'ignore', label: 'Ignorar', dbField: null, required: false },
   ];
@@ -703,8 +702,8 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
   }
 
   isFieldUsed(fieldValue: string, currentIndex: number): boolean {
-    // 'ignore', 'crm', and 'custom_field' can be used multiple times
-    if (fieldValue === 'ignore' || fieldValue === 'crm' || fieldValue === 'custom_field') return false;
+    // 'ignore' and 'custom_field' can be used multiple times
+    if (fieldValue === 'ignore' || fieldValue === 'custom_field') return false;
     const m = this.mappings();
     return Object.entries(m).some(
       ([idx, val]) => val === fieldValue && Number(idx) !== currentIndex
