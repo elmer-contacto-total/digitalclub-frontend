@@ -91,7 +91,7 @@ interface FieldOption {
                       @for (opt of availableFields; track opt.value) {
                         <option [value]="opt.value"
                                 [disabled]="isFieldUsed(opt.value, col.index)">
-                          {{ opt.label }}{{ opt.required ? ' *' : '' }}{{ isFieldUsed(opt.value, col.index) ? ' (ya asignado)' : '' }}
+                          {{ opt.label }} [{{ opt.value }}]{{ opt.required ? ' *' : '' }}{{ isFieldUsed(opt.value, col.index) ? ' (ya asignado)' : '' }}
                         </option>
                       }
                     </select>
