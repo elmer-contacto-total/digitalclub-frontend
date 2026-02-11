@@ -16,6 +16,11 @@ export const IMPORTS_ROUTES: Routes = [
     title: 'Nueva Importación - MWS'
   },
   {
+    path: ':id/mapping',
+    loadComponent: () => import('./components/import-mapping/import-mapping.component').then(m => m.ImportMappingComponent),
+    title: 'Mapeo de Columnas - MWS'
+  },
+  {
     path: ':id',
     loadComponent: () => import('./components/import-detail/import-detail.component').then(m => m.ImportDetailComponent),
     title: 'Detalle Importación - MWS'

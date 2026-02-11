@@ -51,6 +51,26 @@ export interface UnmatchedColumn {
   name: string;
 }
 
+export interface MappingColumn {
+  index: number;
+  header: string;
+  suggestion: string | null;
+  sampleData: string[];
+}
+
+export interface MappingData {
+  importId: number;
+  columns: MappingColumn[];
+  totalRows: number;
+}
+
+export interface CreateImportResponse {
+  result: string;
+  import: Import;
+  mapping: MappingData;
+  message: string;
+}
+
 export interface ValidatedUsersResponse {
   id: number;
   validCount: number;
@@ -102,15 +122,33 @@ export class ImportService {
   }
 
   /**
-   * Crear nueva importación con archivo CSV
-   * PARIDAD: Rails Admin::ImportsController#create
+   * Crear nueva importación con archivo CSV.
+   * Retorna headers + sugerencias de mapeo para la página de mapeo interactivo.
    */
-  createImport(file: File, importType: string = 'user'): Observable<{ result: string; import: Import; message: string }> {
+  createImport(file: File, importType: string = 'user'): Observable<CreateImportResponse> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('importType', importType);
 
-    return this.http.post<{ result: string; import: Import; message: string }>(this.baseUrl, formData);
+    return this.http.post<CreateImportResponse>(this.baseUrl, formData);
+  }
+
+  /**
+   * Obtener mapeo de headers (para recargas de la página de mapeo)
+   */
+  getMapping(importId: number, isFoh: boolean = false): Observable<MappingData> {
+    const params = new HttpParams().set('isFoh', isFoh.toString());
+    return this.http.get<MappingData>(`${this.baseUrl}/${importId}/mapping`, { params });
+  }
+
+  /**
+   * Confirmar mapeo de columnas y disparar validación
+   */
+  confirmMapping(importId: number, columnMapping: Record<string, string>, isFoh: boolean = false): Observable<{ result: string; message: string }> {
+    return this.http.post<{ result: string; message: string }>(
+      `${this.baseUrl}/${importId}/confirm_mapping`,
+      { columnMapping, isFoh }
+    );
   }
 
   /**

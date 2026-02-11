@@ -490,9 +490,9 @@ export class ImportFormComponent implements OnDestroy {
         this.isSubmitting.set(false);
 
         if (response.result === 'success') {
-          this.toast.success('Archivo subido correctamente. Validando...');
-          // Navigate to validation preview
-          this.router.navigate(['/app/imports', response.import.id, 'preview']);
+          this.toast.success('Archivo subido correctamente. Mapee las columnas.');
+          // Navigate to column mapping page
+          this.router.navigate(['/app/imports', response.import.id, 'mapping']);
         } else {
           this.errors.set(['Error al procesar el archivo']);
         }
