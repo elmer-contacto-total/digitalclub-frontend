@@ -44,7 +44,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         <app-loading-spinner message="Cargando envíos..." />
       } @else if (bulkSends().length === 0) {
         <div class="empty-state">
-          <i class="ph-paper-plane-tilt" style="font-size: 48px; color: #ccc;"></i>
+          <i class="ph-paper-plane-tilt"></i>
           <h3>No hay envíos masivos</h3>
           <p>Crea tu primer envío masivo subiendo un CSV con destinatarios</p>
           <a routerLink="/app/bulk_sends/new" class="btn btn-primary">
@@ -144,96 +144,98 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     </div>
   `,
   styles: [`
-    .envio-list-container { padding: 24px; }
-    .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-    .header-left h1 { font-size: 24px; font-weight: 600; margin: 0; color: #1a1a2e; }
-    .subtitle { font-size: 14px; color: #6c757d; margin: 4px 0 0; }
-    .header-actions { display: flex; gap: 8px; }
+    .envio-list-container { padding: var(--space-6); }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-5); }
+    .header-left h1 { font-size: var(--text-2xl); font-weight: var(--font-semibold); margin: 0; color: var(--fg-default); }
+    .subtitle { font-size: var(--text-base); color: var(--fg-muted); margin: var(--space-1) 0 0; }
+    .header-actions { display: flex; gap: var(--space-2); }
 
     .filter-bar {
-      display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap;
+      display: flex; gap: var(--space-1); margin-bottom: var(--space-4); flex-wrap: wrap;
     }
     .filter-btn {
-      padding: 6px 14px; border: 1px solid #dee2e6; border-radius: 20px;
-      background: white; font-size: 13px; cursor: pointer; transition: all 0.2s;
-      &:hover { border-color: #4361ee; color: #4361ee; }
-      &.active { background: #4361ee; color: white; border-color: #4361ee; }
+      padding: 6px 14px; border: 1px solid var(--border-default); border-radius: var(--radius-full);
+      background: var(--card-bg); color: var(--fg-default); font-size: var(--text-sm); cursor: pointer; transition: all var(--duration-normal);
+      &:hover { border-color: var(--accent-default); color: var(--accent-default); }
+      &.active { background: var(--accent-default); color: white; border-color: var(--accent-default); }
     }
 
     .empty-state {
-      text-align: center; padding: 60px 20px;
-      h3 { margin: 16px 0 8px; font-size: 18px; color: #333; }
-      p { color: #6c757d; margin-bottom: 16px; }
+      text-align: center; padding: 60px var(--space-5); background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius-lg);
+      i { font-size: 48px; color: var(--fg-subtle); }
+      h3 { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-xl); color: var(--fg-default); }
+      p { color: var(--fg-muted); margin-bottom: var(--space-4); }
     }
 
     .table-wrapper { overflow-x: auto; }
     .data-table {
-      width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden;
-      border: 1px solid #e9ecef;
-      th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f0f0f0; }
-      th { background: #f8f9fa; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #6c757d; }
-      tr:hover td { background: #fafbfc; }
+      width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: var(--radius-xl); overflow: hidden;
+      border: 1px solid var(--card-border);
+      th, td { padding: var(--space-3) var(--space-4); text-align: left; border-bottom: 1px solid var(--border-muted); }
+      th { background: var(--table-header-bg); font-size: var(--text-sm); font-weight: var(--font-semibold); text-transform: uppercase; color: var(--fg-muted); letter-spacing: 0.3px; }
+      tbody tr:hover td { background: var(--table-row-hover); }
     }
-    .id-cell { font-weight: 600; color: #4361ee; font-size: 13px; }
+    .id-cell { font-weight: var(--font-semibold); color: var(--accent-default); font-size: var(--text-sm); }
     .msg-cell {
       max-width: 200px;
-      .msg-preview { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+      .msg-preview { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-base); color: var(--fg-default); }
       .attach-badge {
-        display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #6c757d;
-        background: #f0f0f0; padding: 2px 6px; border-radius: 4px; margin-top: 4px;
+        display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); color: var(--fg-muted);
+        background: var(--bg-muted); padding: 2px 6px; border-radius: var(--radius-sm); margin-top: var(--space-1);
       }
     }
-    .agent-cell { font-size: 13px; color: #495057; white-space: nowrap; }
-    .num-cell { font-weight: 600; text-align: center; }
+    .agent-cell { font-size: var(--text-sm); color: var(--fg-muted); white-space: nowrap; }
+    .num-cell { font-weight: var(--font-semibold); text-align: center; color: var(--fg-default); }
     .progress-cell { min-width: 120px; }
     .progress-bar {
-      width: 100%; height: 6px; background: #e9ecef; border-radius: 3px; overflow: hidden;
+      width: 100%; height: 6px; background: var(--bg-muted); border-radius: var(--radius-sm); overflow: hidden;
     }
     .progress-fill {
-      height: 100%; background: #4361ee; border-radius: 3px; transition: width 0.3s;
-      &.complete { background: #10b981; }
-      &.failed { background: #ef4444; }
+      height: 100%; background: var(--accent-default); border-radius: var(--radius-sm); transition: width 0.3s;
+      &.complete { background: var(--success-default); }
+      &.failed { background: var(--error-default); }
     }
-    .progress-text { font-size: 12px; color: #6c757d; }
-    .failed-text { font-size: 11px; color: #ef4444; }
-    .date-cell { font-size: 13px; color: #6c757d; white-space: nowrap; }
+    .progress-text { font-size: var(--text-sm); color: var(--fg-muted); }
+    .failed-text { font-size: var(--text-xs); color: var(--error-default); }
+    .date-cell { font-size: var(--text-sm); color: var(--fg-muted); white-space: nowrap; }
 
     .status-badge {
-      display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;
+      display: inline-flex; align-items: center; height: var(--badge-height); padding: 0 var(--space-3);
+      border-radius: var(--radius-full); font-size: var(--text-sm); font-weight: var(--font-medium);
     }
-    .badge-warning { background: #fff3cd; color: #856404; }
-    .badge-info { background: #d1ecf1; color: #0c5460; }
-    .badge-secondary { background: #e2e3e5; color: #383d41; }
-    .badge-success { background: #d4edda; color: #155724; }
-    .badge-dark { background: #d6d8d9; color: #1b1e21; }
-    .badge-danger { background: #f8d7da; color: #721c24; }
+    .badge-warning { background: var(--warning-subtle); color: var(--warning-text); }
+    .badge-info { background: var(--accent-subtle); color: var(--accent-emphasis); }
+    .badge-secondary { background: var(--bg-muted); color: var(--fg-muted); }
+    .badge-success { background: var(--success-subtle); color: var(--success-text); }
+    .badge-dark { background: var(--bg-emphasis); color: var(--fg-muted); }
+    .badge-danger { background: var(--error-subtle); color: var(--error-text); }
 
     .actions-cell { white-space: nowrap; }
     .action-btn {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 32px; height: 32px; border-radius: 6px; border: 1px solid #dee2e6;
-      background: white; cursor: pointer; font-size: 16px; color: #495057;
-      text-decoration: none; transition: all 0.2s; margin-right: 4px;
-      &:hover { border-color: #4361ee; color: #4361ee; }
-      &.warn:hover { border-color: #f59e0b; color: #f59e0b; }
-      &.success:hover { border-color: #10b981; color: #10b981; }
-      &.danger:hover { border-color: #ef4444; color: #ef4444; }
+      width: 32px; height: 32px; border-radius: var(--radius-md); border: 1px solid var(--border-default);
+      background: var(--card-bg); cursor: pointer; font-size: 16px; color: var(--fg-muted);
+      text-decoration: none; transition: all var(--duration-normal); margin-right: var(--space-1);
+      &:hover { border-color: var(--accent-default); color: var(--accent-default); }
+      &.warn:hover { border-color: var(--warning-default); color: var(--warning-default); }
+      &.success:hover { border-color: var(--success-default); color: var(--success-default); }
+      &.danger:hover { border-color: var(--error-default); color: var(--error-default); }
     }
 
     .pagination {
-      display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 16px;
-      span { font-size: 14px; color: #6c757d; }
+      display: flex; justify-content: center; align-items: center; gap: var(--space-3); margin-top: var(--space-4);
+      span { font-size: var(--text-base); color: var(--fg-muted); }
     }
 
     .btn {
       display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px;
-      border: none; border-radius: 8px; font-size: 14px; font-weight: 500;
-      cursor: pointer; text-decoration: none; transition: all 0.2s;
+      border: none; border-radius: var(--radius-lg); font-size: var(--text-base); font-weight: var(--font-medium);
+      cursor: pointer; text-decoration: none; transition: all var(--duration-normal);
       &:disabled { opacity: 0.5; cursor: not-allowed; }
     }
-    .btn-sm { padding: 6px 12px; font-size: 13px; }
-    .btn-primary { background: #4361ee; color: white; &:hover:not(:disabled) { background: #3a56d4; } }
-    .btn-outline { background: white; color: #4361ee; border: 1px solid #4361ee; &:hover { background: #f0f3ff; } }
+    .btn-sm { padding: 6px 12px; font-size: var(--text-sm); }
+    .btn-primary { background: var(--accent-default); color: white; &:hover:not(:disabled) { background: var(--accent-emphasis); } }
+    .btn-outline { background: var(--card-bg); color: var(--accent-default); border: 1px solid var(--accent-default); &:hover { background: var(--accent-subtle); } }
   `]
 })
 export class EnvioListComponent implements OnInit, OnDestroy {
