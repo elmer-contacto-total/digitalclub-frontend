@@ -708,6 +708,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   window.__hablapeMediaQueue = window.__hablapeMediaQueue || [];
   window.__hablapeAuditQueue = window.__hablapeAuditQueue || []; // Queue for audit events (video blocked, etc.)
+  window.__hablapeRevealedIdQueue = window.__hablapeRevealedIdQueue || []; // Queue for revealed message IDs (disk persistence)
   const capturedHashes = new Set();      // Para deduplicación por hash
   const capturedBlobUrls = new Set();    // Para deduplicación por URL
   const processedMessageIds = new Set(); // Mensajes ya procesados
@@ -842,6 +843,11 @@ const MEDIA_CAPTURE_SCRIPT = `
       // Limitar a últimos 500 para evitar crecimiento infinito
       const toSave = arr.slice(-500);
       localStorage.setItem('__hablapeRevealedMessages', JSON.stringify(toSave));
+    } catch (e) {}
+    // Push to dedicated queue for main process disk persistence
+    // This ensures the ID reaches disk even if media capture fails
+    try {
+      window.__hablapeRevealedIdQueue.push(messageId);
     } catch (e) {}
   }
 
@@ -2825,7 +2831,8 @@ export function setupMediaCapture(
   userId: string,
   onMediaCaptured: (data: RawMediaCaptureData) => void,
   onAuditLog: (payload: AuditLogPayload) => void,
-  onMediaDeleted?: (data: DeletedMediaNotification) => void
+  onMediaDeleted?: (data: DeletedMediaNotification) => void,
+  onMessageRevealed?: (messageId: string) => void
 ): void {
   let pollingInterval: NodeJS.Timeout | null = null;
 
@@ -2925,9 +2932,35 @@ export function setupMediaCapture(
     }
   }
 
+  // Collect revealed message IDs for disk persistence (independent of media capture)
+  async function collectRevealedIds(): Promise<void> {
+    if (!onMessageRevealed) return;
+    try {
+      const result = await view.webContents.executeJavaScript(`
+        (function() {
+          if (!window.__hablapeRevealedIdQueue || window.__hablapeRevealedIdQueue.length === 0) {
+            return [];
+          }
+          var items = window.__hablapeRevealedIdQueue.slice();
+          window.__hablapeRevealedIdQueue = [];
+          return items;
+        })()
+      `, true);
+
+      if (result && Array.isArray(result) && result.length > 0) {
+        for (const messageId of result) {
+          onMessageRevealed(messageId);
+        }
+      }
+    } catch (err) {
+      // Silently ignore polling errors
+    }
+  }
+
   // Función combinada de polling
   async function pollAll(): Promise<void> {
     await collectCapturedMedia();
+    await collectRevealedIds();
     await collectAuditEvents();
     await collectDeletedMedia();
   }
@@ -2963,11 +2996,12 @@ export function initializeMediaSecurity(
     onMediaCaptured: (data: RawMediaCaptureData) => void;
     onAuditLog: (payload: AuditLogPayload) => void;
     onMediaDeleted?: (data: DeletedMediaNotification) => void;
+    onMessageRevealed?: (messageId: string) => void;
   },
   capturedMediaBackup?: Map<string, { chatName: string; capturedAt: string }>,
   revealedMessagesBackup?: Set<string>
 ): void {
   setupDownloadBlocking(view, mainWindow, userId, callbacks.onAuditLog);
   injectSecurityScripts(view, capturedMediaBackup, revealedMessagesBackup);
-  setupMediaCapture(view, userId, callbacks.onMediaCaptured, callbacks.onAuditLog, callbacks.onMediaDeleted);
+  setupMediaCapture(view, userId, callbacks.onMediaCaptured, callbacks.onAuditLog, callbacks.onMediaDeleted, callbacks.onMessageRevealed);
 }

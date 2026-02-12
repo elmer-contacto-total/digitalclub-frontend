@@ -896,6 +896,12 @@ function createWhatsAppView(): void {
     onMediaDeleted: (data) => {
       console.log('[MWS Deleted] Mensaje eliminado detectado:', data.whatsappMessageId, data.isDisappearing ? '(disappearing)' : '');
       sendMediaDeletionToServer(data.whatsappMessageId, data.isDisappearing || false);
+    },
+    onMessageRevealed: (messageId) => {
+      if (!revealedMessageIds.has(messageId)) {
+        revealedMessageIds.add(messageId);
+        saveRevealedMessageIds();
+      }
     }
   }, capturedMediaIds, revealedMessageIds);
 
