@@ -429,6 +429,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
    */
   initiateCloseTicket(closeType: TicketCloseType): void {
     this.showTicketConfirmation.set(closeType);
+    this.electronService.setWhatsAppOverlayMode(true);
   }
 
   /**
@@ -436,6 +437,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
    */
   initiateCloseTicketGeneric(): void {
     this.showTicketConfirmation.set({ name: 'Finalizar', kpiName: '' });
+    this.electronService.setWhatsAppOverlayMode(true);
   }
 
   /**
@@ -453,6 +455,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       next: () => {
         this.isClosingTicket.set(false);
         this.showTicketConfirmation.set(null);
+        this.electronService.setWhatsAppOverlayMode(false);
 
         // Update local state
         if (c.registered) {
@@ -463,6 +466,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       error: (err) => {
         console.error('Error closing ticket:', err);
         this.isClosingTicket.set(false);
+        this.electronService.setWhatsAppOverlayMode(false);
       }
     });
   }
@@ -472,6 +476,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
    */
   cancelCloseTicket(): void {
     this.showTicketConfirmation.set(null);
+    this.electronService.setWhatsAppOverlayMode(false);
   }
 
   // ==================== CANNED MESSAGES ====================
