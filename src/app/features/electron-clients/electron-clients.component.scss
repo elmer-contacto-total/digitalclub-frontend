@@ -491,6 +491,22 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+.no-ticket-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--fg-subtle);
+
+  i {
+    font-size: 14px;
+  }
+}
+
 .action-buttons {
   display: flex;
   gap: var(--space-2);

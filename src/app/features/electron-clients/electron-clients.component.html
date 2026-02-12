@@ -239,13 +239,20 @@
               ></textarea>
             </div>
 
-            <!-- Action Buttons (for registered contacts with open ticket) -->
-            @if (isRegistered() && hasOpenTicket()) {
+            <!-- Action Buttons (for registered contacts) -->
+            @if (isRegistered()) {
               <div class="section actions-section">
+                @if (!hasOpenTicket()) {
+                  <div class="no-ticket-hint">
+                    <i class="ph ph-info"></i>
+                    <span>Sin caso abierto</span>
+                  </div>
+                }
                 <div class="action-buttons">
                   @if (closeTypes().length > 0) {
                     @for (ct of closeTypes(); track ct.kpiName) {
                       <button class="action-btn" [class.primary]="$first" [class.secondary]="!$first"
+                              [disabled]="!hasOpenTicket()"
                               (click)="initiateCloseTicket(ct)">
                         <i class="ph ph-check-circle"></i>
                         <span>Finalizar {{ ct.name }}</span>
@@ -253,7 +260,7 @@
                     }
                   } @else {
                     <!-- Fallback: generic close button (no close types configured) -->
-                    <button class="action-btn primary" (click)="initiateCloseTicketGeneric()">
+                    <button class="action-btn primary" [disabled]="!hasOpenTicket()" (click)="initiateCloseTicketGeneric()">
                       <i class="ph ph-check-circle"></i>
                       <span>Finalizar</span>
                     </button>
@@ -261,7 +268,7 @@
                 </div>
               </div>
 
-              <!-- History Section (always visible) -->
+              <!-- History Section -->
               <div class="section">
                 <div class="section-header">
                   <i class="ph ph-clock-counter-clockwise"></i>
