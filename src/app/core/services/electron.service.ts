@@ -1,5 +1,5 @@
 import { Injectable, NgZone, inject } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { ChatSelectedEvent, PhoneDetectedEvent } from '../models/crm-contact.model';
 
 /**
@@ -89,7 +89,7 @@ export class ElectronService {
   private whatsappBoundsSubject = new BehaviorSubject<WhatsAppBounds | null>(null);
   private whatsappSessionSubject = new BehaviorSubject<boolean>(false); // WhatsApp logged in state
   private appClosingSubject = new BehaviorSubject<boolean>(false);
-  private crmResetSubject = new BehaviorSubject<void>(undefined); // CRM reset trigger
+  private crmResetSubject = new Subject<void>(); // CRM reset trigger (Subject — must NOT emit on subscribe)
 
   // Public observables
   readonly chatSelected$: Observable<ChatSelectedEvent | null> = this.chatSelectedSubject.asObservable();

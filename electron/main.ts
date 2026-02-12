@@ -1493,7 +1493,10 @@ async function scanChat(): Promise<void> {
         // Función para validar que un nombre de chat es válido (no es placeholder/status)
         function isValidChatName(name) {
           if (!name || name.length === 0 || name.length > 50) return false;
-          const lower = name.toLowerCase();
+          if (name.trim().length < 2) return false;
+          const lower = name.toLowerCase().trim();
+          // Reject icon/CSS class names (ic-arrow-drop-down, ph-check, mat-icon, data-testid)
+          if (/^[a-z][a-z0-9]*(-[a-z0-9]+)+$/.test(lower)) return false;
           // Lista de placeholders y textos de estado a ignorar
           const invalidPatterns = [
             'escribiendo', 'typing', 'en línea', 'online',

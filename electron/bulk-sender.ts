@@ -440,28 +440,30 @@ export class BulkSender {
         return false;
       }
 
-      // Clear any residual text in search input using Selection API
-      await this.whatsappView.webContents.executeJavaScript(`
+      // Clear any residual text in search input via real input events
+      const hasSearchText = await this.whatsappView.webContents.executeJavaScript(`
         (function() {
           var searchInput = document.querySelector('[data-testid="chat-list-search-input"]') ||
                             document.querySelector('#side div[contenteditable="true"]');
           if (searchInput && searchInput.textContent && searchInput.textContent.trim()) {
             searchInput.focus();
-            var range = document.createRange();
-            range.selectNodeContents(searchInput);
-            var sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-            document.execCommand('delete');
-            // Backup: if still has text, force clear
-            if (searchInput.textContent && searchInput.textContent.trim()) {
-              searchInput.textContent = '';
-              searchInput.innerHTML = '';
-            }
-            searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            searchInput.click();
+            return true;
           }
+          return false;
         })()
-      `);
+      `, true);
+
+      if (hasSearchText) {
+        // Use real Chromium events to clear (Ctrl+A, Backspace)
+        this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'a', modifiers: ['control'] });
+        await this.sleep(50);
+        this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'a', modifiers: ['control'] });
+        await this.sleep(50);
+        this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
+        await this.sleep(50);
+        this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Backspace' });
+      }
 
       await this.sleep(300);
       return true;
@@ -488,170 +490,283 @@ export class BulkSender {
         console.warn('[BulkSender] resetToMainScreen failed, continuing anyway...');
       }
 
-      // --- PHASE 2: Open search and type phone ---
-      const searchResult = await this.whatsappView.webContents.executeJavaScript(`
+      // --- PHASE 2: Hide overlay temporarily so Chromium focus/input works ---
+      await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          var ov = document.getElementById('bulk-send-overlay');
+          if (ov) ov.style.display = 'none';
+        })()
+      `);
+
+      // --- PHASE 3: Click search box, focus input, clear and type phone ---
+      const searchReady = await this.whatsappView.webContents.executeJavaScript(`
         (async function() {
           try {
-            // Click search box
             var searchBox = document.querySelector('[data-testid="chat-list-search"]');
             if (!searchBox) {
               searchBox = document.querySelector('[data-icon="search"]')?.closest('button') ||
                           document.querySelector('#side [contenteditable="true"]');
             }
-            if (!searchBox) {
-              return { success: false, error: 'search_not_found' };
-            }
-            searchBox.click();
-            searchBox.focus();
-            await new Promise(function(r) { setTimeout(r, 300); });
+            if (!searchBox) return { success: false, error: 'search_not_found' };
 
-            // Find search input
+            searchBox.click();
+            await new Promise(function(r) { setTimeout(r, 400); });
+
             var searchInput = document.querySelector('[data-testid="chat-list-search-input"]');
             if (!searchInput) {
               searchInput = document.querySelector('#side div[contenteditable="true"]') ||
                             document.querySelector('[data-testid="search-input"]');
             }
-            if (!searchInput) {
-              return { success: false, error: 'search_input_not_found' };
-            }
+            if (!searchInput) return { success: false, error: 'search_input_not_found' };
 
-            // Clear search input using Selection API targeting the specific node
             searchInput.focus();
-            var range = document.createRange();
-            range.selectNodeContents(searchInput);
-            var sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-            document.execCommand('delete');
-            // Backup: if still has text, force clear
-            if (searchInput.textContent && searchInput.textContent.trim()) {
-              searchInput.textContent = '';
-              searchInput.innerHTML = '';
-              searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
-              await new Promise(function(r) { setTimeout(r, 200); });
-            }
+            searchInput.click();
 
-            // Type phone number
-            document.execCommand('insertText', false, '${normalizedPhone.replace(/'/g, "\\'")}');
-            searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
-
-            return { success: true };
+            // Log focus state for debugging
+            var active = document.activeElement;
+            var focusInfo = active ? (active.tagName + ' editable=' + active.getAttribute('contenteditable') + ' testid=' + active.getAttribute('data-testid')) : 'null';
+            return { success: true, focusInfo: focusInfo };
           } catch(e) {
-            return { success: false, error: e.message || 'search_error' };
+            return { success: false, error: e.message || 'search_focus_error' };
           }
         })()
       `, true);
 
-      if (!searchResult.success) {
-        return { success: false, error: searchResult.error, errorType: 'selector' };
+      if (!searchReady.success) {
+        // Restore overlay before returning
+        await this.whatsappView.webContents.executeJavaScript(`
+          (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
+        `);
+        return { success: false, error: searchReady.error, errorType: 'selector' };
       }
 
-      // Wait for WhatsApp to enter search mode before polling results
-      await this.sleep(500);
+      console.log(`[BulkSender] Search focused: ${searchReady.focusInfo}`);
 
-      // --- PHASE 3: Poll for search results or "no results" ---
-      const searchOutcome = await this.waitForCondition(`
-        (function() {
-          // Check for "no results" indicators
-          var noResults = document.querySelector('[data-testid="search-no-results-title"]');
-          if (noResults) return 'no_results';
+      // Clear existing text: Ctrl+A + Backspace via real Chromium events
+      await this.sleep(100);
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'a', modifiers: ['control'] });
+      await this.sleep(50);
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
+      await this.sleep(300);
 
-          // Check for text-based "no results" in multiple languages
-          var searchPanel = document.querySelector('#pane-side') || document.querySelector('#side');
-          if (searchPanel) {
-            var text = searchPanel.innerText || '';
-            if (text.indexOf('No se encontraron') !== -1 ||
-                text.indexOf('No results found') !== -1 ||
-                text.indexOf('No contacts found') !== -1 ||
-                text.indexOf('No se encontró') !== -1) {
-              return 'no_results';
-            }
+      // Type phone via Electron's insertText API (goes through Chromium IME pipeline, React detects it)
+      await this.whatsappView.webContents.insertText(normalizedPhone);
+
+      console.log(`[BulkSender] Typed ${normalizedPhone} via insertText`);
+
+      // Wait for WhatsApp to process search query
+      await this.sleep(2000);
+
+      // --- PHASE 4: Poll for search results, find and click matching contact ---
+      const phoneSuffixForJs = phoneSuffix.replace(/'/g, "\\'");
+
+      const clickResult: any = await new Promise<any>(async (resolve) => {
+        const startTime = Date.now();
+        const TIMEOUT_MS = 10000;
+        const POLL_INTERVAL = 500;
+        const FALLBACK_AFTER_MS = 6000;
+
+        const poll = async () => {
+          if (Date.now() - startTime > TIMEOUT_MS) {
+            // Last-resort diagnostic: log what's in the search area
+            try {
+              const diag = await this.whatsappView!.webContents.executeJavaScript(`
+                (function() {
+                  var si = document.querySelector('[data-testid="chat-list-search-input"]') ||
+                           document.querySelector('#side div[contenteditable="true"]');
+                  var searchText = si ? (si.textContent || '') : 'INPUT_NOT_FOUND';
+                  var items1 = document.querySelectorAll('[data-testid="cell-frame-container"]').length;
+                  var items2 = document.querySelectorAll('#pane-side [role="row"]').length;
+                  var items3 = document.querySelectorAll('#pane-side [role="listitem"]').length;
+                  return { searchText: searchText, cellFrame: items1, row: items2, listitem: items3 };
+                })()
+              `, true);
+              console.warn('[BulkSender] Timeout diagnostic:', JSON.stringify(diag));
+            } catch { /* ignore */ }
+            resolve({ success: false, error: 'search_timeout', errorType: 'timeout' });
+            return;
           }
 
-          // Check for search results (only specific testid, NOT generic role="row" which matches normal chat list)
-          var results = document.querySelectorAll('[data-testid="cell-frame-container"]');
-          if (results.length > 0) return 'has_results';
-
-          return null;
-        })()
-      `, 8000, 300);
-
-      // --- PHASE 4: Handle "no results" (not registered) ---
-      if (searchOutcome === 'no_results' || searchOutcome === null) {
-        if (searchOutcome === 'no_results') {
-          console.log(`[BulkSender] Phone ${phone} not registered in WhatsApp`);
-          return { success: false, error: `Teléfono ${phone} no registrado en WhatsApp`, errorType: 'not_registered' };
-        }
-        // null = timeout waiting for any result
-        console.warn(`[BulkSender] Search results timeout for ${phone}`);
-        return { success: false, error: 'Search results timeout', errorType: 'timeout' };
-      }
-
-      // --- PHASE 5: Click the correct result ---
-      const clickResult = await this.whatsappView.webContents.executeJavaScript(`
-        (async function() {
           try {
-            var phoneSuffix = '${phoneSuffix}';
-            var results = document.querySelectorAll('[data-testid="cell-frame-container"]');
+            const result = await this.whatsappView!.webContents.executeJavaScript(`
+              (function() {
+                var phoneSuffix = '${phoneSuffixForJs}';
 
-            if (results.length === 0) {
-              return { success: false, error: 'no_results_to_click' };
-            }
+                // --- Check "no results" indicators ---
+                var noResults = document.querySelector('[data-testid="search-no-results-title"]');
+                if (noResults) return { action: 'no_results' };
 
-            var bestMatch = null;
-            var verified = false;
-
-            for (var i = 0; i < results.length; i++) {
-              var el = results[i];
-
-              // Skip groups
-              if (el.querySelector('[data-icon="default-group"]') ||
-                  el.querySelector('[data-icon="community"]')) {
-                continue;
-              }
-
-              // Try to match by data-id (contains phone@c.us)
-              var dataIdEl = el.closest('[data-id]') || el.querySelector('[data-id]');
-              if (dataIdEl) {
-                var dataId = dataIdEl.getAttribute('data-id') || '';
-                if (dataId.indexOf(phoneSuffix) !== -1 && dataId.indexOf('@c.us') !== -1) {
-                  bestMatch = el;
-                  verified = true;
-                  break;
+                var searchPanel = document.querySelector('#pane-side') || document.querySelector('#side');
+                if (searchPanel) {
+                  var panelText = searchPanel.innerText || '';
+                  if (panelText.indexOf('No se encontraron') !== -1 ||
+                      panelText.indexOf('No results found') !== -1 ||
+                      panelText.indexOf('No contacts found') !== -1 ||
+                      panelText.indexOf('No se encontró') !== -1) {
+                    return { action: 'no_results' };
+                  }
                 }
-              }
 
-              // Try to match by visible text (phone number in the row)
-              var rowText = el.textContent || '';
-              if (rowText.indexOf(phoneSuffix) !== -1) {
-                bestMatch = el;
-                verified = true;
-                break;
-              }
+                // --- Gather result items from multiple selectors ---
+                var selectors = [
+                  '[data-testid="cell-frame-container"]',
+                  '#pane-side [role="listitem"]',
+                  '#pane-side [role="row"]'
+                ];
+                var seen = new Set();
+                var items = [];
+                for (var s = 0; s < selectors.length; s++) {
+                  var els = document.querySelectorAll(selectors[s]);
+                  for (var j = 0; j < els.length; j++) {
+                    if (!seen.has(els[j])) {
+                      seen.add(els[j]);
+                      items.push(els[j]);
+                    }
+                  }
+                }
 
-              // First non-group result as fallback
-              if (!bestMatch) {
-                bestMatch = el;
-              }
+                if (items.length === 0) return { action: 'wait' };
+
+                // --- Search for a match among items ---
+                var bestMatch = null;
+                var bestMatchIndex = -1;
+                var verified = false;
+
+                for (var i = 0; i < items.length; i++) {
+                  var el = items[i];
+
+                  // Skip groups
+                  if (el.querySelector('[data-icon="default-group"]') ||
+                      el.querySelector('[data-icon="community"]')) {
+                    continue;
+                  }
+
+                  // Match by data-id (phone@c.us)
+                  var dataIdEl = el.closest('[data-id]') || el.querySelector('[data-id]');
+                  if (dataIdEl) {
+                    var dataId = dataIdEl.getAttribute('data-id') || '';
+                    if (dataId.indexOf(phoneSuffix) !== -1 && dataId.indexOf('@c.us') !== -1) {
+                      bestMatch = el;
+                      bestMatchIndex = i;
+                      verified = true;
+                      break;
+                    }
+                  }
+
+                  // Match by visible text containing the phone suffix
+                  var rowText = el.textContent || '';
+                  if (rowText.indexOf(phoneSuffix) !== -1) {
+                    bestMatch = el;
+                    bestMatchIndex = i;
+                    verified = true;
+                    break;
+                  }
+
+                  // Track first non-group item as fallback
+                  if (bestMatchIndex === -1) {
+                    bestMatch = el;
+                    bestMatchIndex = i;
+                  }
+                }
+
+                if (!bestMatch) {
+                  return { action: 'no_results', error: 'all_results_are_groups', isGroup: true };
+                }
+
+                if (verified) {
+                  bestMatch.click();
+                  return { action: 'clicked', verified: true, index: bestMatchIndex, total: items.length };
+                }
+
+                // Has a non-verified fallback — report it with item count
+                return { action: 'has_fallback', index: bestMatchIndex, total: items.length };
+              })()
+            `, true);
+
+            if (!result || result.action === 'wait') {
+              setTimeout(poll, POLL_INTERVAL);
+              return;
             }
 
-            if (!bestMatch) {
-              return { success: false, error: 'all_results_are_groups', isGroup: true };
+            if (result.action === 'no_results') {
+              if (result.isGroup) {
+                resolve({ success: false, error: 'solo se encontraron grupos', isGroup: true });
+              } else {
+                resolve({ success: false, error: 'not_registered', errorType: 'not_registered' });
+              }
+              return;
             }
 
-            bestMatch.click();
-            return { success: true, verified: verified };
-          } catch(e) {
-            return { success: false, error: e.message || 'click_error' };
+            if (result.action === 'clicked') {
+              console.log(`[BulkSender] Clicked verified match at index ${result.index} (${result.total} items)`);
+              resolve({ success: true, verified: true });
+              return;
+            }
+
+            if (result.action === 'has_fallback') {
+              if (result.total > 15) {
+                // Too many results = search text didn't register (WhatsApp showing unfiltered list)
+                console.warn(`[BulkSender] Search did not filter: ${result.total} items for phone ${normalizedPhone} — skipping fallback`);
+                resolve({ success: false, error: `Search returned ${result.total} unfiltered results`, errorType: 'timeout' });
+                return;
+              }
+              if (Date.now() - startTime >= FALLBACK_AFTER_MS) {
+                // Accept fallback: search completed but no exact phone match (contact saved by name)
+                console.log(`[BulkSender] Clicking fallback at index ${result.index} (${result.total} items, no verified match)`);
+                try {
+                  await this.whatsappView!.webContents.executeJavaScript(`
+                    (function() {
+                      var selectors = ['[data-testid="cell-frame-container"]', '#pane-side [role="listitem"]', '#pane-side [role="row"]'];
+                      var seen = new Set();
+                      var items = [];
+                      for (var s = 0; s < selectors.length; s++) {
+                        var els = document.querySelectorAll(selectors[s]);
+                        for (var j = 0; j < els.length; j++) {
+                          if (!seen.has(els[j])) { seen.add(els[j]); items.push(els[j]); }
+                        }
+                      }
+                      var idx = ${result.index};
+                      if (items[idx]) items[idx].click();
+                    })()
+                  `);
+                } catch { /* ignore click error */ }
+                resolve({ success: true, verified: false });
+              } else {
+                setTimeout(poll, POLL_INTERVAL);
+              }
+              return;
+            }
+
+            setTimeout(poll, POLL_INTERVAL);
+          } catch (err: any) {
+            console.warn('[BulkSender] Poll error:', err.message);
+            setTimeout(poll, POLL_INTERVAL);
           }
-        })()
-      `, true);
+        };
+
+        poll();
+      });
+
+      // --- PHASE 5: Restore overlay and handle click result ---
+      const restoreOverlay = async () => {
+        try {
+          await this.whatsappView!.webContents.executeJavaScript(`
+            (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
+          `);
+        } catch { /* ignore */ }
+      };
 
       if (!clickResult.success) {
+        await restoreOverlay();
         if (clickResult.isGroup) {
           return { success: false, error: `${phone}: solo se encontraron grupos`, errorType: 'not_found' };
         }
-        return { success: false, error: clickResult.error, errorType: 'selector' };
+        if (clickResult.errorType === 'not_registered') {
+          console.log(`[BulkSender] Phone ${phone} not registered in WhatsApp`);
+          return { success: false, error: `Teléfono ${phone} no registrado en WhatsApp`, errorType: 'not_registered' };
+        }
+        console.warn(`[BulkSender] Search/click failed for ${phone}: ${clickResult.error}`);
+        return { success: false, error: clickResult.error || 'Search results timeout', errorType: clickResult.errorType || 'timeout' };
       }
 
       // --- PHASE 6: Verify the correct chat loaded ---
@@ -663,6 +778,9 @@ export class BulkSender {
           return box ? true : null;
         })()
       `, 5000, 300);
+
+      // Restore overlay before returning
+      await restoreOverlay();
 
       if (!composeReady) {
         return { success: false, error: 'Chat did not load (no compose box)', errorType: 'timeout' };
@@ -685,6 +803,12 @@ export class BulkSender {
 
       return { success: true };
     } catch (err: any) {
+      // Restore overlay on error
+      try {
+        await this.whatsappView?.webContents.executeJavaScript(`
+          (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
+        `);
+      } catch { /* ignore */ }
       return { success: false, error: err.message || 'js_execution_error', errorType: 'unknown' };
     }
   }
@@ -694,11 +818,14 @@ export class BulkSender {
       return { success: false, error: 'WhatsApp view not available' };
     }
 
-    const escapedText = JSON.stringify(text);
-
     try {
-      // Step 1: Verify compose box exists, clear residual text, insert new text
-      const insertResult = await this.whatsappView.webContents.executeJavaScript(`
+      // Hide overlay so Chromium focus/input works
+      await this.whatsappView.webContents.executeJavaScript(`
+        (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = 'none'; })()
+      `);
+
+      // Step 1: Focus compose box and clear residual text
+      const focusResult = await this.whatsappView.webContents.executeJavaScript(`
         (async function() {
           try {
             var input = document.querySelector('[data-testid="conversation-compose-box-input"]');
@@ -710,41 +837,54 @@ export class BulkSender {
               return { success: false, error: 'input_not_found' };
             }
 
-            // Clear any residual text
             input.focus();
-            if (input.textContent && input.textContent.trim()) {
-              document.execCommand('selectAll');
-              document.execCommand('delete');
-              await new Promise(function(r) { setTimeout(r, 100); });
-            }
-
-            // Insert text
-            document.execCommand('insertText', false, ${escapedText});
-            input.dispatchEvent(new InputEvent('input', { bubbles: true }));
-
-            // Verify text was inserted
-            await new Promise(function(r) { setTimeout(r, 200); });
-            var currentText = (input.textContent || '').trim();
-            if (!currentText) {
-              return { success: false, error: 'text_not_inserted' };
-            }
-
+            input.click();
             return { success: true };
           } catch(e) {
-            return { success: false, error: e.message || 'insert_error' };
+            return { success: false, error: e.message || 'focus_error' };
           }
         })()
       `, true);
 
-      if (!insertResult.success) {
-        return insertResult;
+      if (!focusResult.success) {
+        await this.whatsappView.webContents.executeJavaScript(`
+          (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
+        `);
+        return focusResult;
+      }
+
+      // Clear any residual text via real Chromium events
+      await this.sleep(100);
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'a', modifiers: ['control'] });
+      await this.sleep(50);
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
+      await this.sleep(200);
+
+      // Insert message text via Electron IME API (React detects this)
+      await this.whatsappView.webContents.insertText(text);
+      await this.sleep(200);
+
+      // Verify text was inserted
+      const textCheck = await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          var input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                      document.querySelector('footer div[contenteditable="true"]');
+          return input ? (input.textContent || '').trim().length > 0 : false;
+        })()
+      `, true);
+
+      if (!textCheck) {
+        await this.whatsappView.webContents.executeJavaScript(`
+          (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
+        `);
+        return { success: false, error: 'text_not_inserted' };
       }
 
       // Step 2: Typing simulation delay
       await this.sleep(500 + Math.random() * 1000);
 
-      // Step 3: Click send button (or fallback to Enter)
-      await this.whatsappView.webContents.executeJavaScript(`
+      // Step 3: Click send button (or fallback to Enter via real event)
+      const sendClicked = await this.whatsappView.webContents.executeJavaScript(`
         (function() {
           var sendBtn = document.querySelector('[data-testid="send"]');
           if (!sendBtn) {
@@ -753,15 +893,18 @@ export class BulkSender {
           }
           if (sendBtn) {
             sendBtn.click();
-          } else {
-            var input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
-                        document.querySelector('footer div[contenteditable="true"]');
-            if (input) {
-              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-            }
+            return 'button';
           }
+          return 'no_button';
         })()
-      `);
+      `, true);
+
+      if (sendClicked === 'no_button') {
+        // Fallback: send Enter via real Chromium event
+        this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+        await this.sleep(50);
+        this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+      }
 
       // Step 4: Poll — verify compose box is empty after send (message was sent)
       const sentOk = await this.waitForCondition(`
@@ -773,6 +916,11 @@ export class BulkSender {
           return text.length === 0 ? true : null;
         })()
       `, 5000, 300);
+
+      // Restore overlay
+      await this.whatsappView.webContents.executeJavaScript(`
+        (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
+      `);
 
       if (!sentOk) {
         return { success: false, error: 'message_not_sent: compose box still has text after 5s' };
@@ -794,6 +942,12 @@ export class BulkSender {
 
       return { success: true };
     } catch (err: any) {
+      // Restore overlay on error
+      try {
+        await this.whatsappView?.webContents.executeJavaScript(`
+          (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
+        `);
+      } catch { /* ignore */ }
       return { success: false, error: err.message || 'js_execution_error' };
     }
   }
