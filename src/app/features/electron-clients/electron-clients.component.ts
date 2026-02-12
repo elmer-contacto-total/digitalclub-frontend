@@ -581,7 +581,10 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   /**
    * Get formatted action for display
    */
-  formatAction(action: string): string {
+  formatAction(action: string, auditableType?: string): string {
+    if (auditableType === 'Ticket') {
+      return action === 'update' ? 'Cerró ticket' : action === 'create' ? 'Abrió ticket' : action;
+    }
     const actions: Record<string, string> = {
       'create': 'Creó',
       'update': 'Actualizó',
@@ -593,9 +596,31 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   /**
    * Get summary of audit changes for display
    */
-  getChangesSummary(changes: Record<string, unknown>): string[] {
+  getChangesSummary(changes: Record<string, unknown>, auditableType?: string): string[] {
     if (!changes) return [];
+    if (auditableType === 'Ticket') {
+      const summary: string[] = [];
+      if (changes['close_type']) {
+        const ct = (changes['close_type'] as unknown[])?.[1];
+        if (ct) summary.push(this.formatCloseTypeLabel(String(ct)));
+      }
+      return summary.length > 0 ? summary : ['status'];
+    }
     return Object.keys(changes).slice(0, 3).map(key => this.formatFieldLabel(key));
+  }
+
+  /**
+   * Format close type to human-readable label
+   */
+  private formatCloseTypeLabel(closeType: string): string {
+    const labels: Record<string, string> = {
+      'closed_con_acuerdo': 'Con Acuerdo',
+      'closed_sin_acuerdo': 'Sin Acuerdo',
+      'closed_interesado': 'Interesado',
+      'auto_closed': 'Auto-cerrado',
+      'manual': 'Manual'
+    };
+    return labels[closeType] || closeType;
   }
 
   // ==================== CUSTOM FIELDS ====================

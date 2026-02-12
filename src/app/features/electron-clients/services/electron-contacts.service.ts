@@ -310,7 +310,7 @@ export class ElectronContactsService {
   closeTicket(ticketId: number, closeType: string): Observable<{ result: string; ticket: unknown }> {
     return this.http.post<{ result: string; ticket: unknown }>(
       `${environment.apiUrl}/app/tickets/${ticketId}/close`,
-      { closeType }
+      { close_type: closeType }
     );
   }
 

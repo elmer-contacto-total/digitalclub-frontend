@@ -288,10 +288,10 @@
                             <span class="history-user">{{ item.username }}</span>
                             <span class="history-date">{{ formatDate(item.createdAt) }}</span>
                           </div>
-                          <div class="history-action">{{ formatAction(item.action) }}</div>
-                          @if (item.auditedChanges && getChangesSummary(item.auditedChanges).length > 0) {
+                          <div class="history-action">{{ formatAction(item.action, item.auditableType) }}</div>
+                          @if (item.auditedChanges && getChangesSummary(item.auditedChanges, item.auditableType).length > 0) {
                             <div class="history-tags">
-                              @for (change of getChangesSummary(item.auditedChanges); track change) {
+                              @for (change of getChangesSummary(item.auditedChanges, item.auditableType); track change) {
                                 <span class="history-tag">{{ change }}</span>
                               }
                             </div>

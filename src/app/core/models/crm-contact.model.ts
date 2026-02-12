@@ -73,6 +73,8 @@ export interface UserActionHistory {
   action: string; // 'create' | 'update' | 'destroy'
   username: string; // Agent who performed the action
   auditedChanges: Record<string, unknown>;
+  auditableType?: string; // 'User' | 'Ticket'
+  comment?: string; // e.g. "Ticket #123 cerrado — closed_con_acuerdo"
   createdAt: string;
 }
 
