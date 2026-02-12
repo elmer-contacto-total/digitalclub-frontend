@@ -255,7 +255,7 @@
                               [disabled]="!hasOpenTicket()"
                               (click)="initiateCloseTicket(ct)">
                         <i class="ph ph-check-circle"></i>
-                        <span>Finalizar {{ ct.name }}</span>
+                        <span>{{ ct.name }}</span>
                       </button>
                     }
                   } @else {
