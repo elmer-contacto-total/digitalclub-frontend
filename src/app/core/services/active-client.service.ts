@@ -15,6 +15,7 @@ export interface ActiveClient {
   name: string;
   companyName?: string;
   status: string;
+  clientType?: string;
 }
 
 interface SetCurrentClientResponse {

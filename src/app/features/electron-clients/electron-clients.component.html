@@ -239,18 +239,25 @@
               ></textarea>
             </div>
 
-            <!-- Action Buttons (for registered contacts) -->
-            @if (isRegistered()) {
+            <!-- Action Buttons (for registered contacts with open ticket) -->
+            @if (isRegistered() && hasOpenTicket()) {
               <div class="section actions-section">
                 <div class="action-buttons">
-                  <button class="action-btn primary" (click)="onCloseWithAgreement()">
-                    <i class="ph ph-handshake"></i>
-                    <span>Cerrar con Acuerdo</span>
-                  </button>
-                  <button class="action-btn secondary" (click)="onCloseWithoutAgreement()">
-                    <i class="ph ph-x-circle"></i>
-                    <span>Cerrar sin Acuerdo</span>
-                  </button>
+                  @if (closeTypes().length > 0) {
+                    @for (ct of closeTypes(); track ct.kpiName) {
+                      <button class="action-btn" [class.primary]="$first" [class.secondary]="!$first"
+                              (click)="initiateCloseTicket(ct)">
+                        <i class="ph ph-check-circle"></i>
+                        <span>Finalizar {{ ct.name }}</span>
+                      </button>
+                    }
+                  } @else {
+                    <!-- Fallback: generic close button (no close types configured) -->
+                    <button class="action-btn primary" (click)="initiateCloseTicketGeneric()">
+                      <i class="ph ph-check-circle"></i>
+                      <span>Finalizar</span>
+                    </button>
+                  }
                 </div>
               </div>
 
@@ -309,11 +316,7 @@
           <h4>Confirmar Cierre</h4>
         </div>
         <p class="modal-body">
-          @if (showTicketConfirmation() === 'con_acuerdo') {
-            Se cerrara el caso indicando que <strong>hubo un acuerdo</strong> con el cliente.
-          } @else {
-            Se cerrara el caso indicando que <strong>NO hubo acuerdo</strong> con el cliente.
-          }
+          Se cerrara el caso como: <strong>{{ showTicketConfirmation()?.name }}</strong>
         </p>
         <div class="modal-footer">
           <button class="modal-btn cancel" (click)="cancelCloseTicket()">

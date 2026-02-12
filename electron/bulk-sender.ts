@@ -422,11 +422,10 @@ export class BulkSender {
     if (!this.whatsappView) return false;
     try {
       // Press Escape 3 times to close any open panels/modals/search
+      // Use sendInputEvent for real Chromium-level events that WhatsApp (React) processes
       for (let i = 0; i < 3; i++) {
-        await this.whatsappView.webContents.executeJavaScript(`
-          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
-        `);
-        await this.sleep(200);
+        this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+        await this.sleep(300);
       }
 
       // Wait for chat list (#pane-side) to be visible
@@ -441,15 +440,24 @@ export class BulkSender {
         return false;
       }
 
-      // Clear any residual text in search input
+      // Clear any residual text in search input using Selection API
       await this.whatsappView.webContents.executeJavaScript(`
         (function() {
           var searchInput = document.querySelector('[data-testid="chat-list-search-input"]') ||
                             document.querySelector('#side div[contenteditable="true"]');
           if (searchInput && searchInput.textContent && searchInput.textContent.trim()) {
             searchInput.focus();
-            document.execCommand('selectAll');
+            var range = document.createRange();
+            range.selectNodeContents(searchInput);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
             document.execCommand('delete');
+            // Backup: if still has text, force clear
+            if (searchInput.textContent && searchInput.textContent.trim()) {
+              searchInput.textContent = '';
+              searchInput.innerHTML = '';
+            }
             searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
           }
         })()
@@ -507,10 +515,23 @@ export class BulkSender {
               return { success: false, error: 'search_input_not_found' };
             }
 
-            // Clear and type phone
+            // Clear search input using Selection API targeting the specific node
             searchInput.focus();
-            document.execCommand('selectAll');
+            var range = document.createRange();
+            range.selectNodeContents(searchInput);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
             document.execCommand('delete');
+            // Backup: if still has text, force clear
+            if (searchInput.textContent && searchInput.textContent.trim()) {
+              searchInput.textContent = '';
+              searchInput.innerHTML = '';
+              searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+              await new Promise(function(r) { setTimeout(r, 200); });
+            }
+
+            // Type phone number
             document.execCommand('insertText', false, '${normalizedPhone.replace(/'/g, "\\'")}');
             searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
 
@@ -524,6 +545,9 @@ export class BulkSender {
       if (!searchResult.success) {
         return { success: false, error: searchResult.error, errorType: 'selector' };
       }
+
+      // Wait for WhatsApp to enter search mode before polling results
+      await this.sleep(500);
 
       // --- PHASE 3: Poll for search results or "no results" ---
       const searchOutcome = await this.waitForCondition(`
@@ -544,17 +568,13 @@ export class BulkSender {
             }
           }
 
-          // Check for search results
+          // Check for search results (only specific testid, NOT generic role="row" which matches normal chat list)
           var results = document.querySelectorAll('[data-testid="cell-frame-container"]');
           if (results.length > 0) return 'has_results';
 
-          // Fallback: check role="row" in search results area
-          var rows = document.querySelectorAll('#pane-side [role="listitem"], #pane-side [role="row"]');
-          if (rows.length > 0) return 'has_results';
-
           return null;
         })()
-      `, 6000, 300);
+      `, 8000, 300);
 
       // --- PHASE 4: Handle "no results" (not registered) ---
       if (searchOutcome === 'no_results' || searchOutcome === null) {
@@ -573,9 +593,6 @@ export class BulkSender {
           try {
             var phoneSuffix = '${phoneSuffix}';
             var results = document.querySelectorAll('[data-testid="cell-frame-container"]');
-            if (results.length === 0) {
-              results = document.querySelectorAll('#pane-side [role="listitem"], #pane-side [role="row"]');
-            }
 
             if (results.length === 0) {
               return { success: false, error: 'no_results_to_click' };

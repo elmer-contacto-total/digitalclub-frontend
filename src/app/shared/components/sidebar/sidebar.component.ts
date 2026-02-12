@@ -62,10 +62,11 @@ export class SidebarComponent implements OnInit, OnDestroy {
     const user = this.currentUser();
     if (!user) return [];
 
-    // TODO: Get hasWhatsApp from client settings
-    const hasWhatsApp = true;
+    // PARIDAD RAILS: @current_client.whatsapp_business?
+    const client = this.activeClient();
+    const isWhatsAppBusiness = client?.clientType === 'whatsapp_business';
 
-    return getNavigationForRole(user.role, hasWhatsApp);
+    return getNavigationForRole(user.role, isWhatsAppBusiness);
   });
 
   // App info

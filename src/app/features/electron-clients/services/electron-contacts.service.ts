@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, of, map, catchError } from 'rxjs';
 import { environment } from '../../../../environments/environment';
@@ -11,6 +11,7 @@ import {
   PhoneUtils,
   UserActionHistory
 } from '../../../core/models/crm-contact.model';
+import { TicketCloseType } from '../../../core/models/ticket.model';
 
 /**
  * Storage key for local contacts
@@ -42,6 +43,7 @@ interface ContactSearchResponse {
     openTicketId?: number;
     customFields?: Record<string, unknown>;
   };
+  closeTypes?: TicketCloseType[];
 }
 
 /**
@@ -57,6 +59,10 @@ export class ElectronContactsService {
   private storage = inject(StorageService);
   private baseUrl = `${environment.apiUrl}/app/users`;
 
+  /** Ticket close types configured for the current client (cached after first fetch) */
+  readonly closeTypes = signal<TicketCloseType[]>([]);
+  private closeTypesFetched = false;
+
   /**
    * Search for a contact by phone number
    * First checks the backend, then falls back to local storage
@@ -71,6 +77,12 @@ export class ElectronContactsService {
     // Try to find in backend first
     return this.searchRegisteredContact(normalizedPhone).pipe(
       map(response => {
+        // Cache closeTypes from response (per client, doesn't change between contacts)
+        if (!this.closeTypesFetched && response.closeTypes) {
+          this.closeTypes.set(response.closeTypes);
+          this.closeTypesFetched = true;
+        }
+
         if (response.found && response.contact) {
           // Map Spring Boot response to RegisteredContact
           const registered: RegisteredContact = {

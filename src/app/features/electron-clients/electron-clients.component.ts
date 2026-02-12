@@ -23,6 +23,7 @@ import {
   ChatSelectedEvent,
   UserActionHistory
 } from '../../core/models/crm-contact.model';
+import { TicketCloseType } from '../../core/models/ticket.model';
 import { CannedMessageService, CannedMessage } from '../../core/services/canned-message.service';
 
 type ViewState = 'empty' | 'loading' | 'contact';
@@ -55,7 +56,10 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
 
   // Ticket state
   isClosingTicket = signal(false);
-  showTicketConfirmation = signal<'con_acuerdo' | 'sin_acuerdo' | null>(null);
+  showTicketConfirmation = signal<TicketCloseType | null>(null);
+
+  // Close types (dynamic per organization, from client_settings)
+  closeTypes = computed(() => this.contactsService.closeTypes());
 
   // Canned messages state
   showCannedMessages = signal(false);
@@ -421,28 +425,17 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   // ==================== TICKET ACTIONS ====================
 
   /**
-   * Handle "Cerrar con Acuerdo" button click
-   * TODO: Implement actual functionality
+   * Initiate ticket close process with a specific close type
    */
-  onCloseWithAgreement(): void {
-    console.log('[CRM] Cerrar con Acuerdo clicked');
-    // TODO: Implement functionality
-  }
-
-  /**
-   * Handle "Cerrar sin Acuerdo" button click
-   * TODO: Implement actual functionality
-   */
-  onCloseWithoutAgreement(): void {
-    console.log('[CRM] Cerrar sin Acuerdo clicked');
-    // TODO: Implement functionality
-  }
-
-  /**
-   * Initiate ticket close process
-   */
-  initiateCloseTicket(closeType: 'con_acuerdo' | 'sin_acuerdo'): void {
+  initiateCloseTicket(closeType: TicketCloseType): void {
     this.showTicketConfirmation.set(closeType);
+  }
+
+  /**
+   * Initiate generic ticket close (when no close types are configured)
+   */
+  initiateCloseTicketGeneric(): void {
+    this.showTicketConfirmation.set({ name: 'Finalizar', kpiName: '' });
   }
 
   /**
@@ -456,7 +449,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
 
     this.isClosingTicket.set(true);
 
-    this.contactsService.closeTicket(c.registered.openTicketId, closeType).subscribe({
+    this.contactsService.closeTicket(c.registered.openTicketId, closeType.kpiName).subscribe({
       next: () => {
         this.isClosingTicket.set(false);
         this.showTicketConfirmation.set(null);
