@@ -269,13 +269,56 @@ export class BulkSender {
 
       console.log(`[BulkSender] Sending to ${next.phone} (${next.recipient_name || 'Unknown'})`);
 
-      try {
-        // Navigate to chat
-        const navResult = await this.navigateToChat(next.phone);
-        if (!navResult.success) {
-          throw new Error(`Failed to navigate to chat: ${navResult.error}`);
+      // Navigate to chat
+      const navResult = await this.navigateToChat(next.phone);
+
+      if (!navResult.success) {
+        const errorMsg = navResult.error || 'navigation_failed';
+        const errorType = navResult.errorType || 'unknown';
+
+        // Classify error: skippable vs real failure
+        if (errorType === 'not_registered' || errorType === 'not_found') {
+          // Contact not on WhatsApp or only groups found — SKIP, don't count as consecutive failure
+          console.log(`[BulkSender] Skipping ${next.phone}: ${errorMsg} (${errorType})`);
+          await this.reportResult(recipientId, false, errorMsg, 'SKIP');
+          this.failedCount++;
+          this.emitOverlayUpdate();
+
+          // Short delay before next (no need to wait full inter-message delay)
+          const skipDelay = 2000 + Math.random() * 3000;
+          console.log(`[BulkSender] Skip delay: ${Math.round(skipDelay / 1000)}s`);
+          await this.sleep(skipDelay);
+          continue;
         }
 
+        // Real failure (timeout, selector, unknown)
+        console.error(`[BulkSender] Navigation failed for ${next.phone}: ${errorMsg} (${errorType})`);
+        await this.reportResult(recipientId, false, errorMsg);
+        this.failedCount++;
+        this.consecutiveFailures++;
+        this.lastError = errorMsg;
+        this.emitOverlayUpdate();
+
+        // Backoff on consecutive failures
+        if (this.consecutiveFailures >= 5) {
+          console.warn('[BulkSender] 5 consecutive failures - auto-pausing');
+          this.isPaused = true;
+          this._state = 'paused';
+          this.lastError = 'Auto-paused after 5 consecutive failures';
+          this.emitOverlayUpdate();
+          return;
+        }
+
+        if (this.consecutiveFailures >= 3) {
+          const backoffDelay = this.getRandomDelay() * 2;
+          console.log(`[BulkSender] Backoff: waiting ${backoffDelay}ms`);
+          await this.sleep(backoffDelay);
+        }
+        continue;
+      }
+
+      // Navigation succeeded — send the message
+      try {
         // Random delay to simulate typing
         const typingDelay = 500 + Math.random() * 1000;
         await this.sleep(typingDelay);
@@ -308,7 +351,7 @@ export class BulkSender {
 
       } catch (err: any) {
         const errorMsg = err.message || String(err);
-        console.error(`[BulkSender] Failed for ${next.phone}: ${errorMsg}`);
+        console.error(`[BulkSender] Send failed for ${next.phone}: ${errorMsg}`);
 
         await this.reportResult(recipientId, false, errorMsg);
         this.failedCount++;
@@ -351,90 +394,281 @@ export class BulkSender {
 
   // --- WhatsApp Interaction ---
 
-  private async navigateToChat(phone: string): Promise<{ success: boolean; error?: string }> {
+  /**
+   * Poll a JS expression in the WebView until it returns a truthy value or timeout.
+   * Returns the truthy value, or null on timeout.
+   */
+  private async waitForCondition(jsExpression: string, timeoutMs = 5000, intervalMs = 200): Promise<any> {
+    if (!this.whatsappView) return null;
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const result = await this.whatsappView.webContents.executeJavaScript(
+          `(function() { try { return ${jsExpression}; } catch(e) { return null; } })()`,
+          true
+        );
+        if (result) return result;
+      } catch { /* ignore */ }
+      await this.sleep(intervalMs);
+    }
+    return null;
+  }
+
+  /**
+   * Reset WhatsApp to main screen between recipients.
+   * Presses Escape to close panels, waits for chat list to be visible.
+   */
+  private async resetToMainScreen(): Promise<boolean> {
+    if (!this.whatsappView) return false;
+    try {
+      // Press Escape 3 times to close any open panels/modals/search
+      for (let i = 0; i < 3; i++) {
+        await this.whatsappView.webContents.executeJavaScript(`
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+        `);
+        await this.sleep(200);
+      }
+
+      // Wait for chat list (#pane-side) to be visible
+      const paneSide = await this.waitForCondition(
+        `document.querySelector('#pane-side') ? true : null`,
+        3000,
+        300
+      );
+
+      if (!paneSide) {
+        console.warn('[BulkSender] resetToMainScreen: #pane-side not found after Escape');
+        return false;
+      }
+
+      // Clear any residual text in search input
+      await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          var searchInput = document.querySelector('[data-testid="chat-list-search-input"]') ||
+                            document.querySelector('#side div[contenteditable="true"]');
+          if (searchInput && searchInput.textContent && searchInput.textContent.trim()) {
+            searchInput.focus();
+            document.execCommand('selectAll');
+            document.execCommand('delete');
+            searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+          }
+        })()
+      `);
+
+      await this.sleep(300);
+      return true;
+    } catch (err: any) {
+      console.warn('[BulkSender] resetToMainScreen error:', err.message);
+      return false;
+    }
+  }
+
+  private async navigateToChat(phone: string): Promise<{ success: boolean; error?: string; errorType?: 'not_registered' | 'not_found' | 'timeout' | 'selector' | 'unknown' }> {
     if (!this.whatsappView) {
-      return { success: false, error: 'WhatsApp view not available' };
+      return { success: false, error: 'WhatsApp view not available', errorType: 'unknown' };
     }
 
+    // Normalize phone: strip +, -, (, ), spaces
+    const normalizedPhone = phone.replace(/[+\-() \s]/g, '');
+    // Last 8 digits for matching (handles country code variations)
+    const phoneSuffix = normalizedPhone.slice(-8);
+
     try {
-      const result = await this.whatsappView.webContents.executeJavaScript(`
+      // --- PHASE 1: Reset to main screen ---
+      const resetOk = await this.resetToMainScreen();
+      if (!resetOk) {
+        console.warn('[BulkSender] resetToMainScreen failed, continuing anyway...');
+      }
+
+      // --- PHASE 2: Open search and type phone ---
+      const searchResult = await this.whatsappView.webContents.executeJavaScript(`
         (async function() {
           try {
             // Click search box
-            let searchBox = document.querySelector('[data-testid="chat-list-search"]');
+            var searchBox = document.querySelector('[data-testid="chat-list-search"]');
             if (!searchBox) {
-              console.warn('[BulkSender] Primary search selector failed, trying fallback');
               searchBox = document.querySelector('[data-icon="search"]')?.closest('button') ||
                           document.querySelector('#side [contenteditable="true"]');
             }
-
             if (!searchBox) {
               return { success: false, error: 'search_not_found' };
             }
-
             searchBox.click();
             searchBox.focus();
+            await new Promise(function(r) { setTimeout(r, 300); });
 
-            // Wait for search input to be ready
-            await new Promise(r => setTimeout(r, 300));
-
-            // Find the actual text input
-            let searchInput = document.querySelector('[data-testid="chat-list-search-input"]');
+            // Find search input
+            var searchInput = document.querySelector('[data-testid="chat-list-search-input"]');
             if (!searchInput) {
-              console.warn('[BulkSender] Primary search-input selector failed, trying fallback');
               searchInput = document.querySelector('#side div[contenteditable="true"]') ||
                             document.querySelector('[data-testid="search-input"]');
             }
-
             if (!searchInput) {
               return { success: false, error: 'search_input_not_found' };
             }
 
-            // Clear and type phone number
+            // Clear and type phone
             searchInput.focus();
-            searchInput.textContent = '';
             document.execCommand('selectAll');
-            document.execCommand('insertText', false, '${phone.replace(/'/g, "\\'")}');
+            document.execCommand('delete');
+            document.execCommand('insertText', false, '${normalizedPhone.replace(/'/g, "\\'")}');
             searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
-
-            // Wait for search results
-            await new Promise(r => setTimeout(r, 1500));
-
-            // Click first result
-            let firstResult = document.querySelector('[data-testid="cell-frame-container"]');
-            if (!firstResult) {
-              console.warn('[BulkSender] Primary cell-frame selector failed, trying fallback');
-              firstResult = document.querySelector('#pane-side [role="row"]') ||
-                            document.querySelector('#pane-side [data-id]');
-            }
-
-            if (!firstResult) {
-              return { success: false, error: 'no_search_result' };
-            }
-
-            firstResult.click();
-
-            // Wait for chat to load
-            await new Promise(r => setTimeout(r, 1000));
-
-            // Verify chat loaded (compose box present)
-            const composeBox = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
-                               document.querySelector('footer div[contenteditable="true"]');
-
-            if (!composeBox) {
-              return { success: false, error: 'chat_not_loaded' };
-            }
 
             return { success: true };
           } catch(e) {
-            return { success: false, error: e.message || 'navigate_error' };
+            return { success: false, error: e.message || 'search_error' };
           }
         })()
       `, true);
 
-      return result;
+      if (!searchResult.success) {
+        return { success: false, error: searchResult.error, errorType: 'selector' };
+      }
+
+      // --- PHASE 3: Poll for search results or "no results" ---
+      const searchOutcome = await this.waitForCondition(`
+        (function() {
+          // Check for "no results" indicators
+          var noResults = document.querySelector('[data-testid="search-no-results-title"]');
+          if (noResults) return 'no_results';
+
+          // Check for text-based "no results" in multiple languages
+          var searchPanel = document.querySelector('#pane-side') || document.querySelector('#side');
+          if (searchPanel) {
+            var text = searchPanel.innerText || '';
+            if (text.indexOf('No se encontraron') !== -1 ||
+                text.indexOf('No results found') !== -1 ||
+                text.indexOf('No contacts found') !== -1 ||
+                text.indexOf('No se encontró') !== -1) {
+              return 'no_results';
+            }
+          }
+
+          // Check for search results
+          var results = document.querySelectorAll('[data-testid="cell-frame-container"]');
+          if (results.length > 0) return 'has_results';
+
+          // Fallback: check role="row" in search results area
+          var rows = document.querySelectorAll('#pane-side [role="listitem"], #pane-side [role="row"]');
+          if (rows.length > 0) return 'has_results';
+
+          return null;
+        })()
+      `, 6000, 300);
+
+      // --- PHASE 4: Handle "no results" (not registered) ---
+      if (searchOutcome === 'no_results' || searchOutcome === null) {
+        if (searchOutcome === 'no_results') {
+          console.log(`[BulkSender] Phone ${phone} not registered in WhatsApp`);
+          return { success: false, error: `Teléfono ${phone} no registrado en WhatsApp`, errorType: 'not_registered' };
+        }
+        // null = timeout waiting for any result
+        console.warn(`[BulkSender] Search results timeout for ${phone}`);
+        return { success: false, error: 'Search results timeout', errorType: 'timeout' };
+      }
+
+      // --- PHASE 5: Click the correct result ---
+      const clickResult = await this.whatsappView.webContents.executeJavaScript(`
+        (async function() {
+          try {
+            var phoneSuffix = '${phoneSuffix}';
+            var results = document.querySelectorAll('[data-testid="cell-frame-container"]');
+            if (results.length === 0) {
+              results = document.querySelectorAll('#pane-side [role="listitem"], #pane-side [role="row"]');
+            }
+
+            if (results.length === 0) {
+              return { success: false, error: 'no_results_to_click' };
+            }
+
+            var bestMatch = null;
+            var verified = false;
+
+            for (var i = 0; i < results.length; i++) {
+              var el = results[i];
+
+              // Skip groups
+              if (el.querySelector('[data-icon="default-group"]') ||
+                  el.querySelector('[data-icon="community"]')) {
+                continue;
+              }
+
+              // Try to match by data-id (contains phone@c.us)
+              var dataIdEl = el.closest('[data-id]') || el.querySelector('[data-id]');
+              if (dataIdEl) {
+                var dataId = dataIdEl.getAttribute('data-id') || '';
+                if (dataId.indexOf(phoneSuffix) !== -1 && dataId.indexOf('@c.us') !== -1) {
+                  bestMatch = el;
+                  verified = true;
+                  break;
+                }
+              }
+
+              // Try to match by visible text (phone number in the row)
+              var rowText = el.textContent || '';
+              if (rowText.indexOf(phoneSuffix) !== -1) {
+                bestMatch = el;
+                verified = true;
+                break;
+              }
+
+              // First non-group result as fallback
+              if (!bestMatch) {
+                bestMatch = el;
+              }
+            }
+
+            if (!bestMatch) {
+              return { success: false, error: 'all_results_are_groups', isGroup: true };
+            }
+
+            bestMatch.click();
+            return { success: true, verified: verified };
+          } catch(e) {
+            return { success: false, error: e.message || 'click_error' };
+          }
+        })()
+      `, true);
+
+      if (!clickResult.success) {
+        if (clickResult.isGroup) {
+          return { success: false, error: `${phone}: solo se encontraron grupos`, errorType: 'not_found' };
+        }
+        return { success: false, error: clickResult.error, errorType: 'selector' };
+      }
+
+      // --- PHASE 6: Verify the correct chat loaded ---
+      // Wait for compose box to appear
+      const composeReady = await this.waitForCondition(`
+        (function() {
+          var box = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                    document.querySelector('footer div[contenteditable="true"]');
+          return box ? true : null;
+        })()
+      `, 5000, 300);
+
+      if (!composeReady) {
+        return { success: false, error: 'Chat did not load (no compose box)', errorType: 'timeout' };
+      }
+
+      // Verify header contains phone (if click was not verified by data-id)
+      if (!clickResult.verified) {
+        const headerCheck = await this.whatsappView.webContents.executeJavaScript(`
+          (function() {
+            var header = document.querySelector('#main header span[title]');
+            if (!header) return 'no_header';
+            return header.getAttribute('title') || header.textContent || '';
+          })()
+        `, true);
+
+        if (headerCheck !== 'no_header' && !String(headerCheck).includes(phoneSuffix)) {
+          console.warn(`[BulkSender] Header "${headerCheck}" does not match phone suffix "${phoneSuffix}" — proceeding anyway (WhatsApp search filtered)`);
+        }
+      }
+
+      return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'js_execution_error' };
+      return { success: false, error: err.message || 'js_execution_error', errorType: 'unknown' };
     }
   }
 
@@ -443,59 +677,105 @@ export class BulkSender {
       return { success: false, error: 'WhatsApp view not available' };
     }
 
+    const escapedText = JSON.stringify(text);
+
     try {
-      const result = await this.whatsappView.webContents.executeJavaScript(`
+      // Step 1: Verify compose box exists, clear residual text, insert new text
+      const insertResult = await this.whatsappView.webContents.executeJavaScript(`
         (async function() {
           try {
-            // Find compose box
-            let input = document.querySelector('[data-testid="conversation-compose-box-input"]');
+            var input = document.querySelector('[data-testid="conversation-compose-box-input"]');
             if (!input) {
-              console.warn('[BulkSender] Primary compose-box selector failed, trying fallback');
               input = document.querySelector('div[contenteditable="true"][data-tab="10"]') ||
                       document.querySelector('footer div[contenteditable="true"]');
             }
-
             if (!input) {
               return { success: false, error: 'input_not_found' };
             }
 
-            // Focus and insert text
+            // Clear any residual text
             input.focus();
-            input.textContent = '';
-            document.execCommand('insertText', false, ${JSON.stringify(text)});
-            input.dispatchEvent(new InputEvent('input', { bubbles: true, data: ${JSON.stringify(text)} }));
-
-            // Typing simulation delay
-            await new Promise(r => setTimeout(r, ${500 + Math.random() * 1000}));
-
-            // Click send button
-            let sendBtn = document.querySelector('[data-testid="send"]');
-            if (!sendBtn) {
-              console.warn('[BulkSender] Primary send selector failed, trying fallback');
-              sendBtn = document.querySelector('button[aria-label="Send"]') ||
-                        document.querySelector('span[data-icon="send"]')?.closest('button');
+            if (input.textContent && input.textContent.trim()) {
+              document.execCommand('selectAll');
+              document.execCommand('delete');
+              await new Promise(function(r) { setTimeout(r, 100); });
             }
 
-            if (!sendBtn) {
-              // Fallback: press Enter key
-              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-              await new Promise(r => setTimeout(r, 500));
-            } else {
-              sendBtn.click();
-              await new Promise(r => setTimeout(r, 500));
-            }
+            // Insert text
+            document.execCommand('insertText', false, ${escapedText});
+            input.dispatchEvent(new InputEvent('input', { bubbles: true }));
 
-            // Verify message was sent (check for sent tick)
-            await new Promise(r => setTimeout(r, 1000));
+            // Verify text was inserted
+            await new Promise(function(r) { setTimeout(r, 200); });
+            var currentText = (input.textContent || '').trim();
+            if (!currentText) {
+              return { success: false, error: 'text_not_inserted' };
+            }
 
             return { success: true };
           } catch(e) {
-            return { success: false, error: e.message || 'send_error' };
+            return { success: false, error: e.message || 'insert_error' };
           }
         })()
       `, true);
 
-      return result;
+      if (!insertResult.success) {
+        return insertResult;
+      }
+
+      // Step 2: Typing simulation delay
+      await this.sleep(500 + Math.random() * 1000);
+
+      // Step 3: Click send button (or fallback to Enter)
+      await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          var sendBtn = document.querySelector('[data-testid="send"]');
+          if (!sendBtn) {
+            sendBtn = document.querySelector('button[aria-label="Send"]') ||
+                      document.querySelector('span[data-icon="send"]')?.closest('button');
+          }
+          if (sendBtn) {
+            sendBtn.click();
+          } else {
+            var input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                        document.querySelector('footer div[contenteditable="true"]');
+            if (input) {
+              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+            }
+          }
+        })()
+      `);
+
+      // Step 4: Poll — verify compose box is empty after send (message was sent)
+      const sentOk = await this.waitForCondition(`
+        (function() {
+          var input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                      document.querySelector('footer div[contenteditable="true"]');
+          if (!input) return null;
+          var text = (input.textContent || '').trim();
+          return text.length === 0 ? true : null;
+        })()
+      `, 5000, 300);
+
+      if (!sentOk) {
+        return { success: false, error: 'message_not_sent: compose box still has text after 5s' };
+      }
+
+      // Step 5: Soft-check — verify last outgoing message has a tick (warning only)
+      await this.sleep(500);
+      try {
+        const hasTick = await this.whatsappView.webContents.executeJavaScript(`
+          (function() {
+            var msgs = document.querySelectorAll('[data-testid="msg-container"] [data-icon="msg-check"], [data-testid="msg-container"] [data-icon="msg-dblcheck"], [data-testid="msg-container"] [data-icon="msg-time"]');
+            return msgs.length > 0;
+          })()
+        `, true);
+        if (!hasTick) {
+          console.warn('[BulkSender] No message tick found after send — may be slow network');
+        }
+      } catch { /* ignore tick check errors */ }
+
+      return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'js_execution_error' };
     }
@@ -652,8 +932,22 @@ export class BulkSender {
             fileInput.setAttribute('data-bulk-used', 'true');
             fileInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-            // Wait for WhatsApp to process and show preview
-            await new Promise(function(r) { setTimeout(r, 3000); });
+            // Wait for WhatsApp to process and show preview (poll instead of fixed delay)
+            var previewTimeout = 8000;
+            var previewInterval = 300;
+            var previewStart = Date.now();
+            var previewReady = false;
+            while (Date.now() - previewStart < previewTimeout) {
+              var previewEl = document.querySelector('[data-testid="media-caption-input-container"]') ||
+                              document.querySelector('[data-testid="send"]') ||
+                              document.querySelector('span[data-icon="send"]');
+              if (previewEl) { previewReady = true; break; }
+              await new Promise(function(r) { setTimeout(r, previewInterval); });
+            }
+            if (!previewReady) {
+              hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
+              return { success: false, error: 'media_preview_timeout' };
+            }
 
             // --- Write caption if present ---
             var captionText = ${JSON.stringify(caption)};
@@ -679,7 +973,19 @@ export class BulkSender {
             }
 
             sendBtn.click();
-            await new Promise(function(r) { setTimeout(r, 2000); });
+
+            // Poll for media preview overlay to disappear (confirms send started)
+            var sendTimeout = 5000;
+            var sendInterval = 300;
+            var sendStart = Date.now();
+            while (Date.now() - sendStart < sendTimeout) {
+              var overlay = document.querySelector('[data-testid="media-caption-input-container"]');
+              if (!overlay) break;
+              await new Promise(function(r) { setTimeout(r, sendInterval); });
+            }
+
+            // Extra brief wait for message to register
+            await new Promise(function(r) { setTimeout(r, 500); });
 
             return { success: true };
           } catch(e) {
@@ -814,12 +1120,12 @@ export class BulkSender {
     }
   }
 
-  private async reportResult(recipientId: number, success: boolean, errorMessage?: string): Promise<void> {
+  private async reportResult(recipientId: number, success: boolean, errorMessage?: string, action?: string): Promise<void> {
     try {
       await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/recipient-result`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify({ recipientId, success, errorMessage: errorMessage || null })
+        body: JSON.stringify({ recipientId, success, errorMessage: errorMessage || null, action: action || null })
       });
     } catch (err) {
       console.error('[BulkSender] Failed to report result:', err);
