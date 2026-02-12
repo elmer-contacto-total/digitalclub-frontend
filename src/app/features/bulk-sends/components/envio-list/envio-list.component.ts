@@ -22,11 +22,11 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         <div class="header-actions">
           @if (isSupervisor()) {
             <a routerLink="/app/bulk_sends/rules" class="btn btn-outline">
-              <i class="ph-sliders"></i> Reglas
+              <i class="ph ph-sliders"></i> Reglas
             </a>
           }
           <a routerLink="/app/bulk_sends/new" class="btn btn-primary">
-            <i class="ph-plus"></i> Nuevo Envío
+            <i class="ph ph-plus"></i> Nuevo Envío
           </a>
         </div>
       </div>
@@ -44,11 +44,11 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         <app-loading-spinner message="Cargando envíos..." />
       } @else if (bulkSends().length === 0) {
         <div class="empty-state">
-          <i class="ph-paper-plane-tilt"></i>
+          <i class="ph ph-paper-plane-tilt"></i>
           <h3>No hay envíos masivos</h3>
           <p>Crea tu primer envío masivo subiendo un CSV con destinatarios</p>
           <a routerLink="/app/bulk_sends/new" class="btn btn-primary">
-            <i class="ph-plus"></i> Nuevo Envío
+            <i class="ph ph-plus"></i> Nuevo Envío
           </a>
         </div>
       } @else {
@@ -76,7 +76,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                   <td class="msg-cell">
                     <span class="msg-preview">{{ bs.message_preview || '—' }}</span>
                     @if (bs.attachment_original_name) {
-                      <span class="attach-badge"><i class="ph-paperclip"></i> {{ bs.attachment_original_name }}</span>
+                      <span class="attach-badge"><i class="ph ph-paperclip"></i> {{ bs.attachment_original_name }}</span>
                     }
                   </td>
                   <td class="agent-cell">{{ bs.assigned_agent_name || '—' }}</td>
@@ -105,21 +105,21 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                   <td class="date-cell">{{ bs.created_at | date:'dd/MM/yy HH:mm' }}</td>
                   <td class="actions-cell">
                     <a [routerLink]="['/app/bulk_sends', bs.id]" class="action-btn" title="Ver detalle">
-                      <i class="ph-eye"></i>
+                      <i class="ph ph-eye"></i>
                     </a>
                     @if (bs.status === 'PROCESSING') {
                       <button class="action-btn warn" (click)="pause(bs)" title="Pausar">
-                        <i class="ph-pause"></i>
+                        <i class="ph ph-pause"></i>
                       </button>
                     }
                     @if (bs.status === 'PAUSED') {
                       <button class="action-btn success" (click)="resume(bs)" title="Reanudar">
-                        <i class="ph-play"></i>
+                        <i class="ph ph-play"></i>
                       </button>
                     }
                     @if (bs.status === 'PROCESSING' || bs.status === 'PAUSED' || bs.status === 'PENDING') {
                       <button class="action-btn danger" (click)="cancel(bs)" title="Cancelar">
-                        <i class="ph-x"></i>
+                        <i class="ph ph-x"></i>
                       </button>
                     }
                   </td>
@@ -132,11 +132,11 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         @if (totalPages() > 1) {
           <div class="pagination">
             <button class="btn btn-sm" [disabled]="currentPage() === 0" (click)="loadPage(currentPage() - 1)">
-              <i class="ph-caret-left"></i>
+              <i class="ph ph-caret-left"></i>
             </button>
             <span>Página {{ currentPage() + 1 }} de {{ totalPages() }}</span>
             <button class="btn btn-sm" [disabled]="currentPage() >= totalPages() - 1" (click)="loadPage(currentPage() + 1)">
-              <i class="ph-caret-right"></i>
+              <i class="ph ph-caret-right"></i>
             </button>
           </div>
         }

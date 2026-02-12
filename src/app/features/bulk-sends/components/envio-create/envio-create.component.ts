@@ -26,7 +26,7 @@ interface ParsedCsv {
     <div class="envio-create-container">
       <div class="page-header">
         <a routerLink="/app/bulk_sends" class="back-link">
-          <i class="ph-arrow-left"></i> Volver a envíos
+          <i class="ph ph-arrow-left"></i> Volver a envíos
         </a>
         <h1>Nuevo Envío Masivo</h1>
         <p class="subtitle">Sube un CSV, escribe tu mensaje con variables, adjunta un archivo y envía</p>
@@ -46,7 +46,7 @@ interface ParsedCsv {
           <span class="step-badge">1</span>
           <h3>Destinatarios (CSV)</h3>
           @if (csv()) {
-            <span class="check-badge"><i class="ph-check-circle-fill"></i></span>
+            <span class="check-badge"><i class="ph-fill ph-check-circle"></i></span>
           }
         </div>
 
@@ -57,7 +57,7 @@ interface ParsedCsv {
                (dragleave)="isDragging.set(false)"
                (drop)="onDrop($event)"
                (click)="csvInput.click()">
-            <i class="ph-file-csv"></i>
+            <i class="ph ph-file-csv"></i>
             <p>Arrastra tu archivo CSV aquí o <strong>haz clic para seleccionar</strong></p>
             <span class="help-text">Debe contener al menos una columna con teléfonos</span>
             <input #csvInput type="file" accept=".csv,.txt" style="display: none" (change)="onCsvSelected($event)">
@@ -65,10 +65,10 @@ interface ParsedCsv {
         } @else {
           <div class="csv-preview">
             <div class="csv-info">
-              <span class="file-name"><i class="ph-file-csv"></i> {{ csvFileName() }}</span>
+              <span class="file-name"><i class="ph ph-file-csv"></i> {{ csvFileName() }}</span>
               <span class="recipient-count">{{ csv()!.totalRows }} destinatarios</span>
               <button class="btn-icon" (click)="removeCsv()" title="Quitar CSV">
-                <i class="ph-x-circle"></i>
+                <i class="ph ph-x-circle"></i>
               </button>
             </div>
 
@@ -110,8 +110,8 @@ interface ParsedCsv {
                       <th [class.col-phone]="$index === +selectedPhoneColumn"
                           [class.col-name]="$index === +selectedNameColumn">
                         {{ header }}
-                        @if ($index === +selectedPhoneColumn) { <i class="ph-phone" title="Teléfono"></i> }
-                        @if ($index === +selectedNameColumn) { <i class="ph-user" title="Nombre"></i> }
+                        @if ($index === +selectedPhoneColumn) { <i class="ph ph-phone" title="Teléfono"></i> }
+                        @if ($index === +selectedNameColumn) { <i class="ph ph-user" title="Nombre"></i> }
                       </th>
                     }
                   </tr>
@@ -140,7 +140,7 @@ interface ParsedCsv {
           <span class="step-badge">2</span>
           <h3>Mensaje</h3>
           @if (messageContent().length > 0) {
-            <span class="check-badge"><i class="ph-check-circle-fill"></i></span>
+            <span class="check-badge"><i class="ph-fill ph-check-circle"></i></span>
           }
         </div>
         <div class="message-section">
@@ -169,13 +169,13 @@ interface ParsedCsv {
           <span class="step-badge">3</span>
           <h3>Adjunto (Opcional)</h3>
           @if (attachmentFile()) {
-            <span class="check-badge"><i class="ph-check-circle-fill"></i></span>
+            <span class="check-badge"><i class="ph-fill ph-check-circle"></i></span>
           }
         </div>
         <div class="attachment-section">
           @if (!attachmentFile()) {
             <div class="attach-zone" (click)="attachInput.click()">
-              <i class="ph-paperclip"></i>
+              <i class="ph ph-paperclip"></i>
               <p>Clic para adjuntar imagen, video o documento</p>
               <span class="help-text">Formatos: jpg, png, gif, mp4, pdf, doc, docx, xls, xlsx</span>
               <input #attachInput type="file"
@@ -197,7 +197,7 @@ interface ParsedCsv {
                 <span class="file-size">{{ formatSize(attachmentFile()!.size) }}</span>
               </div>
               <button class="btn-icon" (click)="removeAttachment()" title="Quitar adjunto">
-                <i class="ph-x-circle"></i>
+                <i class="ph ph-x-circle"></i>
               </button>
             </div>
           }
@@ -211,7 +211,7 @@ interface ParsedCsv {
             <span class="step-badge">4</span>
             <h3>Asignar Agente</h3>
             @if (selectedAgentId()) {
-              <span class="check-badge"><i class="ph-check-circle-fill"></i></span>
+              <span class="check-badge"><i class="ph-fill ph-check-circle"></i></span>
             }
           </div>
           <div class="agent-section">
@@ -246,7 +246,7 @@ interface ParsedCsv {
             <button class="btn btn-primary btn-lg"
                     (click)="prepare()"
                     [disabled]="!canPrepare()">
-              <i class="ph-check-square"></i> Preparar Envío
+              <i class="ph ph-check-square"></i> Preparar Envío
             </button>
             @if (!canPrepare()) {
               <span class="help-text">
@@ -256,7 +256,7 @@ interface ParsedCsv {
           </div>
         } @else {
           <div class="confirmation-panel">
-            <h4><i class="ph-info"></i> Confirmar Envío</h4>
+            <h4><i class="ph ph-info"></i> Confirmar Envío</h4>
             <div class="confirm-stats">
               <div class="stat">
                 <span class="stat-label">Destinatarios</span>
@@ -288,13 +288,13 @@ interface ParsedCsv {
 
             <div class="confirm-actions">
               <button class="btn btn-outline" (click)="showConfirmation.set(false)">
-                <i class="ph-arrow-left"></i> Editar
+                <i class="ph ph-arrow-left"></i> Editar
               </button>
               <button class="btn btn-success btn-lg" (click)="send()" [disabled]="isSending()">
                 @if (isSending()) {
-                  <i class="ph-spinner ph-spin"></i> Enviando...
+                  <i class="ph ph-spinner ph-spin"></i> Enviando...
                 } @else {
-                  <i class="ph-paper-plane-tilt"></i> Iniciar Envío
+                  <i class="ph ph-paper-plane-tilt"></i> Iniciar Envío
                 }
               </button>
             </div>
@@ -670,11 +670,11 @@ export class EnvioCreateComponent implements OnDestroy {
 
   getFileIcon(filename: string): string {
     const ext = filename.split('.').pop()?.toLowerCase();
-    if (ext === 'pdf') return 'ph-file-pdf';
-    if (['doc', 'docx'].includes(ext || '')) return 'ph-file-doc';
-    if (['xls', 'xlsx'].includes(ext || '')) return 'ph-file-xls';
-    if (ext === 'mp4') return 'ph-file-video';
-    return 'ph-file';
+    if (ext === 'pdf') return 'ph ph-file-pdf';
+    if (['doc', 'docx'].includes(ext || '')) return 'ph ph-file-doc';
+    if (['xls', 'xlsx'].includes(ext || '')) return 'ph ph-file-xls';
+    if (ext === 'mp4') return 'ph ph-file-video';
+    return 'ph ph-file';
   }
 
   formatSize(bytes: number): string {

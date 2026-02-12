@@ -15,7 +15,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     <div class="send-rules-container">
       <div class="page-header">
         <a routerLink="/app/bulk_sends" class="back-link">
-          <i class="ph-arrow-left"></i> Volver a envíos masivos
+          <i class="ph ph-arrow-left"></i> Volver a envíos masivos
         </a>
         <h1>Reglas de Envío Masivo</h1>
         <p class="subtitle">Configura límites y medidas anti-ban para los envíos masivos</p>
@@ -35,7 +35,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
           <!-- Daily Limits -->
           <div class="section">
-            <h3><i class="ph-calendar"></i> Límites Diarios</h3>
+            <h3><i class="ph ph-calendar"></i> Límites Diarios</h3>
             <div class="form-group">
               <label for="maxDaily">Máximo de mensajes por día</label>
               <input type="number" id="maxDaily" [(ngModel)]="formData.max_daily_messages"
@@ -46,7 +46,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
           <!-- Delay Settings -->
           <div class="section">
-            <h3><i class="ph-clock"></i> Delays entre Mensajes</h3>
+            <h3><i class="ph ph-clock"></i> Delays entre Mensajes</h3>
             <div class="form-row">
               <div class="form-group">
                 <label for="minDelay">Delay mínimo (segundos)</label>
@@ -64,7 +64,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
           <!-- Pause Settings -->
           <div class="section">
-            <h3><i class="ph-pause-circle"></i> Pausas Periódicas</h3>
+            <h3><i class="ph ph-pause-circle"></i> Pausas Periódicas</h3>
             <div class="form-row">
               <div class="form-group">
                 <label for="pauseAfter">Pausar después de</label>
@@ -87,7 +87,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
           <!-- Schedule -->
           <div class="section">
-            <h3><i class="ph-timer"></i> Horario de Envío</h3>
+            <h3><i class="ph ph-timer"></i> Horario de Envío</h3>
             <div class="form-row">
               <div class="form-group">
                 <label for="hourStart">Hora inicio</label>

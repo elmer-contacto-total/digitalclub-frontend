@@ -16,7 +16,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     <div class="envio-detail-container">
       <div class="page-header">
         <a routerLink="/app/bulk_sends" class="back-link">
-          <i class="ph-arrow-left"></i> Volver a envíos
+          <i class="ph ph-arrow-left"></i> Volver a envíos
         </a>
         <div class="header-row">
           <h1>Envío #{{ bulkSendId }}</h1>
@@ -29,10 +29,10 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         @if (detail()) {
           <div class="agent-info-row">
             @if (detail()!.assigned_agent_name) {
-              <span class="info-tag"><i class="ph-user"></i> Agente: <strong>{{ detail()!.assigned_agent_name }}</strong></span>
+              <span class="info-tag"><i class="ph ph-user"></i> Agente: <strong>{{ detail()!.assigned_agent_name }}</strong></span>
             }
             @if (detail()!.user_name && detail()!.user_name !== detail()!.assigned_agent_name) {
-              <span class="info-tag"><i class="ph-user-circle"></i> Creado por: <strong>{{ detail()!.user_name }}</strong></span>
+              <span class="info-tag"><i class="ph ph-user-circle"></i> Creado por: <strong>{{ detail()!.user_name }}</strong></span>
             }
           </div>
         }
@@ -75,21 +75,21 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
           <div class="action-bar">
             @if (detail()!.status === 'PROCESSING') {
               <button class="btn btn-warning" (click)="pause()">
-                <i class="ph-pause"></i> Pausar
+                <i class="ph ph-pause"></i> Pausar
               </button>
             }
             @if (detail()!.status === 'PAUSED') {
               <button class="btn btn-success" (click)="resume()">
-                <i class="ph-play"></i> Reanudar
+                <i class="ph ph-play"></i> Reanudar
               </button>
             }
             @if (detail()!.status === 'PENDING' && electronService.isElectron && isAssignedAgent()) {
               <button class="btn btn-primary" (click)="startSending()">
-                <i class="ph-paper-plane-tilt"></i> Iniciar Envío
+                <i class="ph ph-paper-plane-tilt"></i> Iniciar Envío
               </button>
             }
             <button class="btn btn-danger" (click)="cancel()">
-              <i class="ph-x"></i> Cancelar
+              <i class="ph ph-x"></i> Cancelar
             </button>
           </div>
         }
@@ -101,7 +101,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
             <pre class="message-content">{{ detail()!.message_content }}</pre>
             @if (detail()!.attachment_original_name) {
               <div class="attachment-info">
-                <i class="ph-paperclip"></i>
+                <i class="ph ph-paperclip"></i>
                 <span>{{ detail()!.attachment_original_name }}</span>
                 @if (detail()!.attachment_size) {
                   <span class="file-size">({{ bulkSendService.formatFileSize(detail()!.attachment_size) }})</span>
@@ -149,12 +149,12 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
           @if (detail()!.recipients_total_pages > 1) {
             <div class="pagination">
               <button class="btn btn-sm" [disabled]="recipientPage() === 0" (click)="loadRecipientPage(recipientPage() - 1)">
-                <i class="ph-caret-left"></i>
+                <i class="ph ph-caret-left"></i>
               </button>
               <span>Página {{ recipientPage() + 1 }} de {{ detail()!.recipients_total_pages }}</span>
               <button class="btn btn-sm" [disabled]="recipientPage() >= detail()!.recipients_total_pages - 1"
                       (click)="loadRecipientPage(recipientPage() + 1)">
-                <i class="ph-caret-right"></i>
+                <i class="ph ph-caret-right"></i>
               </button>
             </div>
           }
