@@ -4,7 +4,7 @@
  * and reports result. Respects configurable rate limiting and pauses.
  */
 
-import { app, BrowserView, net } from 'electron';
+import { app, BrowserView, clipboard, net, nativeImage } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -873,20 +873,241 @@ export class BulkSender {
     if (!this.whatsappView) {
       return { success: false, error: 'Vista de WhatsApp no disponible' };
     }
+    if (!fs.existsSync(filePath)) {
+      return { success: false, error: `Archivo no encontrado: ${filePath}` };
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext);
+
+    if (isImage) {
+      return this.sendImageViaClipboard(filePath, caption);
+    } else {
+      return this.sendFileViaDragDrop(filePath, caption);
+    }
+  }
+
+  /**
+   * Send an image via native clipboard + Ctrl+V.
+   * Caption is typed FIRST in the compose box — WhatsApp auto-transfers it
+   * to the caption field when the image is pasted.
+   */
+  private async sendImageViaClipboard(
+    filePath: string,
+    caption: string
+  ): Promise<{ success: boolean; error?: string }> {
+    // Helper to log in RENDERER (WhatsApp DevTools) instead of main process
+    const rlog = (msg: string) => {
+      if (!this.whatsappView) return;
+      const safe = msg.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+      this.whatsappView.webContents.executeJavaScript(`console.log('[IMG] ${safe}')`, true).catch(() => {});
+    };
 
     try {
-      // Read file from disk in main process
-      if (!fs.existsSync(filePath)) {
-        return { success: false, error: `Archivo no encontrado: ${filePath}` };
+      // 1. Load image and validate
+      const image = nativeImage.createFromPath(filePath);
+      if (image.isEmpty()) {
+        rlog('Step 1 FAIL: image is empty');
+        return { success: false, error: 'No se pudo cargar la imagen desde disco' };
       }
+      rlog('Step 1 OK: image loaded, size=' + image.getSize().width + 'x' + image.getSize().height);
+
+      // 2. Focus compose box (same selectors as sendAndSubmit)
+      const focusResult = await this.whatsappView!.webContents.executeJavaScript(`
+        (function() {
+          console.log('[IMG] Step 2: focusing compose box...');
+          var input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                      document.querySelector('footer div[contenteditable="true"]') ||
+                      document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
+                      document.querySelector('#main div[contenteditable="true"][data-tab]') ||
+                      document.querySelector('#main div[contenteditable="true"]');
+          if (!input) {
+            console.log('[IMG] Step 2 FAIL: compose box not found');
+            return { success: false, error: 'Cuadro de texto no encontrado' };
+          }
+          input.focus();
+          input.click();
+          console.log('[IMG] Step 2 OK: compose box focused, tag=' + input.tagName + ' testid=' + input.getAttribute('data-testid'));
+          return { success: true };
+        })()
+      `, true);
+
+      if (!focusResult.success) {
+        return focusResult;
+      }
+
+      // 3. Give BrowserView Chromium-level focus
+      this.whatsappView!.webContents.focus();
+      await this.sleep(100);
+      rlog('Step 3 OK: BrowserView focused');
+
+      // 4. Clear and type caption FIRST (before pasting image)
+      await this.clearInputViaKeyboard();
+      if (caption) {
+        await this.typeViaKeyboard(caption);
+        await this.sleep(300);
+        rlog('Step 4 OK: caption typed (' + caption.length + ' chars)');
+      } else {
+        rlog('Step 4 OK: no caption to type');
+      }
+
+      // 5. Write image to system clipboard and paste via native Ctrl+V (trusted event)
+      clipboard.writeImage(image);
+      this.whatsappView!.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'v', modifiers: ['control'] });
+      this.whatsappView!.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'v', modifiers: ['control'] });
+      rlog('Step 5 OK: clipboard.writeImage + Ctrl+V dispatched');
+
+      // 6. Wait for media preview to appear
+      // WhatsApp uses "Remove attachment" and "Add file" buttons in the media editor
+      rlog('Step 6: waiting for media preview...');
+      const previewReady = await this.waitForCondition(`
+        (function() {
+          var el = document.querySelector('button[aria-label="Remove attachment"]') ||
+                   document.querySelector('button[aria-label="Add file"]') ||
+                   document.querySelector('button[aria-label="Crop and rotate"]') ||
+                   document.querySelector('span[data-icon="wds-ic-send-filled"]');
+          return el ? true : null;
+        })()
+      `, 10000, 300);
+
+      if (!previewReady) {
+        rlog('Step 6 FAIL: preview timeout after 10s');
+        return { success: false, error: 'Tiempo agotado esperando vista previa de imagen' };
+      }
+      rlog('Step 6 OK: media preview detected');
+
+      await this.sleep(500);
+
+      // 7. Hide blocker + click send button
+      const sendResult = await this.whatsappView!.webContents.executeJavaScript(`
+        (async function() {
+          try {
+            console.log('[IMG] Step 7: starting send sequence...');
+
+            // Hide chat blocker if present
+            var blocker = document.getElementById('hablape-chat-blocker');
+            if (blocker) {
+              blocker.classList.add('hidden');
+              console.log('[IMG] Chat blocker hidden');
+            }
+
+            // Find the Send button INSIDE the media editor (not the compose area one).
+            // Strategy: find "Remove attachment" button, walk up DOM to find a shared
+            // container that also has a Send button.
+            var sendBtn = null;
+            var removeBtn = document.querySelector('button[aria-label="Remove attachment"]') ||
+                            document.querySelector('button[aria-label="Add file"]');
+
+            if (removeBtn) {
+              console.log('[IMG] Found Remove/Add button, searching for Send in same container...');
+              var container = removeBtn.parentElement;
+              for (var depth = 0; depth < 10 && container; depth++) {
+                // Search for Send button (could be <button> or [role="button"])
+                var candidates = container.querySelectorAll('button[aria-label="Send"], [role="button"][aria-label="Send"]');
+                if (candidates.length > 0) {
+                  sendBtn = candidates[0];
+                  console.log('[IMG] Found Send button at depth ' + depth + ' from Remove/Add button');
+                  break;
+                }
+                container = container.parentElement;
+              }
+            }
+
+            // Fallback 1: wds-ic-send-filled icon (pick the one NOT in compose footer)
+            if (!sendBtn) {
+              var icons = document.querySelectorAll('span[data-icon="wds-ic-send-filled"]');
+              console.log('[IMG] Fallback: found ' + icons.length + ' wds-ic-send-filled icons');
+              for (var i = 0; i < icons.length; i++) {
+                var btn = icons[i].closest('button') || icons[i].closest('[role="button"]') || icons[i].parentElement;
+                if (btn) {
+                  // Skip if it's inside footer (the compose send button)
+                  var inFooter = btn.closest('footer');
+                  var r = btn.getBoundingClientRect();
+                  console.log('[IMG]   icon[' + i + ']: ' + Math.round(r.x) + ',' + Math.round(r.y) + ' inFooter=' + !!inFooter);
+                  if (!inFooter && r.width > 0 && r.height > 0) {
+                    sendBtn = btn;
+                    console.log('[IMG] Using non-footer send icon at ' + Math.round(r.x) + ',' + Math.round(r.y));
+                    break;
+                  }
+                }
+              }
+            }
+
+            // Fallback 2: all Send buttons/roles, pick the one NOT in footer
+            if (!sendBtn) {
+              var allSends = document.querySelectorAll('button[aria-label="Send"], [role="button"][aria-label="Send"]');
+              console.log('[IMG] Fallback 2: found ' + allSends.length + ' Send buttons/roles');
+              for (var i = 0; i < allSends.length; i++) {
+                var inFooter = allSends[i].closest('footer');
+                var r = allSends[i].getBoundingClientRect();
+                console.log('[IMG]   Send[' + i + ']: ' + Math.round(r.x) + ',' + Math.round(r.y) + ' inFooter=' + !!inFooter + ' tag=' + allSends[i].tagName + ' role=' + allSends[i].getAttribute('role'));
+                if (!inFooter && r.width > 0 && r.height > 0) {
+                  sendBtn = allSends[i];
+                  break;
+                }
+              }
+            }
+
+            if (!sendBtn) {
+              console.error('[IMG] Step 7 FAIL: NO media editor send button found');
+              return { success: false, error: 'Botón de enviar no encontrado en media preview' };
+            }
+
+            var btnRect = sendBtn.getBoundingClientRect();
+            console.log('[IMG] Step 7: clicking Send at ' + Math.round(btnRect.x) + ',' + Math.round(btnRect.y) + ' tag=' + sendBtn.tagName + ' role=' + sendBtn.getAttribute('role'));
+            sendBtn.click();
+            console.log('[IMG] Step 7: click() dispatched');
+
+            // Wait for media editor to close (Remove attachment button disappears)
+            var timeout = 8000;
+            var start = Date.now();
+            while (Date.now() - start < timeout) {
+              var removeBtn = document.querySelector('button[aria-label="Remove attachment"]');
+              if (!removeBtn) {
+                console.log('[IMG] Step 7 OK: media editor closed after ' + (Date.now() - start) + 'ms');
+                return { success: true };
+              }
+              await new Promise(function(r) { setTimeout(r, 300); });
+            }
+
+            console.warn('[IMG] Step 7 WARN: media editor did NOT close after 8s');
+            return { success: true };
+          } catch(e) {
+            console.error('[IMG] Step 7 ERROR:', e.message || e);
+            return { success: false, error: e.message || 'send_click_error' };
+          }
+        })()
+      `, true);
+
+      rlog('Step 8: sendResult=' + JSON.stringify(sendResult));
+
+      if (!sendResult.success) {
+        return sendResult;
+      }
+
+      await this.sleep(500);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'clipboard_send_error' };
+    }
+  }
+
+  /**
+   * Send a non-image file via drag-and-drop simulation (fallback).
+   * Uses untrusted DragEvents — may not work for all file types if WhatsApp
+   * ignores untrusted drops, but covers the main image path via clipboard above.
+   */
+  private async sendFileViaDragDrop(
+    filePath: string,
+    caption: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
       const fileBuffer = fs.readFileSync(filePath);
       const base64Data = fileBuffer.toString('base64');
       const mimeType = this.getMimeType(filePath);
       const fileName = path.basename(filePath);
 
-      // Use drag-and-drop simulation on the chat area.
-      // This bypasses the attach button (hidden by security CSS) entirely.
-      const result = await this.whatsappView.webContents.executeJavaScript(`
+      const result = await this.whatsappView!.webContents.executeJavaScript(`
         (async function() {
           try {
             // --- Create File from base64 ---
