@@ -309,10 +309,10 @@ export class ElectronContactsService {
    * @param ticketId ID of the ticket to close
    * @param closeType 'con_acuerdo' | 'sin_acuerdo'
    */
-  closeTicket(ticketId: number, closeType: string): Observable<{ result: string; ticket: unknown }> {
+  closeTicket(ticketId: number, closeType: string, notes?: string): Observable<{ result: string; ticket: unknown }> {
     return this.http.post<{ result: string; ticket: unknown }>(
       `${environment.apiUrl}/app/tickets/${ticketId}/close`,
-      { close_type: closeType }
+      { close_type: closeType, notes: notes || null }
     );
   }
 

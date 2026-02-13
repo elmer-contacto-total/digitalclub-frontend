@@ -571,7 +571,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
 
     this.isClosingTicket.set(true);
 
-    this.contactsService.closeTicket(c.registered.openTicketId, closeType.kpiName).subscribe({
+    this.contactsService.closeTicket(c.registered.openTicketId, closeType.kpiName, this.notesField()).subscribe({
       next: () => {
         this.isClosingTicket.set(false);
         this.showTicketConfirmation.set(null);
@@ -751,6 +751,18 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       'manual': 'Manual'
     };
     return labels[closeType] || closeType;
+  }
+
+  /**
+   * Extract notes from a ticket close audit entry
+   */
+  getTicketNotes(item: UserActionHistory): string | null {
+    if (item.auditableType !== 'Ticket' || !item.auditedChanges?.['notes']) return null;
+    const notes = item.auditedChanges['notes'];
+    if (Array.isArray(notes)) {
+      return (notes[1] as string) || null;
+    }
+    return typeof notes === 'string' ? notes : null;
   }
 
   // ==================== CUSTOM FIELDS ====================

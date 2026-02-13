@@ -295,6 +295,12 @@
                               }
                             </div>
                           }
+                          @if (getTicketNotes(item)) {
+                            <div class="history-notes">
+                              <i class="ph ph-note-pencil"></i>
+                              <span>{{ getTicketNotes(item) }}</span>
+                            </div>
+                          }
                         </div>
                       }
                     </div>
