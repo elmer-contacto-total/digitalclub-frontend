@@ -35,7 +35,8 @@ interface ElectronAPI {
   setWhatsAppOverlayMode?(overlayOpen: boolean): Promise<boolean>;
 
   // User login/logout (for media capture association)
-  setLoggedInUser?(userId: number, userName: string): void;
+  setLoggedInUser?(userId: number, userName: string, clientId?: number): void;
+  onIncomingMessageDetected?(callback: (data: { phone: string }) => void): void;
   setAuthToken?(token: string): void;
   clearLoggedInUser?(): void;
 
@@ -90,6 +91,7 @@ export class ElectronService {
   private whatsappSessionSubject = new BehaviorSubject<boolean>(false); // WhatsApp logged in state
   private appClosingSubject = new BehaviorSubject<boolean>(false);
   private crmResetSubject = new Subject<void>(); // CRM reset trigger (Subject — must NOT emit on subscribe)
+  private incomingMessageSubject = new Subject<{ phone: string }>();
 
   // Public observables
   readonly chatSelected$: Observable<ChatSelectedEvent | null> = this.chatSelectedSubject.asObservable();
@@ -100,6 +102,7 @@ export class ElectronService {
   readonly whatsappSession$: Observable<boolean> = this.whatsappSessionSubject.asObservable();
   readonly appClosing$: Observable<boolean> = this.appClosingSubject.asObservable();
   readonly crmReset$: Observable<void> = this.crmResetSubject.asObservable();
+  readonly incomingMessage$: Observable<{ phone: string }> = this.incomingMessageSubject.asObservable();
 
   constructor() {
     this.detectElectron();
@@ -189,6 +192,15 @@ export class ElectronService {
             console.log('[ElectronService] WhatsApp logged out - triggering CRM reset');
             this.triggerCrmReset();
           }
+        });
+      });
+    }
+
+    // Listen for incoming message detection from Electron
+    if (window.electronAPI.onIncomingMessageDetected) {
+      window.electronAPI.onIncomingMessageDetected((data: { phone: string }) => {
+        this.ngZone.run(() => {
+          this.incomingMessageSubject.next(data);
         });
       });
     }
@@ -358,9 +370,9 @@ export class ElectronService {
    * Notify Electron of the logged-in user (for media capture association)
    * Should be called after successful login
    */
-  setLoggedInUser(userId: number, userName: string): void {
+  setLoggedInUser(userId: number, userName: string, clientId?: number): void {
     if (window.electronAPI?.setLoggedInUser) {
-      window.electronAPI.setLoggedInUser(userId, userName);
+      window.electronAPI.setLoggedInUser(userId, userName, clientId);
     }
   }
 

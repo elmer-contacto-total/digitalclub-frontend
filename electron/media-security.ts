@@ -714,6 +714,11 @@ const MEDIA_CAPTURE_SCRIPT = `
   const processedMessageIds = new Set(); // Mensajes ya procesados
   const auditedVideoUrls = new Set();    // Para evitar auditar el mismo video múltiples veces
 
+  // === INCOMING MESSAGE DETECTION (ticket activation) ===
+  const notifiedIncomingIds = new Set();
+  var incomingDebounceTimer = null;
+  var INCOMING_DEBOUNCE_MS = 3000; // 3s trailing debounce
+
   // Cola para notificar mensajes eliminados al backend
   // Restore pending queue from localStorage (survives WhatsApp Web reloads)
   try {
@@ -2108,6 +2113,32 @@ const MEDIA_CAPTURE_SCRIPT = `
             // Delay para que las imágenes blob se carguen
             setTimeout(() => processMessageForImages(messageEl), 1000);
           }
+
+          // === INCOMING MESSAGE DETECTION ===
+          if (messageEl) {
+            var msgDataId = messageEl.getAttribute('data-id') || '';
+            if (msgDataId && !notifiedIncomingIds.has(msgDataId)) {
+              var isOutgoing = msgDataId.startsWith('true_') ||
+                               messageEl.classList.contains('message-out') ||
+                               messageEl.closest('[class*="message-out"]');
+
+              // Solo mensajes entrantes de chats 1:1 (no grupos @g.us)
+              if (!isOutgoing && msgDataId.includes('@c.us')) {
+                notifiedIncomingIds.add(msgDataId);
+
+                // Capturar telefono AHORA (no al disparar timer, para evitar race con cambio de chat)
+                var detectedPhone = window.__hablapeCurrentChatPhone || '';
+
+                if (incomingDebounceTimer) clearTimeout(incomingDebounceTimer);
+                incomingDebounceTimer = setTimeout(function() {
+                  incomingDebounceTimer = null;
+                  if (detectedPhone) {
+                    console.log('[HABLAPE_INCOMING_DETECTED]' + detectedPhone);
+                  }
+                }, INCOMING_DEBOUNCE_MS);
+              }
+            }
+          }
         }
 
         // También buscar imágenes blob directamente agregadas
@@ -2194,6 +2225,14 @@ const MEDIA_CAPTURE_SCRIPT = `
       const existingMessages = mainPane.querySelectorAll('[data-id*="@"]');
       console.log('[MWS Auto] Escaneando', existingMessages.length, 'mensajes existentes...');
 
+      // Pre-populate incoming IDs to avoid false positives from existing messages
+      notifiedIncomingIds.clear();
+      if (incomingDebounceTimer) { clearTimeout(incomingDebounceTimer); incomingDebounceTimer = null; }
+      existingMessages.forEach(function(el) {
+        var id = el.getAttribute('data-id');
+        if (id) notifiedIncomingIds.add(id);
+      });
+
       existingMessages.forEach((messageEl, idx) => {
         // Delay escalonado para no saturar
         setTimeout(() => processMessageForImages(messageEl), idx * 200);
@@ -2218,6 +2257,15 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // Re-scan existing messages for images in the new chat
       const existingMessages = mainPane.querySelectorAll('[data-id*="@"]');
+
+      // Clear incoming tracking for new chat
+      notifiedIncomingIds.clear();
+      if (incomingDebounceTimer) { clearTimeout(incomingDebounceTimer); incomingDebounceTimer = null; }
+      existingMessages.forEach(function(el) {
+        var id = el.getAttribute('data-id');
+        if (id) notifiedIncomingIds.add(id);
+      });
+
       existingMessages.forEach((messageEl, idx) => {
         setTimeout(() => processMessageForImages(messageEl), idx * 200);
       });

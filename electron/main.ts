@@ -50,6 +50,7 @@ let whatsappInitialized = false;
 // Usuario logueado en Angular (para asociar medios capturados)
 let loggedInUserId: number | null = null;
 let loggedInUserName: string | null = null;
+let loggedInClientId: number | null = null;
 
 // Cliente activo en el chat (para asociar medios al cliente)
 let activeClientUserId: number | null = null;
@@ -205,6 +206,38 @@ function getMediaApiHeaders(): Record<string, string> {
     headers['Authorization'] = `Bearer ${mediaAuthToken}`;
   }
   return headers;
+}
+
+/**
+ * Notify backend of an incoming message detected in WhatsApp Web.
+ * Creates/activates ticket without scraping message content.
+ */
+async function notifyIncomingMessage(senderPhone: string): Promise<void> {
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/app/messages/api_intake_create`, {
+      method: 'POST',
+      headers: getMediaApiHeaders(),
+      body: JSON.stringify({
+        direction: 'incoming',
+        senderPhone: senderPhone,
+        recipientId: loggedInUserId,
+        content: '',
+        clientId: loggedInClientId
+      })
+    });
+
+    if (response.ok) {
+      console.log('[MWS Incoming] Backend notified for phone:', senderPhone);
+      // Notificar Angular para update inmediato de UI
+      if (mainWindow) {
+        mainWindow.webContents.send('incoming-message-detected', { phone: senderPhone });
+      }
+    } else {
+      console.error('[MWS Incoming] Backend error:', response.status);
+    }
+  } catch (err) {
+    console.error('[MWS Incoming] Network error:', err);
+  }
 }
 
 /**
@@ -983,6 +1016,15 @@ function createWhatsAppView(): void {
         ).catch(() => {});
       } else if (rawPhone && rawPhone !== phone) {
         console.log('[MWS] Teléfono rechazado (inválido):', rawPhone, '->', phone);
+      }
+    }
+    // Chat bloqueado por click en sidebar - sincronizar estado
+    // Mensaje entrante detectado - activar ticket
+    else if (message.startsWith('[HABLAPE_INCOMING_DETECTED]')) {
+      const phone = message.replace('[HABLAPE_INCOMING_DETECTED]', '').trim();
+      if (phone && loggedInUserId && loggedInClientId && mediaAuthToken) {
+        console.log('[MWS] Incoming message detected for phone:', phone);
+        notifyIncomingMessage(phone);
       }
     }
     // Chat bloqueado por click en sidebar - sincronizar estado
@@ -1985,9 +2027,10 @@ function registerShortcuts(): void {
 // IPC Handlers
 function setupIPC(): void {
   // === User Login/Logout (para asociar medios capturados) ===
-  ipcMain.on('set-logged-in-user', (_, data: { userId: number; userName: string }) => {
+  ipcMain.on('set-logged-in-user', (_, data: { userId: number; userName: string; clientId?: number }) => {
     loggedInUserId = data.userId;
     loggedInUserName = data.userName;
+    loggedInClientId = data.clientId ?? null;
     console.log('[MWS] *** Usuario logueado recibido via IPC ***');
     console.log('[MWS] agentId:', loggedInUserId);
     console.log('[MWS] userName:', loggedInUserName);
@@ -2003,6 +2046,7 @@ function setupIPC(): void {
     console.log('[MWS] Usuario deslogueado:', loggedInUserId);
     loggedInUserId = null;
     loggedInUserName = null;
+    loggedInClientId = null;
     mediaAuthToken = null;
   });
 

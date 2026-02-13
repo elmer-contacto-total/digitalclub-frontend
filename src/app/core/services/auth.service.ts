@@ -440,7 +440,7 @@ export class AuthService {
 
     // Notify Electron of logged-in user (for media capture association)
     if (this.electronService.isElectron) {
-      this.electronService.setLoggedInUser(currentUser.id, currentUser.fullName);
+      this.electronService.setLoggedInUser(currentUser.id, currentUser.fullName, currentUser.clientId);
     }
 
     // Show success message
@@ -482,7 +482,7 @@ export class AuthService {
         // Notify Electron of existing logged-in user (deferred to avoid injection issues)
         setTimeout(() => {
           if (this.electronService.isElectron) {
-            this.electronService.setLoggedInUser(user.id, user.fullName);
+            this.electronService.setLoggedInUser(user.id, user.fullName, user.clientId);
             // Also sync auth token for media API calls
             const token = this.storage.getString(TOKEN_KEY);
             if (token) {

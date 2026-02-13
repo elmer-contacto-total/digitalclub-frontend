@@ -160,9 +160,14 @@ const electronAPI = {
     ipcRenderer.on('whatsapp-session-change', (_, data) => callback(data));
   },
 
+  // Evento cuando se detecta un mensaje entrante del cliente
+  onIncomingMessageDetected: (callback: (data: { phone: string }) => void) => {
+    ipcRenderer.on('incoming-message-detected', (_, data) => callback(data));
+  },
+
   // Notificar a Electron el usuario logueado
-  setLoggedInUser: (userId: number, userName: string) => {
-    ipcRenderer.send('set-logged-in-user', { userId, userName });
+  setLoggedInUser: (userId: number, userName: string, clientId?: number) => {
+    ipcRenderer.send('set-logged-in-user', { userId, userName, clientId });
   },
 
   // Actualizar token de autenticación (para API calls de media)
@@ -327,7 +332,8 @@ declare global {
         getStatus: () => Promise<{ bulkSendId: number | null; state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; lastError: string | null }>;
       };
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
-      setLoggedInUser: (userId: number, userName: string) => void;
+      setLoggedInUser: (userId: number, userName: string, clientId?: number) => void;
+      onIncomingMessageDetected?: (callback: (data: { phone: string }) => void) => void;
       setAuthToken: (token: string) => void;
       clearLoggedInUser: () => void;
       setActiveClient: (data: { clientUserId: number | null; chatPhone: string; chatName: string }) => void;
