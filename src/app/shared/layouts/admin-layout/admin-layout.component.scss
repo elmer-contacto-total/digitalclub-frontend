@@ -114,7 +114,7 @@
 }
 
 // When WhatsApp is visible, constrain overlay to Angular area (left half)
-:host-context(.whatsapp-visible) .bulk-send-overlay {
+.whatsapp-visible .bulk-send-overlay {
   right: 50vw;
 }
 
