@@ -214,20 +214,18 @@ function getMediaApiHeaders(): Record<string, string> {
  */
 async function notifyIncomingMessage(senderPhone: string): Promise<void> {
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/app/messages/api_intake_create`, {
+    const response = await fetch(`${BACKEND_BASE_URL}/app/messages/activate_incoming_ticket`, {
       method: 'POST',
       headers: getMediaApiHeaders(),
       body: JSON.stringify({
-        direction: 'incoming',
         senderPhone: senderPhone,
         recipientId: loggedInUserId,
-        content: '',
         clientId: loggedInClientId
       })
     });
 
     if (response.ok) {
-      console.log('[MWS Incoming] Backend notified for phone:', senderPhone);
+      console.log('[MWS Incoming] Ticket activated for phone:', senderPhone);
       // Notificar Angular para update inmediato de UI
       if (mainWindow) {
         mainWindow.webContents.send('incoming-message-detected', { phone: senderPhone });
