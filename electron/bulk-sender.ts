@@ -578,53 +578,92 @@ export class BulkSender {
         console.warn(`[BulkSender] Keyboard typing may have failed — search input content: "${verifyResult.content}"`);
       }
 
-      // Wait for WhatsApp to process search query
-      await this.sleep(2000);
+      // --- PHASE 4: Check search results (with retry if not filtered) ---
+      let searchCheck: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        // Wait for WhatsApp to process search query
+        await this.sleep(2000);
 
-      // --- PHASE 4: Check search results and select via keyboard ---
-      const searchCheck = await this.whatsappView.webContents.executeJavaScript(`
-        (function() {
-          // Check "no results" indicators
-          var noResults = document.querySelector('[data-testid="search-no-results-title"]');
-          if (noResults) return { status: 'no_results' };
+        searchCheck = await this.whatsappView.webContents.executeJavaScript(`
+          (function() {
+            var noResults = document.querySelector('[data-testid="search-no-results-title"]');
+            if (noResults) return { status: 'no_results' };
 
-          var searchPanel = document.querySelector('#pane-side') || document.querySelector('#side');
-          if (searchPanel) {
-            var panelText = searchPanel.innerText || '';
-            if (panelText.indexOf('No se encontraron') !== -1 ||
-                panelText.indexOf('No results found') !== -1 ||
-                panelText.indexOf('No contacts found') !== -1 ||
-                panelText.indexOf('No se encontró') !== -1) {
-              return { status: 'no_results' };
+            var searchPanel = document.querySelector('#pane-side') || document.querySelector('#side');
+            if (searchPanel) {
+              var panelText = searchPanel.innerText || '';
+              if (panelText.indexOf('No se encontraron') !== -1 ||
+                  panelText.indexOf('No results found') !== -1 ||
+                  panelText.indexOf('No contacts found') !== -1 ||
+                  panelText.indexOf('No se encontró') !== -1) {
+                return { status: 'no_results' };
+              }
             }
-          }
 
-          // Count result items
-          var selectors = [
-            '[data-testid="cell-frame-container"]',
-            '#pane-side [role="listitem"]',
-            '#pane-side [role="row"]'
-          ];
-          var seen = new Set();
-          var count = 0;
-          for (var s = 0; s < selectors.length; s++) {
-            var els = document.querySelectorAll(selectors[s]);
-            for (var j = 0; j < els.length; j++) {
-              if (!seen.has(els[j])) { seen.add(els[j]); count++; }
+            var selectors = [
+              '[data-testid="cell-frame-container"]',
+              '#pane-side [role="listitem"]',
+              '#pane-side [role="row"]'
+            ];
+            var seen = new Set();
+            var count = 0;
+            for (var s = 0; s < selectors.length; s++) {
+              var els = document.querySelectorAll(selectors[s]);
+              for (var j = 0; j < els.length; j++) {
+                if (!seen.has(els[j])) { seen.add(els[j]); count++; }
+              }
             }
-          }
-          return { status: 'has_results', count: count };
-        })()
-      `, true);
+            return { status: 'has_results', count: count };
+          })()
+        `, true);
 
+        if (searchCheck.status === 'no_results') break;
+        if (searchCheck.count <= 15) break; // Filtered OK
+
+        // Too many results — search didn't filter. Retry: clear, escape, re-enter search
+        if (attempt < 2) {
+          console.warn(`[BulkSender] Búsqueda no filtró (${searchCheck.count} items), reintentando (${attempt + 1}/2)...`);
+          await this.clearInputViaKeyboard();
+          await this.sleep(300);
+          // Press Escape to exit search mode
+          this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+          this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+          await this.sleep(500);
+          // Re-click search box
+          await this.whatsappView.webContents.executeJavaScript(`
+            (function() {
+              var searchBox = document.querySelector('[data-testid="chat-list-search"]') ||
+                              document.querySelector('[data-icon="search"]')?.closest('button') ||
+                              document.querySelector('#side [contenteditable="true"]');
+              if (searchBox) searchBox.click();
+            })()
+          `, true);
+          await this.sleep(500);
+          // Re-focus input and re-type
+          await this.whatsappView.webContents.executeJavaScript(`
+            (function() {
+              var input = document.querySelector('[data-testid="chat-list-search-input"]') ||
+                          document.querySelector('#side div[contenteditable="true"]');
+              if (input) { input.focus(); input.click(); }
+            })()
+          `, true);
+          this.whatsappView.webContents.focus();
+          await this.sleep(200);
+          await this.clearInputViaKeyboard();
+          await this.sleep(200);
+          await this.typeViaKeyboard(normalizedPhone);
+        }
+      }
+
+      // Final check after retries
       if (searchCheck.status === 'no_results') {
         console.log(`[BulkSender] Phone ${phone} not registered in WhatsApp`);
         return { success: false, error: `No se encontraron resultados para ${phone}`, errorType: 'not_registered' };
       }
 
       if (searchCheck.count > 15) {
-        console.warn(`[BulkSender] Search did not filter: ${searchCheck.count} items for phone ${normalizedPhone}`);
-        return { success: false, error: `Búsqueda devolvió ${searchCheck.count} resultados sin filtrar`, errorType: 'timeout' };
+        console.warn(`[BulkSender] Búsqueda no filtró tras 3 intentos (${searchCheck.count} resultados) para ${normalizedPhone}`);
+        return { success: false, error: `Búsqueda no filtró tras 3 intentos (${searchCheck.count} resultados)`, errorType: 'timeout' };
       }
 
       console.log(`[BulkSender] Search filtered to ${searchCheck.count} items, selecting via keyboard`);
