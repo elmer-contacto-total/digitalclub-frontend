@@ -558,6 +558,8 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         if (c.registered) {
           c.registered.hasOpenTicket = false;
           c.registered.openTicketId = undefined;
+          this.contact.set({ ...c });          // trigger signal change detection
+          this.requiresResponse.set(false);     // no ticket = no response needed
 
           // Reload action history to show the close audit
           this.loadActionHistoryAuto(c.registered.id);
