@@ -4,7 +4,7 @@
  * and reports result. Respects configurable rate limiting and pauses.
  */
 
-import { BrowserView } from 'electron';
+import { app, BrowserView, net } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -102,6 +102,17 @@ export class BulkSender {
     try {
       if (fs.existsSync(this.stateFile)) {
         fs.unlinkSync(this.stateFile);
+      }
+    } catch { /* ignore */ }
+  }
+
+  private cleanupTempAttachment(): void {
+    if (!this.bulkSendId) return;
+    try {
+      const tempDir = path.join(app.getPath('temp'), `bulk_send_${this.bulkSendId}`);
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        console.log(`[BulkSender] Cleaned up temp attachment dir: ${tempDir}`);
       }
     } catch { /* ignore */ }
   }
@@ -211,6 +222,7 @@ export class BulkSender {
     this.notifyBackend('cancel');
     this.emitOverlayUpdate();
     this.clearPersistedState();
+    this.cleanupTempAttachment();
     this.hideOverlay();
     this.setBulkSendActiveFlag(false);
   }
@@ -268,6 +280,7 @@ export class BulkSender {
         this._state = 'completed';
         this.emitOverlayUpdate();
         this.clearPersistedState();
+        this.cleanupTempAttachment();
         console.log(`[BulkSender] Bulk send ${this.bulkSendId} completed: ${this.sentCount} sent, ${this.failedCount} failed`);
         return;
       }
@@ -347,8 +360,13 @@ export class BulkSender {
 
         // Send message (with or without attachment)
         if (hasAttachment) {
+          // Download attachment from backend to local temp (server path is not accessible on Windows)
+          const localAttachmentPath = await this.downloadAttachment(
+            this.bulkSendId!,
+            next.attachment_original_name || path.basename(next.attachment_path)
+          );
           const sendResult = await this.sendMediaWithCaption(
-            next.attachment_path,
+            localAttachmentPath,
             content,
             next.attachment_type || 'document'
           );
@@ -1194,6 +1212,37 @@ export class BulkSender {
     } catch (err) {
       console.error(`[BulkSender] Failed to notify backend (${action}):`, err);
     }
+  }
+
+  /**
+   * Download the bulk send attachment from the backend to a local temp directory.
+   * Reuses the local file if already downloaded (same bulk send, multiple recipients).
+   */
+  private async downloadAttachment(bulkSendId: number, originalName: string): Promise<string> {
+    const tempDir = path.join(app.getPath('temp'), `bulk_send_${bulkSendId}`);
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    const localPath = path.join(tempDir, originalName);
+
+    // Reuse if already downloaded for this bulk send
+    if (fs.existsSync(localPath)) {
+      return localPath;
+    }
+
+    console.log(`[BulkSender] Downloading attachment from backend for bulk send ${bulkSendId}...`);
+    const response = await net.fetch(`${this.apiBaseUrl}/app/bulk_sends/${bulkSendId}/attachment/download`, {
+      headers: { 'Authorization': `Bearer ${this.authToken}` }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error descargando adjunto: HTTP ${response.status}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    fs.writeFileSync(localPath, buffer);
+    console.log(`[BulkSender] Attachment downloaded to ${localPath} (${buffer.length} bytes)`);
+    return localPath;
   }
 
   // --- Bulk Send Active Flag (disables chat blocker) ---
