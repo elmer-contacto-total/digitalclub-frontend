@@ -127,9 +127,9 @@
                 </div>
 
                 @if (hasOpenTicket()) {
-                  <div class="ticket-badge">
-                    <i class="ph ph-ticket"></i>
-                    <span>Caso abierto</span>
+                  <div class="ticket-badge" [class.pending-response]="requiresResponse()">
+                    <i class="ph" [class.ph-ticket]="!requiresResponse()" [class.ph-chat-dots]="requiresResponse()"></i>
+                    <span>{{ requiresResponse() ? 'Esperando respuesta' : 'Caso abierto' }}</span>
                   </div>
                 }
               </div>
@@ -247,12 +247,17 @@
                     <i class="ph ph-info"></i>
                     <span>Sin caso abierto</span>
                   </div>
+                } @else if (requiresResponse()) {
+                  <div class="no-ticket-hint pending-response">
+                    <i class="ph ph-chat-dots"></i>
+                    <span>Responde al cliente antes de cerrar</span>
+                  </div>
                 }
                 <div class="action-buttons">
                   @if (closeTypes().length > 0) {
                     @for (ct of closeTypes(); track ct.kpiName) {
                       <button class="action-btn" [class.primary]="$first" [class.secondary]="!$first"
-                              [disabled]="!hasOpenTicket()"
+                              [disabled]="!canCloseTicket()"
                               (click)="initiateCloseTicket(ct)">
                         <i class="ph ph-check-circle"></i>
                         <span>{{ ct.name }}</span>
@@ -260,7 +265,7 @@
                     }
                   } @else {
                     <!-- Fallback: generic close button (no close types configured) -->
-                    <button class="action-btn primary" [disabled]="!hasOpenTicket()" (click)="initiateCloseTicketGeneric()">
+                    <button class="action-btn primary" [disabled]="!canCloseTicket()" (click)="initiateCloseTicketGeneric()">
                       <i class="ph ph-check-circle"></i>
                       <span>Finalizar</span>
                     </button>

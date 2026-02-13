@@ -60,6 +60,7 @@ export interface RegisteredContact {
   issueNotes?: string;
   hasOpenTicket?: boolean;
   openTicketId?: number;
+  requireResponse?: boolean;
   customFields?: Record<string, unknown>;
   lastMessageAt?: string;
   createdAt: string;

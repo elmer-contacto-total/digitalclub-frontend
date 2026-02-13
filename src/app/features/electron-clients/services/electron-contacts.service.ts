@@ -99,6 +99,7 @@ export class ElectronContactsService {
             issueNotes: response.contact.issueNotes,
             hasOpenTicket: response.contact.hasOpenTicket,
             openTicketId: response.contact.openTicketId,
+            requireResponse: response.contact.requireResponse,
             customFields: response.contact.customFields,
             createdAt: response.contact.createdAt || ''
           };
@@ -176,6 +177,7 @@ export class ElectronContactsService {
             issueNotes: response.contact.issueNotes,
             hasOpenTicket: response.contact.hasOpenTicket,
             openTicketId: response.contact.openTicketId,
+            requireResponse: response.contact.requireResponse,
             customFields: response.contact.customFields,
             createdAt: response.contact.createdAt || ''
           };

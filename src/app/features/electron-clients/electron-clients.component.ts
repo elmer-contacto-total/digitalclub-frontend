@@ -11,7 +11,8 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil, switchMap, of } from 'rxjs';
 import { ElectronService } from '../../core/services/electron.service';
 import { ElectronContactsService } from './services/electron-contacts.service';
-import { WebSocketService } from '../../core/services/websocket.service';
+import { WebSocketService, WsNewMessagePayload } from '../../core/services/websocket.service';
+import { MessageDirection } from '../../core/models/message.model';
 import {
   CrmContact,
   LocalContact,
@@ -71,6 +72,10 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   loadingHistory = signal(false);
   showHistoryPanel = signal(false);
 
+  // Require response state (last message was from client → disable close buttons)
+  requiresResponse = signal(false);
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Label options
   readonly labelOptions = PERSONAL_LABELS;
 
@@ -85,6 +90,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   displayPhone = computed(() => this.formatPhone(this.currentPhone()));
   initials = computed(() => getContactInitials(this.displayName()));
   currentLabelConfig = computed(() => getLabelConfig(this.selectedLabel()));
+  canCloseTicket = computed(() => this.hasOpenTicket() && !this.requiresResponse());
 
   ngOnInit(): void {
     // Check if running in Electron
@@ -104,6 +110,13 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     ).subscribe(() => {
       console.log('[CRM] Reset triggered - clearing all state');
       this.fullReset();
+    });
+
+    // Listen for WebSocket messages to detect incoming/outgoing and ticket reopening
+    this.wsService.messages$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(payload => {
+      this.handleWsMessage(payload);
     });
 
     // Listen for chat selection from Electron
@@ -153,6 +166,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         } else if (result.type === 'registered' && result.registered) {
           this.notesField.set(result.registered.issueNotes || '');
           this.selectedLabel.set(undefined);
+          this.requiresResponse.set(result.registered.requireResponse === true);
         }
 
         // Notificar a Electron del cliente activo (para captura de medios)
@@ -196,6 +210,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       this.electronService.hideWhatsApp();
     }
 
+    this.cancelRefreshTimer();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -318,6 +333,8 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     this.contact.set(null);
     this.selectedLabel.set(undefined);
     this.notesField.set('');
+    this.requiresResponse.set(false);
+    this.cancelRefreshTimer();
 
     // Clear active client in Electron
     this.electronService.clearActiveClient();
@@ -340,6 +357,8 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     // Reset ticket state
     this.isClosingTicket.set(false);
     this.showTicketConfirmation.set(null);
+    this.requiresResponse.set(false);
+    this.cancelRefreshTimer();
 
     // Reset canned messages
     this.showCannedMessages.set(false);
@@ -420,6 +439,84 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       month: 'short',
       year: 'numeric'
     });
+  }
+
+  // ==================== WEBSOCKET MESSAGE HANDLING ====================
+
+  /**
+   * Handle incoming WebSocket message to update requiresResponse and detect ticket reopening
+   */
+  private handleWsMessage(payload: WsNewMessagePayload): void {
+    const c = this.contact();
+    if (!c?.registered?.id) return;
+
+    // Check if message involves the current contact
+    const contactId = c.registered.id;
+    if (payload.senderId !== contactId && payload.recipientId !== contactId) return;
+
+    const isIncoming = payload.message.direction === MessageDirection.INCOMING;
+
+    if (isIncoming) {
+      // Client sent a message → disable close buttons
+      this.requiresResponse.set(true);
+
+      // If no open ticket, the backend will create one after ~5 sec delay
+      if (!this.hasOpenTicket()) {
+        this.refreshContactAfterDelay();
+      }
+    } else {
+      // Agent sent a message → enable close buttons
+      this.requiresResponse.set(false);
+    }
+  }
+
+  /**
+   * Re-query contact after delay to detect backend-created ticket
+   * Debounced: cancels previous timer if multiple messages arrive quickly
+   */
+  private refreshContactAfterDelay(): void {
+    this.cancelRefreshTimer();
+
+    const phone = this.currentPhone();
+    if (!phone) return;
+
+    this.refreshTimer = setTimeout(() => {
+      // Verify we're still on the same contact
+      if (this.currentPhone() !== phone) return;
+
+      this.contactsService.searchByPhone(phone).subscribe(result => {
+        // Verify still on the same contact after async response
+        if (this.currentPhone() !== phone) return;
+
+        if (result?.type === 'registered' && result.registered) {
+          // Update ticket state from fresh API data
+          const current = this.contact();
+          if (current?.registered) {
+            current.registered.hasOpenTicket = result.registered.hasOpenTicket;
+            current.registered.openTicketId = result.registered.openTicketId;
+            current.registered.requireResponse = result.registered.requireResponse;
+            // Re-set the signal to trigger change detection
+            this.contact.set({ ...current });
+            this.requiresResponse.set(result.registered.requireResponse === true);
+
+            // Reload action history if a new ticket appeared
+            if (result.registered.hasOpenTicket && result.registered.id) {
+              this.loadActionHistoryAuto(result.registered.id);
+            }
+          }
+        }
+      });
+    }, 6000);
+  }
+
+  /**
+   * Cancel pending refresh timer
+   */
+  private cancelRefreshTimer(): void {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
   }
 
   // ==================== TICKET ACTIONS ====================
