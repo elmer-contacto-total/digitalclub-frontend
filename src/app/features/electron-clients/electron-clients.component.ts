@@ -124,7 +124,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$)
     ).subscribe(data => {
       const currentPhone = this.currentPhone();
-      if (currentPhone && currentPhone === data.phone) {
+      if (currentPhone && PhoneUtils.normalize(currentPhone) === PhoneUtils.normalize(data.phone)) {
         this.requiresResponse.set(true);
         if (!this.hasOpenTicket()) {
           this.refreshContactAfterDelay();
@@ -137,7 +137,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$)
     ).subscribe(data => {
       const currentPhone = this.currentPhone();
-      if (currentPhone && currentPhone === data.phone) {
+      if (currentPhone && PhoneUtils.normalize(currentPhone) === PhoneUtils.normalize(data.phone)) {
         this.requiresResponse.set(false);
       }
     });
@@ -228,8 +228,8 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Hide WhatsApp Web view when leaving this module
-    if (this.electronService.isElectron) {
+    // Hide WhatsApp Web view when leaving this module (but not during bulk send)
+    if (this.electronService.isElectron && !this.electronService.bulkSendActive) {
       this.electronService.hideWhatsApp();
     }
 

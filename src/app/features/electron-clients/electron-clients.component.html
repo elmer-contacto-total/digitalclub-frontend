@@ -126,12 +126,6 @@
                   }
                 </div>
 
-                @if (hasOpenTicket()) {
-                  <div class="ticket-badge" [class.pending-response]="requiresResponse()">
-                    <i class="ph" [class.ph-ticket]="!requiresResponse()" [class.ph-chat-dots]="requiresResponse()"></i>
-                    <span>{{ requiresResponse() ? 'Esperando respuesta' : 'Caso abierto' }}</span>
-                  </div>
-                }
               </div>
 
               <!-- Custom Fields -->

@@ -1,6 +1,6 @@
 import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { BulkSendService, BulkSend } from '../../../../core/services/bulk-send.service';
 import { ElectronService } from '../../../../core/services/electron.service';
@@ -265,6 +265,7 @@ export class EnvioListComponent implements OnInit, OnDestroy {
   electronService = inject(ElectronService);
   private authService = inject(AuthService);
   private toast = inject(ToastService);
+  private router = inject(Router);
   private destroy$ = new Subject<void>();
 
   isLoading = signal(false);
@@ -333,7 +334,9 @@ export class EnvioListComponent implements OnInit, OnDestroy {
     });
   }
 
-  resume(bs: BulkSend): void {
+  async resume(bs: BulkSend): Promise<void> {
+    await this.router.navigate(['/app/electron_clients']);
+    await new Promise(resolve => setTimeout(resolve, 500));
     if (this.electronService.isElectron) {
       this.electronService.resumeBulkSend();
     }
@@ -351,9 +354,11 @@ export class EnvioListComponent implements OnInit, OnDestroy {
   async start(bs: BulkSend): Promise<void> {
     const token = this.authService.getToken();
     if (!token) return;
+    await this.router.navigate(['/app/electron_clients']);
+    await new Promise(resolve => setTimeout(resolve, 500));
     const started = await this.electronService.startBulkSend(bs.id, token);
     if (started) {
-      this.toast.success('Envío masivo iniciado');
+      this.toast.success('Envío masivo completado');
       this.loadBulkSends();
     } else {
       this.toast.error('No se pudo iniciar el envío');

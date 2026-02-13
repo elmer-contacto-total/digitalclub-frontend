@@ -7,7 +7,7 @@ import { SidebarComponent } from '../../components/sidebar/sidebar.component';
 import { ImpersonationToolbarComponent } from '../../components/impersonation-toolbar/impersonation-toolbar.component';
 import { UpdateBannerComponent } from '../../components/update-banner/update-banner.component';
 import { ToastService } from '../../../core/services/toast.service';
-import { ElectronService } from '../../../core/services/electron.service';
+import { ElectronService, BulkSendState } from '../../../core/services/electron.service';
 
 @Component({
   selector: 'app-admin-layout',
@@ -25,6 +25,8 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
   sidebarCollapsed = signal(false);
   sidebarMobileOpen = signal(false);
   whatsappVisible = signal(false);
+  bulkSendActive = signal(false);
+  bulkSendState = signal<BulkSendState>({ state: 'idle', sentCount: 0, failedCount: 0, totalRecipients: 0, currentPhone: null });
 
   // Responsive handling
   private readonly MOBILE_BREAKPOINT = 1024;
@@ -40,6 +42,14 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe(visible => {
           this.whatsappVisible.set(visible);
+        });
+
+      // Listen for bulk send state changes
+      this.electronService.bulkSendState$
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(state => {
+          this.bulkSendState.set(state);
+          this.bulkSendActive.set(state.state === 'running');
         });
     }
   }
@@ -97,5 +107,21 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
 
   get currentYear(): number {
     return new Date().getFullYear();
+  }
+
+  pauseBulkSend(): void {
+    this.electronService.pauseBulkSend();
+  }
+
+  cancelBulkSend(): void {
+    if (confirm('¿Estás seguro de cancelar el envío masivo?')) {
+      this.electronService.cancelBulkSend();
+    }
+  }
+
+  get bulkSendProgress(): number {
+    const s = this.bulkSendState();
+    if (!s.totalRecipients) return 0;
+    return Math.round((s.sentCount / s.totalRecipients) * 100);
   }
 }

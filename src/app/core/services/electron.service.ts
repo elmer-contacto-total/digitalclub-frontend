@@ -3,6 +3,17 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { ChatSelectedEvent, PhoneDetectedEvent } from '../models/crm-contact.model';
 
 /**
+ * State of the bulk send process, pushed from Electron main process
+ */
+export interface BulkSendState {
+  state: 'idle' | 'running' | 'paused' | 'completed' | 'cancelled' | 'error';
+  sentCount: number;
+  failedCount: number;
+  totalRecipients: number;
+  currentPhone: string | null;
+}
+
+/**
  * Bounds data from Electron
  */
 interface WhatsAppBounds {
@@ -45,6 +56,9 @@ interface ElectronAPI {
   setActiveClient?(data: { clientUserId: number | null; chatPhone: string; chatName: string }): void;
   clearActiveClient?(): void;
   crmClientReady?(): void;
+
+  // Bulk send state changes
+  onBulkSendStateChanged?(callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null }) => void): void;
 
   // Angular bounds
   getAngularBounds?(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
@@ -94,6 +108,9 @@ export class ElectronService {
   private crmResetSubject = new Subject<void>(); // CRM reset trigger (Subject — must NOT emit on subscribe)
   private incomingMessageSubject = new Subject<{ phone: string }>();
   private outgoingMessageSubject = new Subject<{ phone: string }>();
+  private bulkSendStateSubject = new BehaviorSubject<BulkSendState>({
+    state: 'idle', sentCount: 0, failedCount: 0, totalRecipients: 0, currentPhone: null
+  });
 
   // Public observables
   readonly chatSelected$: Observable<ChatSelectedEvent | null> = this.chatSelectedSubject.asObservable();
@@ -106,6 +123,7 @@ export class ElectronService {
   readonly crmReset$: Observable<void> = this.crmResetSubject.asObservable();
   readonly incomingMessage$: Observable<{ phone: string }> = this.incomingMessageSubject.asObservable();
   readonly outgoingMessage$: Observable<{ phone: string }> = this.outgoingMessageSubject.asObservable();
+  readonly bulkSendState$: Observable<BulkSendState> = this.bulkSendStateSubject.asObservable();
 
   constructor() {
     this.detectElectron();
@@ -124,6 +142,13 @@ export class ElectronService {
    */
   get currentChat(): ChatSelectedEvent | null {
     return this.chatSelectedSubject.value;
+  }
+
+  /**
+   * Whether a bulk send is currently running (blocks UI)
+   */
+  get bulkSendActive(): boolean {
+    return this.bulkSendStateSubject.value.state === 'running';
   }
 
   /**
@@ -213,6 +238,15 @@ export class ElectronService {
       window.electronAPI.onOutgoingMessageDetected((data: { phone: string }) => {
         this.ngZone.run(() => {
           this.outgoingMessageSubject.next(data);
+        });
+      });
+    }
+
+    // Listen for bulk send state changes
+    if (window.electronAPI.onBulkSendStateChanged) {
+      window.electronAPI.onBulkSendStateChanged((data) => {
+        this.ngZone.run(() => {
+          this.bulkSendStateSubject.next(data as BulkSendState);
         });
       });
     }
@@ -509,6 +543,7 @@ export class ElectronService {
       window.electronAPI.removeAllListeners('whatsapp-visibility-changed');
       window.electronAPI.removeAllListeners('whatsapp-bounds-changed');
       window.electronAPI.removeAllListeners('app-closing');
+      window.electronAPI.removeAllListeners('bulk-send-state-changed');
     }
   }
 }

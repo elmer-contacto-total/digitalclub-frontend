@@ -39,6 +39,37 @@
     </footer>
   </div>
 
+  <!-- Bulk Send Overlay - blocks ALL interaction during mass sending -->
+  @if (bulkSendActive()) {
+    <div class="bulk-send-overlay">
+      <div class="bulk-send-card">
+        <div class="bulk-send-icon">
+          <i class="ph ph-paper-plane-tilt"></i>
+        </div>
+        <h3>Envío masivo en curso</h3>
+        <p class="bulk-send-phone">{{ bulkSendState().currentPhone || 'Preparando...' }}</p>
+        <div class="bulk-send-progress-bar">
+          <div class="bulk-send-progress-fill" [style.width.%]="bulkSendProgress"></div>
+        </div>
+        <p class="bulk-send-count">
+          {{ bulkSendState().sentCount }} / {{ bulkSendState().totalRecipients }} enviados
+          @if (bulkSendState().failedCount > 0) {
+            <span class="bulk-send-failed">({{ bulkSendState().failedCount }} fallidos)</span>
+          }
+        </p>
+        <div class="bulk-send-actions">
+          <button class="bulk-send-btn bulk-send-btn-pause" (click)="pauseBulkSend()">
+            <i class="ph ph-pause"></i> Pausar
+          </button>
+          <button class="bulk-send-btn bulk-send-btn-cancel" (click)="cancelBulkSend()">
+            <i class="ph ph-x"></i> Cancelar
+          </button>
+        </div>
+        <p class="bulk-send-notice">La interfaz está bloqueada durante el envío masivo</p>
+      </div>
+    </div>
+  }
+
   <!-- Toast Container -->
   <div class="toast-container">
     @for (toast of toasts(); track toast.id) {

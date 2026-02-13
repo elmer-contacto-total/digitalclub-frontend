@@ -34,6 +34,11 @@ const BACKEND_BASE_URL = process.env.BACKEND_URL || 'http://digitalclub.contacto
 const bulkSender = new BulkSender(BACKEND_BASE_URL);
 const BULK_SEND_STATE_FILE = path.join(app.getPath('userData'), 'bulk-send-state.json');
 bulkSender.setStateFile(BULK_SEND_STATE_FILE);
+bulkSender.setOverlayCallback((data) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('bulk-send-state-changed', data);
+  }
+});
 
 // Fingerprint único para esta instalación
 let userFingerprint: UserFingerprint;
@@ -2451,17 +2456,13 @@ function setupIPC(): void {
 
   // Start bulk send
   ipcMain.handle('bulk-send:start', async (_, bulkSendId: number, authToken: string) => {
-    const wasHidden = !whatsappVisible;
     try {
-      // Ensure WhatsApp BrowserView is attached to window (insertText requires rendered view)
-      if (wasHidden && mainWindow && whatsappView) {
-        if (!mainWindow.getBrowserViews().includes(whatsappView)) {
-          mainWindow.addBrowserView(whatsappView);
-        }
-        updateWhatsAppViewBounds();
-        console.log('[MWS] WhatsApp view attached for BulkSender');
+      // Notificar Angular antes de iniciar
+      if (mainWindow) {
+        mainWindow.webContents.send('bulk-send-state-changed', {
+          state: 'running', sentCount: 0, failedCount: 0, totalRecipients: 0, currentPhone: null
+        });
       }
-
       bulkSender.setWhatsAppView(whatsappView);
       bulkSender.setAuthToken(authToken);
       const result = await bulkSender.start(bulkSendId);
@@ -2469,12 +2470,12 @@ function setupIPC(): void {
     } catch (err: any) {
       return { success: false, error: err.message };
     } finally {
-      // Always restore hidden state if it was hidden before bulk send
-      if (wasHidden && mainWindow && whatsappView) {
-        if (mainWindow.getBrowserViews().includes(whatsappView)) {
-          mainWindow.removeBrowserView(whatsappView);
-        }
-        console.log('[MWS] WhatsApp view detached after BulkSender');
+      if (mainWindow) {
+        const status = bulkSender.getStatus();
+        mainWindow.webContents.send('bulk-send-state-changed', {
+          state: status.state, sentCount: status.sentCount,
+          failedCount: status.failedCount, totalRecipients: status.totalRecipients, currentPhone: null
+        });
       }
     }
   });
@@ -2482,18 +2483,39 @@ function setupIPC(): void {
   // Pause bulk send
   ipcMain.handle('bulk-send:pause', async () => {
     bulkSender.pause();
+    if (mainWindow) {
+      const s = bulkSender.getStatus();
+      mainWindow.webContents.send('bulk-send-state-changed', {
+        state: s.state, sentCount: s.sentCount, failedCount: s.failedCount,
+        totalRecipients: s.totalRecipients, currentPhone: s.currentPhone
+      });
+    }
     return { success: true };
   });
 
   // Resume bulk send
   ipcMain.handle('bulk-send:resume', async () => {
     bulkSender.resume();
+    if (mainWindow) {
+      const s = bulkSender.getStatus();
+      mainWindow.webContents.send('bulk-send-state-changed', {
+        state: s.state, sentCount: s.sentCount, failedCount: s.failedCount,
+        totalRecipients: s.totalRecipients, currentPhone: s.currentPhone
+      });
+    }
     return { success: true };
   });
 
   // Cancel bulk send
   ipcMain.handle('bulk-send:cancel', async () => {
     bulkSender.cancel();
+    if (mainWindow) {
+      const s = bulkSender.getStatus();
+      mainWindow.webContents.send('bulk-send-state-changed', {
+        state: s.state, sentCount: s.sentCount, failedCount: s.failedCount,
+        totalRecipients: s.totalRecipients, currentPhone: s.currentPhone
+      });
+    }
     return { success: true };
   });
 

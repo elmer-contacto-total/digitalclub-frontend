@@ -240,6 +240,11 @@ const electronAPI = {
     }
   },
 
+  // Bulk send state changes (from main process)
+  onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null }) => void) => {
+    ipcRenderer.on('bulk-send-state-changed', (_, data) => callback(data));
+  },
+
   // Modo overlay: ocultar/mostrar WhatsApp cuando hay menús abiertos
   setWhatsAppOverlayMode: (overlayOpen: boolean): Promise<boolean> => {
     return ipcRenderer.invoke('whatsapp:set-overlay-mode', overlayOpen);
@@ -336,6 +341,7 @@ declare global {
         cancel: () => Promise<{ success: boolean }>;
         getStatus: () => Promise<{ bulkSendId: number | null; state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; lastError: string | null }>;
       };
+      onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null }) => void) => void;
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
       setLoggedInUser: (userId: number, userName: string, clientId?: number) => void;
       onIncomingMessageDetected?: (callback: (data: { phone: string }) => void) => void;
