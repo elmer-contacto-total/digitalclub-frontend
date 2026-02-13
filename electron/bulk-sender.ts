@@ -884,108 +884,12 @@ export class BulkSender {
       const mimeType = this.getMimeType(filePath);
       const fileName = path.basename(filePath);
 
-      // Determine if this is image/video or document
-      const isMedia = mediaType === 'image' || mediaType === 'video';
-
-      // Step 1: Temporarily unhide the attach button, click it, click the menu option,
-      //         then inject the file via DataTransfer into the <input type="file">
+      // Use drag-and-drop simulation on the chat area.
+      // This bypasses the attach button (hidden by security CSS) entirely.
       const result = await this.whatsappView.webContents.executeJavaScript(`
         (async function() {
           try {
-            // --- Temporarily disable CSS that hides attach button ---
-            var securityStyles = document.querySelectorAll('style');
-            var hiddenStyles = [];
-            securityStyles.forEach(function(s) {
-              if (s.textContent && s.textContent.indexOf('data-testid') !== -1 && s.textContent.indexOf('display: none') !== -1) {
-                hiddenStyles.push({ el: s, text: s.textContent });
-                s.textContent = s.textContent.replace(/\\[data-testid="clip"\\][^}]*display:\\s*none\\s*!important[^}]*/g, '');
-              }
-            });
-
-            await new Promise(function(r) { setTimeout(r, 100); });
-
-            // --- Click attach button ---
-            var attachBtn = document.querySelector('[data-testid="attach-menu-plus"]') ||
-                            document.querySelector('span[data-icon="attach-menu-plus"]')?.closest('button') ||
-                            document.querySelector('[data-testid="clip"]')?.closest('button');
-
-            if (!attachBtn) {
-              // Restore styles before returning
-              hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
-              return { success: false, error: 'Botón de adjuntar no encontrado' };
-            }
-
-            attachBtn.click();
-            await new Promise(function(r) { setTimeout(r, 600); });
-
-            // --- Click correct menu option ---
-            var menuItem;
-            if (${JSON.stringify(isMedia)}) {
-              menuItem = document.querySelector('[data-testid="attach-image"]') ||
-                         document.querySelector('li[data-testid="mi-attach-media"]') ||
-                         document.querySelector('[aria-label*="photo"]') ||
-                         document.querySelector('[aria-label*="Photos"]');
-            } else {
-              menuItem = document.querySelector('[data-testid="attach-document"]') ||
-                         document.querySelector('li[data-testid="mi-attach-document"]') ||
-                         document.querySelector('[aria-label*="Document"]');
-            }
-
-            if (!menuItem) {
-              hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
-              return { success: false, error: 'Opción de adjunto no encontrada en el menú' };
-            }
-
-            // Before clicking menu item, set up input interception
-            var fileInjected = false;
-            var inputPromise = new Promise(function(resolve) {
-              // Watch for file input creation
-              var observer = new MutationObserver(function(mutations) {
-                for (var m = 0; m < mutations.length; m++) {
-                  var nodes = mutations[m].addedNodes;
-                  for (var n = 0; n < nodes.length; n++) {
-                    var node = nodes[n];
-                    if (node.tagName === 'INPUT' && node.type === 'file') {
-                      observer.disconnect();
-                      resolve(node);
-                      return;
-                    }
-                    if (node.querySelector) {
-                      var inp = node.querySelector('input[type="file"]');
-                      if (inp) {
-                        observer.disconnect();
-                        resolve(inp);
-                        return;
-                      }
-                    }
-                  }
-                }
-              });
-              observer.observe(document.body, { childList: true, subtree: true });
-
-              // Also check existing inputs
-              var existing = document.querySelector('input[type="file"]:not([data-bulk-used])');
-              if (existing) {
-                observer.disconnect();
-                resolve(existing);
-              }
-
-              // Timeout fallback
-              setTimeout(function() { observer.disconnect(); resolve(null); }, 3000);
-            });
-
-            menuItem.click();
-
-            var fileInput = await inputPromise;
-
-            // --- Restore CSS immediately after getting the input ---
-            hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
-
-            if (!fileInput) {
-              return { success: false, error: 'Campo de archivo no encontrado' };
-            }
-
-            // --- Inject file via DataTransfer ---
+            // --- Create File from base64 ---
             var base64 = ${JSON.stringify(base64Data)};
             var binaryStr = atob(base64);
             var bytes = new Uint8Array(binaryStr.length);
@@ -994,13 +898,25 @@ export class BulkSender {
             }
             var file = new File([bytes], ${JSON.stringify(fileName)}, { type: ${JSON.stringify(mimeType)} });
 
+            // --- Simulate drag-and-drop onto chat area ---
             var dt = new DataTransfer();
             dt.items.add(file);
-            fileInput.files = dt.files;
-            fileInput.setAttribute('data-bulk-used', 'true');
-            fileInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-            // Wait for WhatsApp to process and show preview (poll instead of fixed delay)
+            var dropTarget = document.querySelector('#main .copyable-area') ||
+                             document.querySelector('#main') ||
+                             document.querySelector('[data-testid="conversation-panel-wrapper"]');
+
+            if (!dropTarget) {
+              return { success: false, error: 'Área de chat no encontrada para enviar archivo' };
+            }
+
+            dropTarget.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+            await new Promise(function(r) { setTimeout(r, 100); });
+            dropTarget.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+            await new Promise(function(r) { setTimeout(r, 100); });
+            dropTarget.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+
+            // --- Wait for WhatsApp to process and show preview ---
             var previewTimeout = 8000;
             var previewInterval = 300;
             var previewStart = Date.now();
@@ -1013,7 +929,6 @@ export class BulkSender {
               await new Promise(function(r) { setTimeout(r, previewInterval); });
             }
             if (!previewReady) {
-              hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
               return { success: false, error: 'Tiempo agotado esperando vista previa del archivo' };
             }
 
@@ -1057,12 +972,6 @@ export class BulkSender {
 
             return { success: true };
           } catch(e) {
-            // Restore styles on error
-            try {
-              if (typeof hiddenStyles !== 'undefined') {
-                hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
-              }
-            } catch(_) {}
             return { success: false, error: e.message || 'media_send_error' };
           }
         })()
