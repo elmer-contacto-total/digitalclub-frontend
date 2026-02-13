@@ -147,7 +147,7 @@ export class BulkSender {
   async start(bulkSendId: number): Promise<{ success: boolean; error?: string; activeBulkSendId?: number | null }> {
     if (this._state === 'running') {
       console.log('[BulkSender] Already running bulk send', this.bulkSendId);
-      return { success: false, error: 'already_running', activeBulkSendId: this.bulkSendId };
+      return { success: false, error: 'Ya hay un envío masivo en curso', activeBulkSendId: this.bulkSendId };
     }
 
     this.bulkSendId = bulkSendId;
@@ -280,7 +280,7 @@ export class BulkSender {
       // Validate phone
       if (!next.phone || next.phone.trim().length < 5) {
         console.warn(`[BulkSender] Invalid phone "${next.phone}" for recipient ${recipientId} — skipping`);
-        await this.reportResult(recipientId, false, 'invalid_phone: empty or too short', 'SKIP');
+        await this.reportResult(recipientId, false, 'Teléfono inválido: vacío o muy corto', 'SKIP');
         this.failedCount++;
         this.emitOverlayUpdate();
         await this.sleep(1000);
@@ -326,7 +326,7 @@ export class BulkSender {
           console.warn('[BulkSender] 5 consecutive failures - auto-pausing');
           this.isPaused = true;
           this._state = 'paused';
-          this.lastError = 'Auto-paused after 5 consecutive failures';
+          this.lastError = 'Pausado automáticamente tras 5 fallos consecutivos';
           this.emitOverlayUpdate();
           return;
         }
@@ -387,7 +387,7 @@ export class BulkSender {
           console.warn('[BulkSender] 5 consecutive failures - auto-pausing');
           this.isPaused = true;
           this._state = 'paused';
-          this.lastError = 'Auto-paused after 5 consecutive failures';
+          this.lastError = 'Pausado automáticamente tras 5 fallos consecutivos';
           this.emitOverlayUpdate();
           return;
         }
@@ -493,7 +493,7 @@ export class BulkSender {
 
   private async navigateToChat(phone: string): Promise<{ success: boolean; error?: string; errorType?: 'not_registered' | 'not_found' | 'timeout' | 'selector' | 'unknown' }> {
     if (!this.whatsappView) {
-      return { success: false, error: 'WhatsApp view not available', errorType: 'unknown' };
+      return { success: false, error: 'Vista de WhatsApp no disponible', errorType: 'unknown' };
     }
 
     // Normalize phone: strip +, -, (, ), spaces
@@ -518,7 +518,7 @@ export class BulkSender {
               searchBox = document.querySelector('[data-icon="search"]')?.closest('button') ||
                           document.querySelector('#side [contenteditable="true"]');
             }
-            if (!searchBox) return { success: false, error: 'search_not_found' };
+            if (!searchBox) return { success: false, error: 'Buscador no encontrado' };
 
             searchBox.click();
             await new Promise(function(r) { setTimeout(r, 400); });
@@ -529,7 +529,7 @@ export class BulkSender {
               input = document.querySelector('#side div[contenteditable="true"]') ||
                       document.querySelector('[data-testid="search-input"]');
             }
-            if (!input) return { success: false, error: 'search_input_not_found' };
+            if (!input) return { success: false, error: 'Campo de búsqueda no encontrado' };
 
             input.focus();
             input.click();
@@ -619,12 +619,12 @@ export class BulkSender {
 
       if (searchCheck.status === 'no_results') {
         console.log(`[BulkSender] Phone ${phone} not registered in WhatsApp`);
-        return { success: false, error: `Teléfono ${phone} no registrado en WhatsApp`, errorType: 'not_registered' };
+        return { success: false, error: `No se encontraron resultados para ${phone}`, errorType: 'not_registered' };
       }
 
       if (searchCheck.count > 15) {
         console.warn(`[BulkSender] Search did not filter: ${searchCheck.count} items for phone ${normalizedPhone}`);
-        return { success: false, error: `Search returned ${searchCheck.count} unfiltered results`, errorType: 'timeout' };
+        return { success: false, error: `Búsqueda devolvió ${searchCheck.count} resultados sin filtrar`, errorType: 'timeout' };
       }
 
       console.log(`[BulkSender] Search filtered to ${searchCheck.count} items, selecting via keyboard`);
@@ -674,7 +674,7 @@ export class BulkSender {
           `, true);
           console.warn('[BulkSender] Compose box not found. Diagnostic:', JSON.stringify(diag));
         } catch { /* ignore */ }
-        return { success: false, error: 'Chat did not load (no compose box)', errorType: 'timeout' };
+        return { success: false, error: 'El chat no cargó (no se encontró el cuadro de texto)', errorType: 'timeout' };
       }
 
       // Verify header contains phone suffix (soft check — warning only)
@@ -687,19 +687,18 @@ export class BulkSender {
       `, true);
 
       if (headerCheck !== 'no_header' && !String(headerCheck).includes(phoneSuffix)) {
-        console.error(`[BulkSender] WRONG CHAT: header "${headerCheck}" does not match "${phoneSuffix}"`);
-        return { success: false, error: `wrong_chat: header "${headerCheck}" doesn't match phone`, errorType: 'not_found' };
+        console.warn(`[BulkSender] Header "${headerCheck}" does not match phone suffix "${phoneSuffix}" — proceeding (WhatsApp may show generic text)`);
       }
 
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'js_execution_error', errorType: 'unknown' };
+      return { success: false, error: err.message || 'Error de ejecución', errorType: 'unknown' };
     }
   }
 
   private async sendAndSubmit(text: string): Promise<{ success: boolean; error?: string }> {
     if (!this.whatsappView) {
-      return { success: false, error: 'WhatsApp view not available' };
+      return { success: false, error: 'Vista de WhatsApp no disponible' };
     }
 
     try {
@@ -711,7 +710,7 @@ export class BulkSender {
                       document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
                       document.querySelector('#main div[contenteditable="true"][data-tab]') ||
                       document.querySelector('#main div[contenteditable="true"]');
-          if (!input) return { success: false, error: 'input_not_found' };
+          if (!input) return { success: false, error: 'Cuadro de texto no encontrado' };
           input.focus();
           input.click();
           return { success: true };
@@ -745,7 +744,7 @@ export class BulkSender {
       `, true);
 
       if (!textCheck) {
-        return { success: false, error: 'text_not_inserted' };
+        return { success: false, error: 'No se pudo escribir el texto en el chat' };
       }
 
       // Step 3: Typing simulation delay
@@ -770,7 +769,7 @@ export class BulkSender {
       `, 5000, 300);
 
       if (!sentOk) {
-        return { success: false, error: 'message_not_sent: compose box still has text after 5s' };
+        return { success: false, error: 'Mensaje no enviado: el cuadro de texto aún tiene contenido' };
       }
 
       // Step 6: Soft-check — verify last outgoing message has a tick (warning only)
@@ -815,13 +814,13 @@ export class BulkSender {
     mediaType: string
   ): Promise<{ success: boolean; error?: string }> {
     if (!this.whatsappView) {
-      return { success: false, error: 'WhatsApp view not available' };
+      return { success: false, error: 'Vista de WhatsApp no disponible' };
     }
 
     try {
       // Read file from disk in main process
       if (!fs.existsSync(filePath)) {
-        return { success: false, error: `File not found: ${filePath}` };
+        return { success: false, error: `Archivo no encontrado: ${filePath}` };
       }
       const fileBuffer = fs.readFileSync(filePath);
       const base64Data = fileBuffer.toString('base64');
@@ -856,7 +855,7 @@ export class BulkSender {
             if (!attachBtn) {
               // Restore styles before returning
               hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
-              return { success: false, error: 'attach_button_not_found' };
+              return { success: false, error: 'Botón de adjuntar no encontrado' };
             }
 
             attachBtn.click();
@@ -877,7 +876,7 @@ export class BulkSender {
 
             if (!menuItem) {
               hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
-              return { success: false, error: 'attach_menu_item_not_found' };
+              return { success: false, error: 'Opción de adjunto no encontrada en el menú' };
             }
 
             // Before clicking menu item, set up input interception
@@ -926,7 +925,7 @@ export class BulkSender {
             hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
 
             if (!fileInput) {
-              return { success: false, error: 'file_input_not_found' };
+              return { success: false, error: 'Campo de archivo no encontrado' };
             }
 
             // --- Inject file via DataTransfer ---
@@ -958,7 +957,7 @@ export class BulkSender {
             }
             if (!previewReady) {
               hiddenStyles.forEach(function(h) { h.el.textContent = h.text; });
-              return { success: false, error: 'media_preview_timeout' };
+              return { success: false, error: 'Tiempo agotado esperando vista previa del archivo' };
             }
 
             // --- Write caption if present ---
@@ -981,7 +980,7 @@ export class BulkSender {
                           document.querySelector('span[data-icon="send"]')?.closest('button');
 
             if (!sendBtn) {
-              return { success: false, error: 'send_button_not_found_after_media' };
+              return { success: false, error: 'Botón de enviar no encontrado después de adjuntar' };
             }
 
             sendBtn.click();
