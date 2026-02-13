@@ -113,6 +113,11 @@
   pointer-events: auto;
 }
 
+// When WhatsApp is visible, constrain overlay to Angular area (left half)
+:host-context(.whatsapp-visible) .bulk-send-overlay {
+  right: 50vw;
+}
+
 .bulk-send-card {
   background: var(--card-bg);
   border-radius: var(--radius-xl);

@@ -1219,19 +1219,14 @@ export class BulkSender {
           overlay.id = 'bulk-send-overlay';
           overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;pointer-events:auto;';
           overlay.innerHTML = \`
-            <div style="background:white;border-radius:16px;padding:32px;text-align:center;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-              <div style="width:60px;height:60px;border-radius:50%;background:#4361ee;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <div style="text-align:center;color:white;">
+              <div style="width:56px;height:56px;border-radius:50%;background:#4361ee;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
                   <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
                 </svg>
               </div>
-              <h3 style="margin:0 0 8px;font-size:20px;color:#1a1a2e;">Envío masivo en curso</h3>
-              <p id="bulk-overlay-status" style="margin:0 0 16px;font-size:14px;color:#6c757d;">Iniciando...</p>
-              <div style="background:#e9ecef;border-radius:8px;height:8px;overflow:hidden;margin-bottom:8px;">
-                <div id="bulk-overlay-progress" style="height:100%;background:#4361ee;border-radius:8px;transition:width 0.3s;width:0%"></div>
-              </div>
-              <p id="bulk-overlay-count" style="margin:0 0 20px;font-size:13px;color:#999;">0 / 0 enviados</p>
-              <p style="font-size:12px;color:#aaa;margin:0;">WhatsApp está bloqueado durante el envío masivo</p>
+              <p style="margin:0;font-size:16px;font-weight:600;">Envío masivo en curso</p>
+              <p style="margin:8px 0 0;font-size:13px;opacity:0.7;">Los controles están en el panel izquierdo</p>
             </div>
           \`;
           document.body.appendChild(overlay);
@@ -1257,20 +1252,7 @@ export class BulkSender {
   }
 
   private async updateOverlay(): Promise<void> {
-    if (!this.whatsappView) return;
-    const pct = this.totalRecipients > 0 ? Math.round((this.sentCount + this.failedCount) * 100 / this.totalRecipients) : 0;
-    try {
-      await this.whatsappView.webContents.executeJavaScript(`
-        (function() {
-          const status = document.getElementById('bulk-overlay-status');
-          const progress = document.getElementById('bulk-overlay-progress');
-          const count = document.getElementById('bulk-overlay-count');
-          if (status) status.textContent = 'Enviando a ${(this.currentPhone || '').replace(/'/g, "\\'")}...';
-          if (progress) progress.style.width = '${pct}%';
-          if (count) count.textContent = '${this.sentCount} / ${this.totalRecipients} enviados' + (${this.failedCount} > 0 ? ' (${this.failedCount} fallidos)' : '');
-        })()
-      `);
-    } catch { /* ignore */ }
+    // Progress is shown in Angular overlay; WhatsApp overlay is just a blocker
   }
 
   // --- API Communication ---
