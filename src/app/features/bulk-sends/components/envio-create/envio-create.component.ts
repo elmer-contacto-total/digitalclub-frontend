@@ -24,12 +24,19 @@ interface ParsedCsv {
   imports: [CommonModule, FormsModule, RouterLink, LoadingSpinnerComponent],
   template: `
     <div class="envio-create-container">
-      <div class="page-header">
-        <a routerLink="/app/bulk_sends" class="back-link">
-          <i class="ph ph-arrow-left"></i> Volver a envíos
-        </a>
-        <h1>Nuevo Envío Masivo</h1>
-        <p class="subtitle">Sube un CSV, escribe tu mensaje con variables, adjunta un archivo y envía</p>
+      <a routerLink="/app/bulk_sends" class="back-link">
+        <i class="ph ph-arrow-left"></i> Volver a envíos
+      </a>
+      <div class="hero-card">
+        <div class="hero-main">
+          <div class="hero-icon">
+            <i class="ph ph-paper-plane-tilt"></i>
+          </div>
+          <div class="hero-info">
+            <h1>Nuevo Envío Masivo</h1>
+            <p>Sube un CSV, escribe tu mensaje con variables, adjunta un archivo y envía</p>
+          </div>
+        </div>
       </div>
 
       @if (errors().length > 0) {
@@ -102,33 +109,40 @@ interface ParsedCsv {
               }
             </div>
 
-            <div class="preview-table-wrapper">
-              <table class="preview-table">
-                <thead>
-                  <tr>
-                    @for (header of csv()!.headers; track $index) {
-                      <th [class.col-phone]="$index === +selectedPhoneColumn"
-                          [class.col-name]="$index === +selectedNameColumn">
-                        {{ header }}
-                        @if ($index === +selectedPhoneColumn) { <i class="ph ph-phone" title="Teléfono"></i> }
-                        @if ($index === +selectedNameColumn) { <i class="ph ph-user" title="Nombre"></i> }
-                      </th>
-                    }
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (row of csv()!.rows; track $index) {
+            <button class="btn-toggle-preview" (click)="showCsvPreview.set(!showCsvPreview())">
+              <i class="ph" [class.ph-caret-down]="!showCsvPreview()" [class.ph-caret-up]="showCsvPreview()"></i>
+              {{ showCsvPreview() ? 'Ocultar vista previa' : 'Ver vista previa (' + csv()!.totalRows + ' filas)' }}
+            </button>
+
+            @if (showCsvPreview()) {
+              <div class="preview-table-wrapper">
+                <table class="preview-table">
+                  <thead>
                     <tr>
-                      @for (cell of row; track $index) {
-                        <td>{{ cell }}</td>
+                      @for (header of csv()!.headers; track $index) {
+                        <th [class.col-phone]="$index === +selectedPhoneColumn"
+                            [class.col-name]="$index === +selectedNameColumn">
+                          {{ header }}
+                          @if ($index === +selectedPhoneColumn) { <i class="ph ph-phone" title="Teléfono"></i> }
+                          @if ($index === +selectedNameColumn) { <i class="ph ph-user" title="Nombre"></i> }
+                        </th>
                       }
                     </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-            @if (csv()!.totalRows > 5) {
-              <p class="more-rows">... y {{ csv()!.totalRows - 5 }} filas más</p>
+                  </thead>
+                  <tbody>
+                    @for (row of csv()!.rows; track $index) {
+                      <tr>
+                        @for (cell of row; track $index) {
+                          <td>{{ cell }}</td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              @if (csv()!.totalRows > 5) {
+                <p class="more-rows">... y {{ csv()!.totalRows - 5 }} filas más</p>
+              }
             }
           </div>
         }
@@ -292,9 +306,9 @@ interface ParsedCsv {
               </button>
               <button class="btn btn-success btn-lg" (click)="send()" [disabled]="isSending()">
                 @if (isSending()) {
-                  <i class="ph ph-spinner ph-spin"></i> Enviando...
+                  <i class="ph ph-spinner ph-spin"></i> Creando...
                 } @else {
-                  <i class="ph ph-paper-plane-tilt"></i> Iniciar Envío
+                  <i class="ph ph-paper-plane-tilt"></i> Crear Envío
                 }
               </button>
             </div>
@@ -305,14 +319,28 @@ interface ParsedCsv {
   `,
   styles: [`
     .envio-create-container { padding: var(--space-6); max-width: 800px; margin: 0 auto; }
-    .page-header { margin-bottom: var(--space-6); }
+
     .back-link {
-      display: inline-flex; align-items: center; gap: var(--space-1);
-      color: var(--fg-muted); text-decoration: none; font-size: var(--text-base); margin-bottom: var(--space-2);
+      display: inline-flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-sm); color: var(--fg-muted); text-decoration: none;
+      margin-bottom: var(--space-4); transition: color var(--duration-fast);
+      i { font-size: 16px; }
       &:hover { color: var(--accent-default); }
     }
-    .page-header h1 { font-size: var(--text-2xl); font-weight: var(--font-semibold); margin: 0; color: var(--fg-default); }
-    .subtitle { font-size: var(--text-base); color: var(--fg-muted); margin: var(--space-1) 0 0; }
+
+    .hero-card {
+      background: linear-gradient(135deg, var(--accent-default) 0%, var(--accent-emphasis) 100%);
+      border-radius: var(--radius-xl); padding: var(--space-6); margin-bottom: var(--space-6); color: white;
+    }
+    .hero-main { display: flex; align-items: center; gap: var(--space-4); }
+    .hero-icon {
+      width: 64px; height: 64px; border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      i { font-size: 32px; }
+    }
+    .hero-info h1 { margin: 0 0 var(--space-1) 0; font-size: var(--text-xl); font-weight: var(--font-semibold); color: white; }
+    .hero-info p { margin: 0; font-size: var(--text-base); opacity: 0.9; }
 
     .error-panel {
       background: var(--error-subtle); border: 1px solid var(--error-default); border-radius: var(--radius-lg);
@@ -370,7 +398,15 @@ interface ParsedCsv {
       &:hover { background: var(--accent-default); color: white; }
     }
 
-    .preview-table-wrapper { overflow-x: auto; margin-bottom: var(--space-2); }
+    .btn-toggle-preview {
+      display: inline-flex; align-items: center; gap: var(--space-1);
+      background: none; border: 1px solid var(--border-default); border-radius: var(--radius-lg);
+      padding: var(--space-1) var(--space-3); font-size: var(--text-sm); color: var(--fg-muted);
+      cursor: pointer; margin-top: var(--space-2);
+      &:hover { border-color: var(--accent-default); color: var(--accent-default); }
+    }
+
+    .preview-table-wrapper { overflow-x: auto; margin-bottom: var(--space-2); margin-top: var(--space-3); }
     .preview-table {
       width: 100%; border-collapse: collapse; font-size: var(--text-sm);
       th, td { padding: var(--space-2) var(--space-3); text-align: left; border: 1px solid var(--border-muted); color: var(--fg-default); }
@@ -479,6 +515,7 @@ export class EnvioCreateComponent implements OnDestroy {
   csvFile = signal<File | null>(null);
   csvFileName = signal('');
   isDragging = signal(false);
+  showCsvPreview = signal(false);
   messageContent = signal('');
   messageContentValue = '';
   attachmentFile = signal<File | null>(null);
@@ -594,6 +631,7 @@ export class EnvioCreateComponent implements OnDestroy {
     this.csvFileName.set('');
     this.selectedPhoneColumn = 0;
     this.selectedNameColumn = -1;
+    this.showCsvPreview.set(false);
   }
 
   getExtraVariables(): string[] {
@@ -718,26 +756,11 @@ export class EnvioCreateComponent implements OnDestroy {
       this.attachmentFile() || undefined,
       agentId
     ).pipe(takeUntil(this.destroy$)).subscribe({
-      next: async (res) => {
+      next: (res) => {
         this.toast.success('Envío masivo creado');
-        const bulkSendId = res.bulk_send.id;
-        const currentUserId = this.authService.currentUser()?.id;
-        const assignedToSelf = !agentId || agentId === currentUserId;
-
-        // Auto-start via Electron only if assigned to self
-        if (assignedToSelf && this.electronService.isElectron) {
-          const token = this.authService.getToken();
-          if (token) {
-            const started = await this.electronService.startBulkSend(bulkSendId, token);
-            if (started) {
-              this.toast.success('Envío masivo iniciado automáticamente');
-            }
-          }
-        }
-
         this.isSending.set(false);
         this.attachmentPreview.set(null);
-        this.router.navigate(['/app/bulk_sends', bulkSendId]);
+        this.router.navigate(['/app/bulk_sends']);
       },
       error: (err) => {
         this.isSending.set(false);
