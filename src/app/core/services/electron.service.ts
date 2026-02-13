@@ -37,6 +37,7 @@ interface ElectronAPI {
   // User login/logout (for media capture association)
   setLoggedInUser?(userId: number, userName: string, clientId?: number): void;
   onIncomingMessageDetected?(callback: (data: { phone: string }) => void): void;
+  onOutgoingMessageDetected?(callback: (data: { phone: string }) => void): void;
   setAuthToken?(token: string): void;
   clearLoggedInUser?(): void;
 
@@ -92,6 +93,7 @@ export class ElectronService {
   private appClosingSubject = new BehaviorSubject<boolean>(false);
   private crmResetSubject = new Subject<void>(); // CRM reset trigger (Subject — must NOT emit on subscribe)
   private incomingMessageSubject = new Subject<{ phone: string }>();
+  private outgoingMessageSubject = new Subject<{ phone: string }>();
 
   // Public observables
   readonly chatSelected$: Observable<ChatSelectedEvent | null> = this.chatSelectedSubject.asObservable();
@@ -103,6 +105,7 @@ export class ElectronService {
   readonly appClosing$: Observable<boolean> = this.appClosingSubject.asObservable();
   readonly crmReset$: Observable<void> = this.crmResetSubject.asObservable();
   readonly incomingMessage$: Observable<{ phone: string }> = this.incomingMessageSubject.asObservable();
+  readonly outgoingMessage$: Observable<{ phone: string }> = this.outgoingMessageSubject.asObservable();
 
   constructor() {
     this.detectElectron();
@@ -201,6 +204,15 @@ export class ElectronService {
       window.electronAPI.onIncomingMessageDetected((data: { phone: string }) => {
         this.ngZone.run(() => {
           this.incomingMessageSubject.next(data);
+        });
+      });
+    }
+
+    // Listen for outgoing message detection from Electron
+    if (window.electronAPI.onOutgoingMessageDetected) {
+      window.electronAPI.onOutgoingMessageDetected((data: { phone: string }) => {
+        this.ngZone.run(() => {
+          this.outgoingMessageSubject.next(data);
         });
       });
     }

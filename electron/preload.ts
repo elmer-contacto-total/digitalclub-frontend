@@ -165,6 +165,11 @@ const electronAPI = {
     ipcRenderer.on('incoming-message-detected', (_, data) => callback(data));
   },
 
+  // Evento cuando se detecta un mensaje saliente del agente
+  onOutgoingMessageDetected: (callback: (data: { phone: string }) => void) => {
+    ipcRenderer.on('outgoing-message-detected', (_, data) => callback(data));
+  },
+
   // Notificar a Electron el usuario logueado
   setLoggedInUser: (userId: number, userName: string, clientId?: number) => {
     ipcRenderer.send('set-logged-in-user', { userId, userName, clientId });
@@ -334,6 +339,7 @@ declare global {
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
       setLoggedInUser: (userId: number, userName: string, clientId?: number) => void;
       onIncomingMessageDetected?: (callback: (data: { phone: string }) => void) => void;
+      onOutgoingMessageDetected?: (callback: (data: { phone: string }) => void) => void;
       setAuthToken: (token: string) => void;
       clearLoggedInUser: () => void;
       setActiveClient: (data: { clientUserId: number | null; chatPhone: string; chatName: string }) => void;

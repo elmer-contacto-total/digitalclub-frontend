@@ -239,6 +239,36 @@ async function notifyIncomingMessage(senderPhone: string): Promise<void> {
 }
 
 /**
+ * Notify backend that the agent responded to a client in WhatsApp Web.
+ * Clears requireResponse flag so close ticket buttons are enabled.
+ */
+async function notifyOutgoingMessage(clientPhone: string): Promise<void> {
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/app/messages/mark_agent_responded`, {
+      method: 'POST',
+      headers: getMediaApiHeaders(),
+      body: JSON.stringify({
+        clientPhone: clientPhone,
+        clientId: loggedInClientId
+      })
+    });
+
+    if (response.ok) {
+      console.log('[MWS Outgoing] Agent responded, requireResponse cleared for:', clientPhone);
+    } else {
+      console.error('[MWS Outgoing] Backend error:', response.status);
+    }
+  } catch (err) {
+    console.error('[MWS Outgoing] Network error:', err);
+  }
+
+  // Notify Angular immediately (don't wait for backend)
+  if (mainWindow) {
+    mainWindow.webContents.send('outgoing-message-detected', { phone: clientPhone });
+  }
+}
+
+/**
  * Envía un log de auditoría al backend
  */
 async function sendAuditLog(payload: AuditLogPayload): Promise<void> {
@@ -984,6 +1014,9 @@ function createWhatsAppView(): void {
   // Cargar WhatsApp Web
   whatsappView.webContents.loadURL('https://web.whatsapp.com');
 
+  // DevTools para WhatsApp BrowserView (debug)
+  whatsappView.webContents.openDevTools();
+
   // Marcar como inicializado
   whatsappInitialized = true;
 
@@ -1020,9 +1053,21 @@ function createWhatsAppView(): void {
     // Mensaje entrante detectado - activar ticket
     else if (message.startsWith('[HABLAPE_INCOMING_DETECTED]')) {
       const phone = message.replace('[HABLAPE_INCOMING_DETECTED]', '').trim();
+      console.log('[MWS] INCOMING_DETECTED recibido. phone:', phone,
+        'loggedInUserId:', loggedInUserId, 'loggedInClientId:', loggedInClientId,
+        'mediaAuthToken:', mediaAuthToken ? 'SET' : 'NULL');
       if (phone && loggedInUserId && loggedInClientId && mediaAuthToken) {
-        console.log('[MWS] Incoming message detected for phone:', phone);
+        console.log('[MWS] ✓ Llamando notifyIncomingMessage para:', phone);
         notifyIncomingMessage(phone);
+      } else {
+        console.log('[MWS] ✗ Condición no cumplida, no se llama notifyIncomingMessage');
+      }
+    }
+    // Mensaje saliente del agente detectado - habilitar botones de cierre
+    else if (message.startsWith('[HABLAPE_OUTGOING_DETECTED]')) {
+      const phone = message.replace('[HABLAPE_OUTGOING_DETECTED]', '').trim();
+      if (phone && loggedInUserId && loggedInClientId && mediaAuthToken) {
+        notifyOutgoingMessage(phone);
       }
     }
     // Chat bloqueado por click en sidebar - sincronizar estado

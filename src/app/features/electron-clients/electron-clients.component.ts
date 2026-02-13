@@ -132,6 +132,16 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       }
     });
 
+    // Listen for outgoing messages detected by Electron (agent responded → enable close buttons)
+    this.electronService.outgoingMessage$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(data => {
+      const currentPhone = this.currentPhone();
+      if (currentPhone && currentPhone === data.phone) {
+        this.requiresResponse.set(false);
+      }
+    });
+
     // Listen for chat selection from Electron
     // FLUJO ROBUSTO:
     // 1. Electron bloquea el chat y envía el teléfono esperado

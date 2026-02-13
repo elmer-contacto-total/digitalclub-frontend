@@ -1,6 +1,6 @@
 {
   "name": "holape-angular",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "MWS Desktop - Monitor WhatsApp Service",
   "main": "dist/electron/main.js",
   "scripts": {

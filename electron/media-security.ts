@@ -372,12 +372,22 @@ const BLOCK_DOWNLOAD_SCRIPT = `
   // ===== BLOQUEAR DROP DE ARCHIVOS (envío via drag & drop) =====
   ['dragover', 'dragenter', 'drop'].forEach((evt) => {
     document.addEventListener(evt, (e) => {
+      if (window.__hablapeBulkSendActive) return;
       if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
         e.preventDefault();
         e.stopImmediatePropagation();
       }
     }, true);
   });
+
+  // ===== BLOQUEAR PASTE DE ARCHIVOS/IMÁGENES =====
+  document.addEventListener('paste', (e) => {
+    if (window.__hablapeBulkSendActive) return;
+    if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, true);
 
   // ===== BLOQUEAR TECLAS DE GUARDADO =====
   document.addEventListener('keydown', (e) => {
@@ -963,6 +973,9 @@ const MEDIA_CAPTURE_SCRIPT = `
       blocker.remove();
       console.log('[MWS] Blocker ELIMINADO');
     }
+
+    // Verificar si el último mensaje es del cliente (ticket pendiente)
+    setTimeout(checkLastMessageForIncoming, 300);
   };
 
   // Verificar estado del blocker (para debugging)
@@ -2122,8 +2135,8 @@ const MEDIA_CAPTURE_SCRIPT = `
                                messageEl.classList.contains('message-out') ||
                                messageEl.closest('[class*="message-out"]');
 
-              // Solo mensajes entrantes de chats 1:1 (no grupos @g.us)
-              if (!isOutgoing && msgDataId.includes('@c.us')) {
+              // Solo chats 1:1 (@c.us o @lid), no grupos (@g.us)
+              if (!isOutgoing && (msgDataId.includes('@c.us') || msgDataId.includes('@lid'))) {
                 notifiedIncomingIds.add(msgDataId);
 
                 // Capturar telefono AHORA (no al disparar timer, para evitar race con cambio de chat)
@@ -2136,6 +2149,9 @@ const MEDIA_CAPTURE_SCRIPT = `
                     console.log('[HABLAPE_INCOMING_DETECTED]' + detectedPhone);
                   }
                 }, INCOMING_DEBOUNCE_MS);
+              } else if (isOutgoing && (msgDataId.includes('@c.us') || msgDataId.includes('@lid'))) {
+                // Mensaje saliente del agente — emitir señal para habilitar botones de cierre
+                console.log('[HABLAPE_OUTGOING_DETECTED]' + (window.__hablapeCurrentChatPhone || ''));
               }
             }
           }
@@ -2209,6 +2225,63 @@ const MEDIA_CAPTURE_SCRIPT = `
   // Observar el área principal del chat
   let currentMainPane = null; // Track current #main for observer re-attach
 
+  // Revisa si el último mensaje del chat es entrante (del cliente).
+  // Si lo es, emite señal para activar ticket — cubre el caso donde el
+  // cliente envió mensajes mientras el agente estaba en otro chat.
+  function checkLastMessageForIncoming() {
+    console.log('[MWS CheckLast] === INICIO checkLastMessageForIncoming ===');
+
+    var mainPane = document.querySelector('#main') ||
+                   document.querySelector('[data-testid="conversation-panel-body"]');
+    if (!mainPane) {
+      console.log('[MWS CheckLast] SALIDA: #main no encontrado');
+      return;
+    }
+
+    var allMessages = mainPane.querySelectorAll('[data-id*="@"]');
+    console.log('[MWS CheckLast] Total mensajes encontrados:', allMessages.length);
+    if (allMessages.length === 0) {
+      console.log('[MWS CheckLast] SALIDA: 0 mensajes');
+      return;
+    }
+
+    var lastMsg = allMessages[allMessages.length - 1];
+    var dataId = lastMsg.getAttribute('data-id') || '';
+    console.log('[MWS CheckLast] Último mensaje data-id:', dataId);
+
+    // Solo chats 1:1 (@c.us o @lid), no grupos (@g.us)
+    var is1to1 = dataId.includes('@c.us') || dataId.includes('@lid');
+    if (!is1to1) {
+      console.log('[MWS CheckLast] SALIDA: no es @c.us ni @lid (posible grupo @g.us)');
+      return;
+    }
+
+    var startsWithTrue = dataId.startsWith('true_');
+    var hasClassOut = lastMsg.classList.contains('message-out');
+    var closestOut = lastMsg.closest('[class*="message-out"]');
+    var isOutgoing = startsWithTrue || hasClassOut || !!closestOut;
+
+    console.log('[MWS CheckLast] isOutgoing:', isOutgoing,
+      '(true_:', startsWithTrue, ', class message-out:', hasClassOut, ', closest:', !!closestOut, ')');
+
+    if (!isOutgoing) {
+      var phone = window.__hablapeCurrentChatPhone || '';
+      console.log('[MWS CheckLast] Último msg es ENTRANTE. phone:', phone || '(vacío)');
+      if (phone) {
+        console.log('[HABLAPE_INCOMING_DETECTED]' + phone);
+        console.log('[MWS CheckLast] ✓ Señal emitida para:', phone);
+      } else {
+        console.log('[MWS CheckLast] ✗ No hay phone disponible, no se emite señal');
+      }
+    } else {
+      console.log('[MWS CheckLast] Último msg es SALIENTE (del agente)');
+      var outPhone = window.__hablapeCurrentChatPhone || '';
+      if (outPhone) {
+        console.log('[HABLAPE_OUTGOING_DETECTED]' + outPhone);
+      }
+    }
+  }
+
   function startChatObserver() {
     const mainPane = document.querySelector('#main') ||
                     document.querySelector('[data-testid="conversation-panel-body"]');
@@ -2237,6 +2310,10 @@ const MEDIA_CAPTURE_SCRIPT = `
         // Delay escalonado para no saturar
         setTimeout(() => processMessageForImages(messageEl), idx * 200);
       });
+
+      // Verificar si el último mensaje es del cliente (ticket pendiente)
+      console.log('[MWS CheckLast] Programando checkLastMessage desde startChatObserver (500ms delay)');
+      setTimeout(checkLastMessageForIncoming, 500);
     } else {
       // Reintentar en 2 segundos
       console.log('[MWS Auto] Área de chat no encontrada, reintentando...');
@@ -2269,6 +2346,10 @@ const MEDIA_CAPTURE_SCRIPT = `
       existingMessages.forEach((messageEl, idx) => {
         setTimeout(() => processMessageForImages(messageEl), idx * 200);
       });
+
+      // Verificar si el último mensaje es del cliente (ticket pendiente)
+      console.log('[MWS CheckLast] Programando checkLastMessage desde ensureChatObserverAttached (500ms delay)');
+      setTimeout(checkLastMessageForIncoming, 500);
     }
   }
 

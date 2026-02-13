@@ -123,6 +123,11 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                         <i class="ph ph-pause"></i>
                       </button>
                     }
+                    @if (bs.status === 'PENDING' && electronService.isElectron && isAssignedToMe(bs)) {
+                      <button class="action-btn success" (click)="start(bs)" title="Iniciar">
+                        <i class="ph ph-play"></i>
+                      </button>
+                    }
                     @if (bs.status === 'PAUSED') {
                       <button class="action-btn success" (click)="resume(bs)" title="Reanudar">
                         <i class="ph ph-play"></i>
@@ -257,7 +262,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 })
 export class EnvioListComponent implements OnInit, OnDestroy {
   bulkSendService = inject(BulkSendService);
-  private electronService = inject(ElectronService);
+  electronService = inject(ElectronService);
   private authService = inject(AuthService);
   private toast = inject(ToastService);
   private destroy$ = new Subject<void>();
@@ -336,6 +341,23 @@ export class EnvioListComponent implements OnInit, OnDestroy {
       next: () => { this.toast.success('Envío reanudado'); this.loadBulkSends(); },
       error: (err) => this.toast.error(err.error?.message || 'Error al reanudar')
     });
+  }
+
+  isAssignedToMe(bs: BulkSend): boolean {
+    const currentUserId = this.authService.currentUser()?.id;
+    return !bs.assigned_agent_id || bs.assigned_agent_id === currentUserId;
+  }
+
+  async start(bs: BulkSend): Promise<void> {
+    const token = this.authService.getToken();
+    if (!token) return;
+    const started = await this.electronService.startBulkSend(bs.id, token);
+    if (started) {
+      this.toast.success('Envío masivo iniciado');
+      this.loadBulkSends();
+    } else {
+      this.toast.error('No se pudo iniciar el envío');
+    }
   }
 
   cancel(bs: BulkSend): void {
