@@ -713,7 +713,7 @@ export class BulkSender {
           `, true);
           console.warn('[BulkSender] Compose box not found. Diagnostic:', JSON.stringify(diag));
         } catch { /* ignore */ }
-        return { success: false, error: 'El chat no cargó (no se encontró el cuadro de texto)', errorType: 'timeout' };
+        return { success: false, error: 'Contacto no registrado en WhatsApp', errorType: 'not_registered' };
       }
 
       // Verify header contains phone suffix (soft check — warning only)
