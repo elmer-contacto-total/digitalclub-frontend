@@ -3,6 +3,7 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { BulkSendService, BulkSend } from '../../../../core/services/bulk-send.service';
+import { ElectronService } from '../../../../core/services/electron.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { UserRole } from '../../../../core/models/user.model';
 import { ToastService } from '../../../../core/services/toast.service';
@@ -34,15 +35,25 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       <!-- Status filter -->
       <div class="filter-bar">
         <button class="filter-btn" [class.active]="!statusFilter()" (click)="filterByStatus('')">Todos</button>
+        <button class="filter-btn" [class.active]="statusFilter() === 'PENDING'" (click)="filterByStatus('PENDING')">Pendientes</button>
         <button class="filter-btn" [class.active]="statusFilter() === 'PROCESSING'" (click)="filterByStatus('PROCESSING')">En proceso</button>
         <button class="filter-btn" [class.active]="statusFilter() === 'PAUSED'" (click)="filterByStatus('PAUSED')">Pausados</button>
         <button class="filter-btn" [class.active]="statusFilter() === 'COMPLETED'" (click)="filterByStatus('COMPLETED')">Completados</button>
         <button class="filter-btn" [class.active]="statusFilter() === 'CANCELLED'" (click)="filterByStatus('CANCELLED')">Cancelados</button>
       </div>
 
+      @if (loadError()) {
+        <div class="error-panel">
+          <p><i class="ph ph-warning"></i> {{ loadError() }}</p>
+          <button class="btn btn-outline btn-sm" (click)="loadBulkSends()">
+            <i class="ph ph-arrows-clockwise"></i> Reintentar
+          </button>
+        </div>
+      }
+
       @if (isLoading()) {
         <app-loading-spinner message="Cargando envíos..." />
-      } @else if (bulkSends().length === 0) {
+      } @else if (bulkSends().length === 0 && !loadError()) {
         <div class="empty-state">
           <i class="ph ph-paper-plane-tilt"></i>
           <h3>No hay envíos masivos</h3>
@@ -236,15 +247,23 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     .btn-sm { padding: 6px 12px; font-size: var(--text-sm); }
     .btn-primary { background: var(--accent-default); color: white; &:hover:not(:disabled) { background: var(--accent-emphasis); } }
     .btn-outline { background: var(--card-bg); color: var(--accent-default); border: 1px solid var(--accent-default); &:hover { background: var(--accent-subtle); } }
+
+    .error-panel {
+      background: var(--error-subtle); border: 1px solid var(--error-default); border-radius: var(--radius-lg);
+      padding: var(--space-4); margin-bottom: var(--space-4); display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+      p { margin: 0; font-size: var(--text-base); color: var(--error-text); display: flex; align-items: center; gap: var(--space-2); }
+    }
   `]
 })
 export class EnvioListComponent implements OnInit, OnDestroy {
   bulkSendService = inject(BulkSendService);
+  private electronService = inject(ElectronService);
   private authService = inject(AuthService);
   private toast = inject(ToastService);
   private destroy$ = new Subject<void>();
 
   isLoading = signal(false);
+  loadError = signal('');
   bulkSends = signal<BulkSend[]>([]);
   statusFilter = signal('');
   currentPage = signal(0);
@@ -279,8 +298,9 @@ export class EnvioListComponent implements OnInit, OnDestroy {
     this.loadBulkSends();
   }
 
-  private loadBulkSends(): void {
+  loadBulkSends(): void {
     this.isLoading.set(true);
+    this.loadError.set('');
     const status = this.statusFilter() || undefined;
     this.bulkSendService.getBulkSends(this.currentPage(), 20, status).pipe(
       takeUntil(this.destroy$)
@@ -293,11 +313,15 @@ export class EnvioListComponent implements OnInit, OnDestroy {
       error: (err) => {
         console.error('Error loading bulk sends:', err);
         this.isLoading.set(false);
+        this.loadError.set('Error al cargar envíos. Verifica tu conexión.');
       }
     });
   }
 
   pause(bs: BulkSend): void {
+    if (this.electronService.isElectron) {
+      this.electronService.pauseBulkSend();
+    }
     this.bulkSendService.pauseBulkSend(bs.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => { this.toast.success('Envío pausado'); this.loadBulkSends(); },
       error: (err) => this.toast.error(err.error?.message || 'Error al pausar')
@@ -305,6 +329,9 @@ export class EnvioListComponent implements OnInit, OnDestroy {
   }
 
   resume(bs: BulkSend): void {
+    if (this.electronService.isElectron) {
+      this.electronService.resumeBulkSend();
+    }
     this.bulkSendService.resumeBulkSend(bs.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => { this.toast.success('Envío reanudado'); this.loadBulkSends(); },
       error: (err) => this.toast.error(err.error?.message || 'Error al reanudar')
@@ -313,6 +340,9 @@ export class EnvioListComponent implements OnInit, OnDestroy {
 
   cancel(bs: BulkSend): void {
     if (!confirm('¿Estás seguro de cancelar este envío?')) return;
+    if (this.electronService.isElectron) {
+      this.electronService.cancelBulkSend();
+    }
     this.bulkSendService.cancelBulkSend(bs.id).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => { this.toast.success('Envío cancelado'); this.loadBulkSends(); },
       error: (err) => this.toast.error(err.error?.message || 'Error al cancelar')

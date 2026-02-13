@@ -84,8 +84,12 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
               </button>
             }
             @if (detail()!.status === 'PENDING' && electronService.isElectron && isAssignedAgent()) {
-              <button class="btn btn-primary" (click)="startSending()">
-                <i class="ph ph-paper-plane-tilt"></i> Iniciar Envío
+              <button class="btn btn-primary" (click)="startSending()" [disabled]="isStarting()">
+                @if (isStarting()) {
+                  <i class="ph ph-spinner ph-spin"></i> Iniciando...
+                } @else {
+                  <i class="ph ph-paper-plane-tilt"></i> Iniciar Envío
+                }
               </button>
             }
             <button class="btn btn-danger" (click)="cancel()">
@@ -275,6 +279,9 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     .btn-success { background: var(--success-default); color: white; &:hover:not(:disabled) { filter: brightness(0.85); } }
     .btn-warning { background: var(--warning-default); color: white; &:hover:not(:disabled) { filter: brightness(0.85); } }
     .btn-danger { background: var(--error-default); color: white; &:hover:not(:disabled) { filter: brightness(0.85); } }
+
+    .ph-spin { animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   `]
 })
 export class EnvioDetailComponent implements OnInit, OnDestroy {
@@ -287,6 +294,7 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
 
   bulkSendId = 0;
   isLoading = signal(false);
+  isStarting = signal(false);
   detail = signal<BulkSendDetail | null>(null);
   recipientPage = signal(0);
 
@@ -308,7 +316,7 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$),
       filter(() => {
         const d = this.detail();
-        return d !== null && (d.status === 'PROCESSING' || d.status === 'PENDING');
+        return d !== null && d.status !== 'COMPLETED' && d.status !== 'CANCELLED' && d.status !== 'FAILED';
       }),
       switchMap(() => this.bulkSendService.getBulkSend(this.bulkSendId, this.recipientPage()))
     ).subscribe({
@@ -344,24 +352,33 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
   }
 
   pause(): void {
+    if (this.electronService.isElectron) {
+      this.electronService.pauseBulkSend();
+    }
     this.bulkSendService.pauseBulkSend(this.bulkSendId).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => { this.toast.success('Envío pausado'); this.loadDetail(); },
-      error: (err) => this.toast.error(err.error?.message || 'Error')
+      error: (err) => this.toast.error(err.error?.message || 'Error al pausar')
     });
   }
 
   resume(): void {
+    if (this.electronService.isElectron) {
+      this.electronService.resumeBulkSend();
+    }
     this.bulkSendService.resumeBulkSend(this.bulkSendId).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => { this.toast.success('Envío reanudado'); this.loadDetail(); },
-      error: (err) => this.toast.error(err.error?.message || 'Error')
+      error: (err) => this.toast.error(err.error?.message || 'Error al reanudar')
     });
   }
 
   cancel(): void {
     if (!confirm('¿Cancelar este envío?')) return;
+    if (this.electronService.isElectron) {
+      this.electronService.cancelBulkSend();
+    }
     this.bulkSendService.cancelBulkSend(this.bulkSendId).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => { this.toast.success('Envío cancelado'); this.loadDetail(); },
-      error: (err) => this.toast.error(err.error?.message || 'Error')
+      error: (err) => this.toast.error(err.error?.message || 'Error al cancelar')
     });
   }
 
@@ -370,15 +387,27 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
       this.toast.error('Solo disponible en la aplicación de escritorio');
       return;
     }
+    if (this.isStarting()) return;
+
     const token = this.authService.getToken();
-    if (token) {
+    if (!token) {
+      this.toast.error('Sesión expirada. Vuelve a iniciar sesión.');
+      return;
+    }
+
+    this.isStarting.set(true);
+    try {
       const ok = await this.electronService.startBulkSend(this.bulkSendId, token);
       if (ok) {
-        this.toast.success('Envío iniciado');
+        this.toast.success('Envío masivo iniciado');
         this.loadDetail();
       } else {
-        this.toast.error('No se pudo iniciar el envío');
+        this.toast.error('No se pudo iniciar. Verifica que WhatsApp esté conectado.');
       }
+    } catch {
+      this.toast.error('Error al comunicarse con WhatsApp');
+    } finally {
+      this.isStarting.set(false);
     }
   }
 }

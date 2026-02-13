@@ -2364,9 +2364,9 @@ function setupIPC(): void {
 
   // Start bulk send
   ipcMain.handle('bulk-send:start', async (_, bulkSendId: number, authToken: string) => {
+    const wasHidden = !whatsappVisible;
     try {
       // Ensure WhatsApp BrowserView is attached to window (insertText requires rendered view)
-      const wasHidden = !whatsappVisible;
       if (wasHidden && mainWindow && whatsappView) {
         if (!mainWindow.getBrowserViews().includes(whatsappView)) {
           mainWindow.addBrowserView(whatsappView);
@@ -2378,18 +2378,17 @@ function setupIPC(): void {
       bulkSender.setWhatsAppView(whatsappView);
       bulkSender.setAuthToken(authToken);
       const result = await bulkSender.start(bulkSendId);
-
-      // Restore hidden state if it was hidden before bulk send
+      return result;
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    } finally {
+      // Always restore hidden state if it was hidden before bulk send
       if (wasHidden && mainWindow && whatsappView) {
         if (mainWindow.getBrowserViews().includes(whatsappView)) {
           mainWindow.removeBrowserView(whatsappView);
         }
         console.log('[MWS] WhatsApp view detached after BulkSender');
       }
-
-      return result;
-    } catch (err: any) {
-      return { success: false, error: err.message };
     }
   });
 

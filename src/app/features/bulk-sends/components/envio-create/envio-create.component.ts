@@ -533,6 +533,7 @@ export class EnvioCreateComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.attachmentPreview.set(null);
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -727,10 +728,15 @@ export class EnvioCreateComponent implements OnDestroy {
         if (assignedToSelf && this.electronService.isElectron) {
           const token = this.authService.getToken();
           if (token) {
-            await this.electronService.startBulkSend(bulkSendId, token);
+            const started = await this.electronService.startBulkSend(bulkSendId, token);
+            if (started) {
+              this.toast.success('Envío masivo iniciado automáticamente');
+            }
           }
         }
 
+        this.isSending.set(false);
+        this.attachmentPreview.set(null);
         this.router.navigate(['/app/bulk_sends', bulkSendId]);
       },
       error: (err) => {

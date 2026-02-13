@@ -63,6 +63,7 @@ export class BulkSender {
   private lastError: string | null = null;
   private isPaused = false;
   private isCancelled = false;
+  private dailySentCount = 0;
   private stateFile: string | null = null;
 
   constructor(apiBaseUrl: string) {
@@ -155,6 +156,7 @@ export class BulkSender {
     this.failedCount = 0;
     this.totalRecipients = 0;
     this.consecutiveFailures = 0;
+    this.dailySentCount = 0;
     this.currentPhone = null;
     this.lastError = null;
     this.isPaused = false;
@@ -250,6 +252,16 @@ export class BulkSender {
         continue;
       }
 
+      // Check daily limit
+      if (this.rules.max_daily_messages > 0 && this.dailySentCount >= this.rules.max_daily_messages) {
+        console.log(`[BulkSender] Daily limit reached (${this.dailySentCount}/${this.rules.max_daily_messages}) — auto-pausing`);
+        this.isPaused = true;
+        this._state = 'paused';
+        this.lastError = `Límite diario alcanzado (${this.rules.max_daily_messages} mensajes)`;
+        this.emitOverlayUpdate();
+        return;
+      }
+
       // Fetch next recipient
       const next = await this.fetchNextRecipient();
       if (!next || !next.has_next) {
@@ -264,6 +276,16 @@ export class BulkSender {
       const content = next.content || '';
       const recipientId = next.recipient_id;
       const hasAttachment = !!next.attachment_path;
+
+      // Validate phone
+      if (!next.phone || next.phone.trim().length < 5) {
+        console.warn(`[BulkSender] Invalid phone "${next.phone}" for recipient ${recipientId} — skipping`);
+        await this.reportResult(recipientId, false, 'invalid_phone: empty or too short', 'SKIP');
+        this.failedCount++;
+        this.emitOverlayUpdate();
+        await this.sleep(1000);
+        continue;
+      }
 
       this.emitOverlayUpdate();
 
@@ -343,6 +365,7 @@ export class BulkSender {
         // Report success
         await this.reportResult(recipientId, true);
         this.sentCount++;
+        this.dailySentCount++;
         this.consecutiveFailures = 0;
         messagesSinceLastPause++;
 
@@ -404,7 +427,7 @@ export class BulkSender {
     while (Date.now() - start < timeoutMs) {
       try {
         const result = await this.whatsappView.webContents.executeJavaScript(
-          `(function() { try { return ${jsExpression}; } catch(e) { return null; } })()`,
+          `(function() { try { var __r = (${jsExpression.trim()}); return __r; } catch(e) { return null; } })()`,
           true
         );
         if (result) return result;
@@ -455,14 +478,9 @@ export class BulkSender {
       `, true);
 
       if (hasSearchText) {
-        // Use real Chromium events to clear (Ctrl+A, Backspace)
-        this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'a', modifiers: ['control'] });
-        await this.sleep(50);
-        this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'a', modifiers: ['control'] });
-        await this.sleep(50);
-        this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
-        await this.sleep(50);
-        this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Backspace' });
+        // Clear search text via real keyboard events (Ctrl+A, Backspace)
+        this.whatsappView.webContents.focus();
+        await this.clearInputViaKeyboard();
       }
 
       await this.sleep(300);
@@ -490,18 +508,11 @@ export class BulkSender {
         console.warn('[BulkSender] resetToMainScreen failed, continuing anyway...');
       }
 
-      // --- PHASE 2: Hide overlay temporarily so Chromium focus/input works ---
-      await this.whatsappView.webContents.executeJavaScript(`
-        (function() {
-          var ov = document.getElementById('bulk-send-overlay');
-          if (ov) ov.style.display = 'none';
-        })()
-      `);
-
-      // --- PHASE 3: Click search box, focus input, clear and type phone ---
-      const searchReady = await this.whatsappView.webContents.executeJavaScript(`
+      // --- PHASE 2A: Click search box and focus the search input via JS ---
+      const searchFocus = await this.whatsappView.webContents.executeJavaScript(`
         (async function() {
           try {
+            // Click search box to open search
             var searchBox = document.querySelector('[data-testid="chat-list-search"]');
             if (!searchBox) {
               searchBox = document.querySelector('[data-icon="search"]')?.closest('button') ||
@@ -512,19 +523,19 @@ export class BulkSender {
             searchBox.click();
             await new Promise(function(r) { setTimeout(r, 400); });
 
-            var searchInput = document.querySelector('[data-testid="chat-list-search-input"]');
-            if (!searchInput) {
-              searchInput = document.querySelector('#side div[contenteditable="true"]') ||
-                            document.querySelector('[data-testid="search-input"]');
+            // Find and focus the search input
+            var input = document.querySelector('[data-testid="chat-list-search-input"]');
+            if (!input) {
+              input = document.querySelector('#side div[contenteditable="true"]') ||
+                      document.querySelector('[data-testid="search-input"]');
             }
-            if (!searchInput) return { success: false, error: 'search_input_not_found' };
+            if (!input) return { success: false, error: 'search_input_not_found' };
 
-            searchInput.focus();
-            searchInput.click();
+            input.focus();
+            input.click();
 
-            // Log focus state for debugging
-            var active = document.activeElement;
-            var focusInfo = active ? (active.tagName + ' editable=' + active.getAttribute('contenteditable') + ' testid=' + active.getAttribute('data-testid')) : 'null';
+            var focusInfo = document.activeElement ?
+              (document.activeElement.tagName + ' editable=' + document.activeElement.getAttribute('contenteditable') + ' testid=' + document.activeElement.getAttribute('data-testid')) : 'null';
             return { success: true, focusInfo: focusInfo };
           } catch(e) {
             return { success: false, error: e.message || 'search_focus_error' };
@@ -532,283 +543,156 @@ export class BulkSender {
         })()
       `, true);
 
-      if (!searchReady.success) {
-        // Restore overlay before returning
-        await this.whatsappView.webContents.executeJavaScript(`
-          (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
-        `);
-        return { success: false, error: searchReady.error, errorType: 'selector' };
+      if (!searchFocus.success) {
+        return { success: false, error: searchFocus.error, errorType: 'selector' };
       }
 
-      console.log(`[BulkSender] Search focused: ${searchReady.focusInfo}`);
+      console.log(`[BulkSender] Search focused: ${searchFocus.focusInfo}`);
 
-      // Clear existing text: Ctrl+A + Backspace via real Chromium events
+      // --- PHASE 2B: Give BrowserView Chromium-level focus, then type via real keyboard events ---
+      this.whatsappView.webContents.focus();
       await this.sleep(100);
-      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'a', modifiers: ['control'] });
-      await this.sleep(50);
-      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
-      await this.sleep(300);
 
-      // Type phone via Electron's insertText API (goes through Chromium IME pipeline, React detects it)
-      await this.whatsappView.webContents.insertText(normalizedPhone);
+      // Clear any existing text in the search input
+      await this.clearInputViaKeyboard();
 
-      console.log(`[BulkSender] Typed ${normalizedPhone} via insertText`);
+      // Type phone number character by character (real Chromium keyDown/char/keyUp events)
+      await this.typeViaKeyboard(normalizedPhone);
+
+      // Wait for WhatsApp to process the search query
+      await this.sleep(500);
+
+      // Verify text was typed
+      const verifyResult = await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          var input = document.querySelector('[data-testid="chat-list-search-input"]') ||
+                      document.querySelector('#side div[contenteditable="true"]');
+          var content = input ? (input.textContent || '').trim() : '';
+          return { content: content };
+        })()
+      `, true);
+
+      if (verifyResult.content.length > 0) {
+        console.log(`[BulkSender] Typed ${normalizedPhone} via keyboard (verified: ${verifyResult.content})`);
+      } else {
+        console.warn(`[BulkSender] Keyboard typing may have failed — search input content: "${verifyResult.content}"`);
+      }
 
       // Wait for WhatsApp to process search query
       await this.sleep(2000);
 
-      // --- PHASE 4: Poll for search results, find and click matching contact ---
-      const phoneSuffixForJs = phoneSuffix.replace(/'/g, "\\'");
+      // --- PHASE 4: Check search results and select via keyboard ---
+      const searchCheck = await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          // Check "no results" indicators
+          var noResults = document.querySelector('[data-testid="search-no-results-title"]');
+          if (noResults) return { status: 'no_results' };
 
-      const clickResult: any = await new Promise<any>(async (resolve) => {
-        const startTime = Date.now();
-        const TIMEOUT_MS = 10000;
-        const POLL_INTERVAL = 500;
-        const FALLBACK_AFTER_MS = 6000;
-
-        const poll = async () => {
-          if (Date.now() - startTime > TIMEOUT_MS) {
-            // Last-resort diagnostic: log what's in the search area
-            try {
-              const diag = await this.whatsappView!.webContents.executeJavaScript(`
-                (function() {
-                  var si = document.querySelector('[data-testid="chat-list-search-input"]') ||
-                           document.querySelector('#side div[contenteditable="true"]');
-                  var searchText = si ? (si.textContent || '') : 'INPUT_NOT_FOUND';
-                  var items1 = document.querySelectorAll('[data-testid="cell-frame-container"]').length;
-                  var items2 = document.querySelectorAll('#pane-side [role="row"]').length;
-                  var items3 = document.querySelectorAll('#pane-side [role="listitem"]').length;
-                  return { searchText: searchText, cellFrame: items1, row: items2, listitem: items3 };
-                })()
-              `, true);
-              console.warn('[BulkSender] Timeout diagnostic:', JSON.stringify(diag));
-            } catch { /* ignore */ }
-            resolve({ success: false, error: 'search_timeout', errorType: 'timeout' });
-            return;
+          var searchPanel = document.querySelector('#pane-side') || document.querySelector('#side');
+          if (searchPanel) {
+            var panelText = searchPanel.innerText || '';
+            if (panelText.indexOf('No se encontraron') !== -1 ||
+                panelText.indexOf('No results found') !== -1 ||
+                panelText.indexOf('No contacts found') !== -1 ||
+                panelText.indexOf('No se encontró') !== -1) {
+              return { status: 'no_results' };
+            }
           }
 
-          try {
-            const result = await this.whatsappView!.webContents.executeJavaScript(`
-              (function() {
-                var phoneSuffix = '${phoneSuffixForJs}';
-
-                // --- Check "no results" indicators ---
-                var noResults = document.querySelector('[data-testid="search-no-results-title"]');
-                if (noResults) return { action: 'no_results' };
-
-                var searchPanel = document.querySelector('#pane-side') || document.querySelector('#side');
-                if (searchPanel) {
-                  var panelText = searchPanel.innerText || '';
-                  if (panelText.indexOf('No se encontraron') !== -1 ||
-                      panelText.indexOf('No results found') !== -1 ||
-                      panelText.indexOf('No contacts found') !== -1 ||
-                      panelText.indexOf('No se encontró') !== -1) {
-                    return { action: 'no_results' };
-                  }
-                }
-
-                // --- Gather result items from multiple selectors ---
-                var selectors = [
-                  '[data-testid="cell-frame-container"]',
-                  '#pane-side [role="listitem"]',
-                  '#pane-side [role="row"]'
-                ];
-                var seen = new Set();
-                var items = [];
-                for (var s = 0; s < selectors.length; s++) {
-                  var els = document.querySelectorAll(selectors[s]);
-                  for (var j = 0; j < els.length; j++) {
-                    if (!seen.has(els[j])) {
-                      seen.add(els[j]);
-                      items.push(els[j]);
-                    }
-                  }
-                }
-
-                if (items.length === 0) return { action: 'wait' };
-
-                // --- Search for a match among items ---
-                var bestMatch = null;
-                var bestMatchIndex = -1;
-                var verified = false;
-
-                for (var i = 0; i < items.length; i++) {
-                  var el = items[i];
-
-                  // Skip groups
-                  if (el.querySelector('[data-icon="default-group"]') ||
-                      el.querySelector('[data-icon="community"]')) {
-                    continue;
-                  }
-
-                  // Match by data-id (phone@c.us)
-                  var dataIdEl = el.closest('[data-id]') || el.querySelector('[data-id]');
-                  if (dataIdEl) {
-                    var dataId = dataIdEl.getAttribute('data-id') || '';
-                    if (dataId.indexOf(phoneSuffix) !== -1 && dataId.indexOf('@c.us') !== -1) {
-                      bestMatch = el;
-                      bestMatchIndex = i;
-                      verified = true;
-                      break;
-                    }
-                  }
-
-                  // Match by visible text containing the phone suffix
-                  var rowText = el.textContent || '';
-                  if (rowText.indexOf(phoneSuffix) !== -1) {
-                    bestMatch = el;
-                    bestMatchIndex = i;
-                    verified = true;
-                    break;
-                  }
-
-                  // Track first non-group item as fallback
-                  if (bestMatchIndex === -1) {
-                    bestMatch = el;
-                    bestMatchIndex = i;
-                  }
-                }
-
-                if (!bestMatch) {
-                  return { action: 'no_results', error: 'all_results_are_groups', isGroup: true };
-                }
-
-                if (verified) {
-                  bestMatch.click();
-                  return { action: 'clicked', verified: true, index: bestMatchIndex, total: items.length };
-                }
-
-                // Has a non-verified fallback — report it with item count
-                return { action: 'has_fallback', index: bestMatchIndex, total: items.length };
-              })()
-            `, true);
-
-            if (!result || result.action === 'wait') {
-              setTimeout(poll, POLL_INTERVAL);
-              return;
+          // Count result items
+          var selectors = [
+            '[data-testid="cell-frame-container"]',
+            '#pane-side [role="listitem"]',
+            '#pane-side [role="row"]'
+          ];
+          var seen = new Set();
+          var count = 0;
+          for (var s = 0; s < selectors.length; s++) {
+            var els = document.querySelectorAll(selectors[s]);
+            for (var j = 0; j < els.length; j++) {
+              if (!seen.has(els[j])) { seen.add(els[j]); count++; }
             }
-
-            if (result.action === 'no_results') {
-              if (result.isGroup) {
-                resolve({ success: false, error: 'solo se encontraron grupos', isGroup: true });
-              } else {
-                resolve({ success: false, error: 'not_registered', errorType: 'not_registered' });
-              }
-              return;
-            }
-
-            if (result.action === 'clicked') {
-              console.log(`[BulkSender] Clicked verified match at index ${result.index} (${result.total} items)`);
-              resolve({ success: true, verified: true });
-              return;
-            }
-
-            if (result.action === 'has_fallback') {
-              if (result.total > 15) {
-                // Too many results = search text didn't register (WhatsApp showing unfiltered list)
-                console.warn(`[BulkSender] Search did not filter: ${result.total} items for phone ${normalizedPhone} — skipping fallback`);
-                resolve({ success: false, error: `Search returned ${result.total} unfiltered results`, errorType: 'timeout' });
-                return;
-              }
-              if (Date.now() - startTime >= FALLBACK_AFTER_MS) {
-                // Accept fallback: search completed but no exact phone match (contact saved by name)
-                console.log(`[BulkSender] Clicking fallback at index ${result.index} (${result.total} items, no verified match)`);
-                try {
-                  await this.whatsappView!.webContents.executeJavaScript(`
-                    (function() {
-                      var selectors = ['[data-testid="cell-frame-container"]', '#pane-side [role="listitem"]', '#pane-side [role="row"]'];
-                      var seen = new Set();
-                      var items = [];
-                      for (var s = 0; s < selectors.length; s++) {
-                        var els = document.querySelectorAll(selectors[s]);
-                        for (var j = 0; j < els.length; j++) {
-                          if (!seen.has(els[j])) { seen.add(els[j]); items.push(els[j]); }
-                        }
-                      }
-                      var idx = ${result.index};
-                      if (items[idx]) items[idx].click();
-                    })()
-                  `);
-                } catch { /* ignore click error */ }
-                resolve({ success: true, verified: false });
-              } else {
-                setTimeout(poll, POLL_INTERVAL);
-              }
-              return;
-            }
-
-            setTimeout(poll, POLL_INTERVAL);
-          } catch (err: any) {
-            console.warn('[BulkSender] Poll error:', err.message);
-            setTimeout(poll, POLL_INTERVAL);
           }
-        };
+          return { status: 'has_results', count: count };
+        })()
+      `, true);
 
-        poll();
-      });
-
-      // --- PHASE 5: Restore overlay and handle click result ---
-      const restoreOverlay = async () => {
-        try {
-          await this.whatsappView!.webContents.executeJavaScript(`
-            (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
-          `);
-        } catch { /* ignore */ }
-      };
-
-      if (!clickResult.success) {
-        await restoreOverlay();
-        if (clickResult.isGroup) {
-          return { success: false, error: `${phone}: solo se encontraron grupos`, errorType: 'not_found' };
-        }
-        if (clickResult.errorType === 'not_registered') {
-          console.log(`[BulkSender] Phone ${phone} not registered in WhatsApp`);
-          return { success: false, error: `Teléfono ${phone} no registrado en WhatsApp`, errorType: 'not_registered' };
-        }
-        console.warn(`[BulkSender] Search/click failed for ${phone}: ${clickResult.error}`);
-        return { success: false, error: clickResult.error || 'Search results timeout', errorType: clickResult.errorType || 'timeout' };
+      if (searchCheck.status === 'no_results') {
+        console.log(`[BulkSender] Phone ${phone} not registered in WhatsApp`);
+        return { success: false, error: `Teléfono ${phone} no registrado en WhatsApp`, errorType: 'not_registered' };
       }
 
-      // --- PHASE 6: Verify the correct chat loaded ---
-      // Wait for compose box to appear
+      if (searchCheck.count > 15) {
+        console.warn(`[BulkSender] Search did not filter: ${searchCheck.count} items for phone ${normalizedPhone}`);
+        return { success: false, error: `Search returned ${searchCheck.count} unfiltered results`, errorType: 'timeout' };
+      }
+
+      console.log(`[BulkSender] Search filtered to ${searchCheck.count} items, selecting via keyboard`);
+
+      // Select first result via ArrowDown, then open via Enter (real Chromium keyboard events)
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Down' });
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Down' });
+      await this.sleep(200);
+
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+
+      // --- PHASE 5: Verify the correct chat loaded ---
+      // Wait for compose box to appear (try multiple selectors for different WhatsApp versions)
       const composeReady = await this.waitForCondition(`
         (function() {
           var box = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
-                    document.querySelector('footer div[contenteditable="true"]');
+                    document.querySelector('footer div[contenteditable="true"]') ||
+                    document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
+                    document.querySelector('#main div[contenteditable="true"][data-tab]') ||
+                    document.querySelector('#main div[contenteditable="true"]');
           return box ? true : null;
         })()
       `, 5000, 300);
 
-      // Restore overlay before returning
-      await restoreOverlay();
-
       if (!composeReady) {
+        // Diagnostic: log what's in #main to debug selector issues
+        try {
+          const diag = await this.whatsappView.webContents.executeJavaScript(`
+            (function() {
+              var main = document.querySelector('#main');
+              if (!main) return { hasMain: false };
+              var editables = main.querySelectorAll('[contenteditable="true"]');
+              var info = [];
+              for (var i = 0; i < editables.length; i++) {
+                var el = editables[i];
+                info.push({
+                  tag: el.tagName,
+                  testid: el.getAttribute('data-testid'),
+                  role: el.getAttribute('role'),
+                  tab: el.getAttribute('data-tab'),
+                  parent: el.parentElement ? el.parentElement.tagName : null
+                });
+              }
+              return { hasMain: true, editables: info };
+            })()
+          `, true);
+          console.warn('[BulkSender] Compose box not found. Diagnostic:', JSON.stringify(diag));
+        } catch { /* ignore */ }
         return { success: false, error: 'Chat did not load (no compose box)', errorType: 'timeout' };
       }
 
-      // Verify header contains phone (if click was not verified by data-id)
-      if (!clickResult.verified) {
-        const headerCheck = await this.whatsappView.webContents.executeJavaScript(`
-          (function() {
-            var header = document.querySelector('#main header span[title]');
-            if (!header) return 'no_header';
-            return header.getAttribute('title') || header.textContent || '';
-          })()
-        `, true);
+      // Verify header contains phone suffix (soft check — warning only)
+      const headerCheck = await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          var header = document.querySelector('#main header span[title]');
+          if (!header) return 'no_header';
+          return header.getAttribute('title') || header.textContent || '';
+        })()
+      `, true);
 
-        if (headerCheck !== 'no_header' && !String(headerCheck).includes(phoneSuffix)) {
-          console.warn(`[BulkSender] Header "${headerCheck}" does not match phone suffix "${phoneSuffix}" — proceeding anyway (WhatsApp search filtered)`);
-        }
+      if (headerCheck !== 'no_header' && !String(headerCheck).includes(phoneSuffix)) {
+        console.error(`[BulkSender] WRONG CHAT: header "${headerCheck}" does not match "${phoneSuffix}"`);
+        return { success: false, error: `wrong_chat: header "${headerCheck}" doesn't match phone`, errorType: 'not_found' };
       }
 
       return { success: true };
     } catch (err: any) {
-      // Restore overlay on error
-      try {
-        await this.whatsappView?.webContents.executeJavaScript(`
-          (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
-        `);
-      } catch { /* ignore */ }
       return { success: false, error: err.message || 'js_execution_error', errorType: 'unknown' };
     }
   }
@@ -819,114 +703,77 @@ export class BulkSender {
     }
 
     try {
-      // Hide overlay so Chromium focus/input works
-      await this.whatsappView.webContents.executeJavaScript(`
-        (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = 'none'; })()
-      `);
-
-      // Step 1: Focus compose box and clear residual text
+      // Step 1: Focus compose box via JS
       const focusResult = await this.whatsappView.webContents.executeJavaScript(`
-        (async function() {
-          try {
-            var input = document.querySelector('[data-testid="conversation-compose-box-input"]');
-            if (!input) {
-              input = document.querySelector('div[contenteditable="true"][data-tab="10"]') ||
-                      document.querySelector('footer div[contenteditable="true"]');
-            }
-            if (!input) {
-              return { success: false, error: 'input_not_found' };
-            }
-
-            input.focus();
-            input.click();
-            return { success: true };
-          } catch(e) {
-            return { success: false, error: e.message || 'focus_error' };
-          }
+        (function() {
+          var input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                      document.querySelector('footer div[contenteditable="true"]') ||
+                      document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
+                      document.querySelector('#main div[contenteditable="true"][data-tab]') ||
+                      document.querySelector('#main div[contenteditable="true"]');
+          if (!input) return { success: false, error: 'input_not_found' };
+          input.focus();
+          input.click();
+          return { success: true };
         })()
       `, true);
 
       if (!focusResult.success) {
-        await this.whatsappView.webContents.executeJavaScript(`
-          (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
-        `);
         return focusResult;
       }
 
-      // Clear any residual text via real Chromium events
+      // Step 2: Give BrowserView Chromium-level focus, clear, and type message
+      this.whatsappView.webContents.focus();
       await this.sleep(100);
-      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'a', modifiers: ['control'] });
-      await this.sleep(50);
-      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
-      await this.sleep(200);
 
-      // Insert message text via Electron IME API (React detects this)
-      await this.whatsappView.webContents.insertText(text);
-      await this.sleep(200);
+      await this.clearInputViaKeyboard();
+      await this.typeViaKeyboard(text);
 
-      // Verify text was inserted
+      // Wait for React to process
+      await this.sleep(300);
+
+      // Verify text was typed
       const textCheck = await this.whatsappView.webContents.executeJavaScript(`
         (function() {
           var input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
-                      document.querySelector('footer div[contenteditable="true"]');
+                      document.querySelector('footer div[contenteditable="true"]') ||
+                      document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
+                      document.querySelector('#main div[contenteditable="true"][data-tab]') ||
+                      document.querySelector('#main div[contenteditable="true"]');
           return input ? (input.textContent || '').trim().length > 0 : false;
         })()
       `, true);
 
       if (!textCheck) {
-        await this.whatsappView.webContents.executeJavaScript(`
-          (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
-        `);
         return { success: false, error: 'text_not_inserted' };
       }
 
-      // Step 2: Typing simulation delay
+      // Step 3: Typing simulation delay
       await this.sleep(500 + Math.random() * 1000);
 
-      // Step 3: Click send button (or fallback to Enter via real event)
-      const sendClicked = await this.whatsappView.webContents.executeJavaScript(`
-        (function() {
-          var sendBtn = document.querySelector('[data-testid="send"]');
-          if (!sendBtn) {
-            sendBtn = document.querySelector('button[aria-label="Send"]') ||
-                      document.querySelector('span[data-icon="send"]')?.closest('button');
-          }
-          if (sendBtn) {
-            sendBtn.click();
-            return 'button';
-          }
-          return 'no_button';
-        })()
-      `, true);
+      // Step 4: Send via Enter key (real Chromium keyboard event)
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
 
-      if (sendClicked === 'no_button') {
-        // Fallback: send Enter via real Chromium event
-        this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
-        await this.sleep(50);
-        this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
-      }
-
-      // Step 4: Poll — verify compose box is empty after send (message was sent)
+      // Step 5: Poll — verify compose box is empty after send (message was sent)
       const sentOk = await this.waitForCondition(`
         (function() {
           var input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
-                      document.querySelector('footer div[contenteditable="true"]');
+                      document.querySelector('footer div[contenteditable="true"]') ||
+                      document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
+                      document.querySelector('#main div[contenteditable="true"][data-tab]') ||
+                      document.querySelector('#main div[contenteditable="true"]');
           if (!input) return null;
           var text = (input.textContent || '').trim();
           return text.length === 0 ? true : null;
         })()
       `, 5000, 300);
 
-      // Restore overlay
-      await this.whatsappView.webContents.executeJavaScript(`
-        (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
-      `);
-
       if (!sentOk) {
         return { success: false, error: 'message_not_sent: compose box still has text after 5s' };
       }
 
-      // Step 5: Soft-check — verify last outgoing message has a tick (warning only)
+      // Step 6: Soft-check — verify last outgoing message has a tick (warning only)
       await this.sleep(500);
       try {
         const hasTick = await this.whatsappView.webContents.executeJavaScript(`
@@ -942,12 +789,6 @@ export class BulkSender {
 
       return { success: true };
     } catch (err: any) {
-      // Restore overlay on error
-      try {
-        await this.whatsappView?.webContents.executeJavaScript(`
-          (function() { var ov = document.getElementById('bulk-send-overlay'); if (ov) ov.style.display = ''; })()
-        `);
-      } catch { /* ignore */ }
       return { success: false, error: err.message || 'js_execution_error' };
     }
   }
@@ -1190,7 +1031,7 @@ export class BulkSender {
 
           const overlay = document.createElement('div');
           overlay.id = 'bulk-send-overlay';
-          overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;';
+          overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;pointer-events:none;';
           overlay.innerHTML = \`
             <div style="background:white;border-radius:16px;padding:32px;text-align:center;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
               <div style="width:60px;height:60px;border-radius:50%;background:#4361ee;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
@@ -1369,5 +1210,32 @@ export class BulkSender {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Type text character by character using Electron's sendInputEvent.
+   * Generates real Chromium keyboard events (keyDown/char/keyUp) that React detects.
+   */
+  private async typeViaKeyboard(text: string): Promise<void> {
+    if (!this.whatsappView) return;
+    for (const char of text) {
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: char });
+      this.whatsappView.webContents.sendInputEvent({ type: 'char', keyCode: char });
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: char });
+      await this.sleep(30 + Math.random() * 20);
+    }
+  }
+
+  /**
+   * Clear focused input via Ctrl+A + Backspace using Electron's sendInputEvent.
+   */
+  private async clearInputViaKeyboard(): Promise<void> {
+    if (!this.whatsappView) return;
+    this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'a', modifiers: ['control'] });
+    this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'a', modifiers: ['control'] });
+    await this.sleep(50);
+    this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
+    this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Backspace' });
+    await this.sleep(50);
   }
 }
