@@ -1105,10 +1105,13 @@ export class BulkSender {
             send_hour_end: data.rules.send_hour_end ?? DEFAULT_RULES.send_hour_end,
             max_daily_messages: data.rules.max_daily_messages ?? DEFAULT_RULES.max_daily_messages
           };
+          console.log(`[BulkSender] Reglas cargadas del servidor:`, JSON.stringify(this.rules));
         }
+      } else {
+        console.error(`[BulkSender] Error al obtener reglas (HTTP ${response.status}) — usando valores por defecto`);
       }
     } catch (err) {
-      console.warn('[BulkSender] Failed to fetch rules, using defaults:', err);
+      console.error('[BulkSender] Error al obtener reglas, usando valores por defecto:', err);
     }
   }
 
