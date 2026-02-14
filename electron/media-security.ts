@@ -2139,16 +2139,25 @@ const MEDIA_CAPTURE_SCRIPT = `
               if (!isOutgoing && (msgDataId.includes('@c.us') || msgDataId.includes('@lid'))) {
                 notifiedIncomingIds.add(msgDataId);
 
-                // Capturar telefono AHORA (no al disparar timer, para evitar race con cambio de chat)
-                var detectedPhone = window.__hablapeCurrentChatPhone || '';
+                // Solo detectar si es el último mensaje del chat (evita falsos por scroll-load)
+                var chatContainer = messageEl.closest('#main') || messageEl.closest('[data-testid="conversation-panel-body"]');
+                var allMsgs = chatContainer ? chatContainer.querySelectorAll('[data-id*="@"]') : [];
+                var isLastMessage = allMsgs.length > 0 && allMsgs[allMsgs.length - 1] === messageEl;
 
-                if (incomingDebounceTimer) clearTimeout(incomingDebounceTimer);
-                incomingDebounceTimer = setTimeout(function() {
-                  incomingDebounceTimer = null;
-                  if (detectedPhone) {
-                    console.log('[HABLAPE_INCOMING_DETECTED]' + detectedPhone);
-                  }
-                }, INCOMING_DEBOUNCE_MS);
+                if (!isLastMessage) {
+                  console.log('[MWS Incoming] Ignorado (no es último msg, probable scroll-load):', msgDataId.substring(0, 30));
+                } else {
+                  // Capturar telefono AHORA (no al disparar timer, para evitar race con cambio de chat)
+                  var detectedPhone = window.__hablapeCurrentChatPhone || '';
+
+                  if (incomingDebounceTimer) clearTimeout(incomingDebounceTimer);
+                  incomingDebounceTimer = setTimeout(function() {
+                    incomingDebounceTimer = null;
+                    if (detectedPhone) {
+                      console.log('[HABLAPE_INCOMING_DETECTED]' + detectedPhone);
+                    }
+                  }, INCOMING_DEBOUNCE_MS);
+                }
               } else if (isOutgoing && (msgDataId.includes('@c.us') || msgDataId.includes('@lid'))) {
                 // Mensaje saliente del agente — emitir señal para habilitar botones de cierre
                 console.log('[HABLAPE_OUTGOING_DETECTED]' + (window.__hablapeCurrentChatPhone || ''));
@@ -2311,9 +2320,6 @@ const MEDIA_CAPTURE_SCRIPT = `
         setTimeout(() => processMessageForImages(messageEl), idx * 200);
       });
 
-      // Verificar si el último mensaje es del cliente (ticket pendiente)
-      console.log('[MWS CheckLast] Programando checkLastMessage desde startChatObserver (500ms delay)');
-      setTimeout(checkLastMessageForIncoming, 500);
     } else {
       // Reintentar en 2 segundos
       console.log('[MWS Auto] Área de chat no encontrada, reintentando...');
@@ -2335,9 +2341,8 @@ const MEDIA_CAPTURE_SCRIPT = `
       // Re-scan existing messages for images in the new chat
       const existingMessages = mainPane.querySelectorAll('[data-id*="@"]');
 
-      // Clear incoming tracking for new chat
-      notifiedIncomingIds.clear();
-      if (incomingDebounceTimer) { clearTimeout(incomingDebounceTimer); incomingDebounceTimer = null; }
+      // Add existing message IDs to tracking (don't clear — prevents false re-detection on re-render)
+      // Don't clear incomingDebounceTimer — phone is captured in closure, let it fire for previous chat
       existingMessages.forEach(function(el) {
         var id = el.getAttribute('data-id');
         if (id) notifiedIncomingIds.add(id);
@@ -2347,9 +2352,6 @@ const MEDIA_CAPTURE_SCRIPT = `
         setTimeout(() => processMessageForImages(messageEl), idx * 200);
       });
 
-      // Verificar si el último mensaje es del cliente (ticket pendiente)
-      console.log('[MWS CheckLast] Programando checkLastMessage desde ensureChatObserverAttached (500ms delay)');
-      setTimeout(checkLastMessageForIncoming, 500);
     }
   }
 
