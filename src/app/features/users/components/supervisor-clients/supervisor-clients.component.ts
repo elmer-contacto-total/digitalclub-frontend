@@ -488,34 +488,47 @@ export class SupervisorClientsComponent implements OnInit, OnDestroy {
   onExport(): void {
     this.isExporting.set(true);
 
-    const params = new URLSearchParams();
-    if (this.activeOnly()) {
-      params.set('active_only', 'true');
-    }
-    if (this.searchTerm) {
-      params.set('search', this.searchTerm);
-    }
-    if (this.agentFilter !== 'all') {
-      params.set('manager_id', this.agentFilter);
-    }
-    if (this.ticketFilter !== 'all') {
-      params.set('ticket_status', this.ticketFilter);
-    }
-    if (this.messageFilter !== 'all') {
-      params.set('message_status', this.messageFilter);
-    }
-    params.set('format', 'csv');
+    const params: PaginationParams & SupervisorClientsParams = {
+      page: 0,
+      pageSize: 10000,
+      search: this.searchTerm || undefined,
+      activeOnly: this.activeOnly(),
+      managerId: this.agentFilter !== 'all' ? parseInt(this.agentFilter, 10) : undefined,
+      ticketStatus: this.ticketFilter as any,
+      messageStatus: this.messageFilter as any,
+    };
 
-    const exportUrl = `/api/app/users/supervisor_clients?${params.toString()}`;
+    this.userService.getSupervisorClients(params).subscribe({
+      next: (response) => {
+        const csv = this.generateCsv(response.data);
+        this.downloadCsv(csv, `clientes_${new Date().toISOString().split('T')[0]}.csv`);
+        this.isExporting.set(false);
+      },
+      error: () => this.isExporting.set(false)
+    });
+  }
 
+  private generateCsv(clients: UserListItem[]): string {
+    const header = 'Código,Nombre,Teléfono';
+    const rows = clients.map(c => {
+      const codigo = (c.codigo || '').replace(/"/g, '""');
+      const nombre = (c.fullName || `${c.firstName} ${c.lastName}`).replace(/"/g, '""');
+      const phone = (c.phone || '').replace(/"/g, '""');
+      return `"${codigo}","${nombre}","${phone}"`;
+    });
+    return [header, ...rows].join('\n');
+  }
+
+  private downloadCsv(csv: string, filename: string): void {
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = exportUrl;
-    link.download = `clientes_${new Date().toISOString().split('T')[0]}.csv`;
+    link.href = url;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
-    setTimeout(() => this.isExporting.set(false), 1000);
+    URL.revokeObjectURL(url);
   }
 
   // Pagination methods
