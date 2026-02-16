@@ -287,18 +287,17 @@
                             <span class="history-user">{{ item.username }}</span>
                             <span class="history-date">{{ formatDate(item.createdAt) }}</span>
                           </div>
-                          <div class="history-action">{{ formatAction(item.action, item.auditableType) }}</div>
+                          <div class="history-action">
+                            {{ formatAction(item.action, item.auditableType) }}
+                            @if (getTicketNotes(item)) {
+                              <span class="history-note-inline" [title]="getTicketNotes(item)!">— {{ getTicketNotes(item) }}</span>
+                            }
+                          </div>
                           @if (item.auditedChanges && getChangesSummary(item.auditedChanges, item.auditableType).length > 0) {
                             <div class="history-tags">
                               @for (change of getChangesSummary(item.auditedChanges, item.auditableType); track change) {
                                 <span class="history-tag">{{ change }}</span>
                               }
-                            </div>
-                          }
-                          @if (getTicketNotes(item)) {
-                            <div class="history-notes">
-                              <i class="ph ph-note-pencil"></i>
-                              <span>{{ getTicketNotes(item) }}</span>
                             </div>
                           }
                         </div>
