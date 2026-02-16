@@ -247,7 +247,7 @@ const electronAPI = {
   },
 
   // Bulk send state changes (from main process)
-  onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null }) => void) => {
+  onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number }) => void) => {
     ipcRenderer.on('bulk-send-state-changed', (_, data) => callback(data));
   },
 
@@ -349,7 +349,7 @@ declare global {
         checkPending: () => Promise<any>;
         dismissOverlay: () => Promise<{ success: boolean }>;
       };
-      onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null }) => void) => void;
+      onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number }) => void) => void;
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
       setLoggedInUser: (userId: number, userName: string, clientId?: number) => void;
       onIncomingMessageDetected?: (callback: (data: { phone: string }) => void) => void;

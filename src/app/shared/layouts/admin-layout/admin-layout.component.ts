@@ -27,6 +27,11 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
   whatsappVisible = signal(false);
   bulkSendActive = signal(false);
   bulkSendState = signal<BulkSendState>({ state: 'idle', sentCount: 0, failedCount: 0, totalRecipients: 0, currentPhone: null });
+  periodicPauseBubbleActive = signal(false);
+  periodicPauseCountdown = signal('');
+  bubblePosition = signal<{ x: number; y: number }>({ x: 0, y: 0 });
+  private isDragging = false;
+  private dragOffset = { x: 0, y: 0 };
   private bulkSendOverlayDismissed = signal(false);
   private completionTimeout: any = null;
 
@@ -52,6 +57,25 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
         .subscribe(state => {
           const prevState = this.bulkSendState().state;
           this.bulkSendState.set(state);
+
+          // Periodic pause: running + periodicPauseRemaining > 0
+          const inPeriodicPause = state.state === 'running'
+            && (state.periodicPauseRemaining ?? 0) > 0;
+
+          if (inPeriodicPause) {
+            this.bulkSendActive.set(false);          // hide overlay
+            this.periodicPauseBubbleActive.set(true); // show bubble
+            const sec = state.periodicPauseRemaining!;
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            this.periodicPauseCountdown.set(`${m}:${s.toString().padStart(2, '0')}`);
+            return;
+          }
+
+          // If bubble was visible, hide it
+          if (this.periodicPauseBubbleActive()) {
+            this.periodicPauseBubbleActive.set(false);
+          }
 
           if ((state.state === 'completed' || state.state === 'cancelled')
               && (prevState === 'running' || prevState === 'paused')) {
@@ -177,5 +201,47 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
     const s = this.bulkSendState();
     if (!s.totalRecipients) return 0;
     return Math.round((s.sentCount / s.totalRecipients) * 100);
+  }
+
+  // --- Periodic Pause Bubble ---
+
+  pauseFromBubble(): void {
+    this.bulkSendOverlayDismissed.set(true);
+    this.periodicPauseBubbleActive.set(false);
+    this.electronService.pauseBulkSend();
+    this.toastService.info('Envío masivo pausado. Para reanudar, ve a Envíos Masivos.');
+  }
+
+  cancelFromBubble(): void {
+    if (confirm('¿Estás seguro de cancelar el envío masivo?')) {
+      this.periodicPauseBubbleActive.set(false);
+      this.electronService.cancelBulkSend();
+    }
+  }
+
+  onBubbleMouseDown(event: MouseEvent): void {
+    if ((event.target as HTMLElement).closest('button')) return;
+    this.isDragging = true;
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    this.dragOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    event.preventDefault();
+  }
+
+  @HostListener('window:mousemove', ['$event'])
+  onMouseMove(event: MouseEvent): void {
+    if (!this.isDragging) return;
+    this.bubblePosition.set({
+      x: Math.max(0, Math.min(event.clientX - this.dragOffset.x, window.innerWidth - 260)),
+      y: Math.max(0, Math.min(event.clientY - this.dragOffset.y, window.innerHeight - 50))
+    });
+  }
+
+  @HostListener('window:mouseup')
+  onMouseUp(): void { this.isDragging = false; }
+
+  get bubbleStyle(): Record<string, string> {
+    const p = this.bubblePosition();
+    if (p.x === 0 && p.y === 0) return { top: '12px', left: '50%', transform: 'translateX(-50%)' };
+    return { top: p.y + 'px', left: p.x + 'px' };
   }
 }

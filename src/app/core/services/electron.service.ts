@@ -11,6 +11,7 @@ export interface BulkSendState {
   failedCount: number;
   totalRecipients: number;
   currentPhone: string | null;
+  periodicPauseRemaining?: number;
 }
 
 /**
@@ -58,7 +59,7 @@ interface ElectronAPI {
   crmClientReady?(): void;
 
   // Bulk send state changes
-  onBulkSendStateChanged?(callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null }) => void): void;
+  onBulkSendStateChanged?(callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number }) => void): void;
 
   // Angular bounds
   getAngularBounds?(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;

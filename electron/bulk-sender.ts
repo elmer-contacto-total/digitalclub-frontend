@@ -34,6 +34,7 @@ export type OverlayUpdateCallback = (data: {
   failedCount: number;
   totalRecipients: number;
   currentPhone: string | null;
+  periodicPauseRemaining?: number;
 }) => void;
 
 const DEFAULT_RULES: BulkSendRules = {
@@ -461,11 +462,41 @@ export class BulkSender {
         }
       }
 
-      // Periodic pause (anti-ban)
+      // Periodic pause (anti-ban) — interruptible, emits countdown
       if (messagesSinceLastPause >= this.rules.pause_after_count) {
-        const pauseMs = this.rules.pause_duration_minutes * 60 * 1000;
+        let remainingSec = this.rules.pause_duration_minutes * 60;
         console.log(`[BulkSender] Periodic pause: ${this.rules.pause_duration_minutes} minutes`);
-        await this.sleep(pauseMs);
+
+        while (remainingSec > 0 && !this.isPaused && !this.isCancelled) {
+          // Emit countdown directly (skip persistState/updateOverlay)
+          if (this.onOverlayUpdate) {
+            this.onOverlayUpdate({
+              state: this._state,
+              sentCount: this.sentCount,
+              failedCount: this.failedCount,
+              totalRecipients: this.totalRecipients,
+              currentPhone: this.currentPhone,
+              periodicPauseRemaining: remainingSec
+            });
+          }
+          await this.sleep(1000);
+          remainingSec--;
+        }
+
+        // If interrupted by cancel/pause, the main loop will detect it
+        // If finished naturally, emit end of periodic pause
+        if (!this.isPaused && !this.isCancelled) {
+          if (this.onOverlayUpdate) {
+            this.onOverlayUpdate({
+              state: this._state,
+              sentCount: this.sentCount,
+              failedCount: this.failedCount,
+              totalRecipients: this.totalRecipients,
+              currentPhone: this.currentPhone
+            });
+          }
+          console.log(`[BulkSender] Periodic pause ended, resuming`);
+        }
         messagesSinceLastPause = 0;
       }
 
