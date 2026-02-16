@@ -49,34 +49,46 @@
         @if (bulkSendState().state === 'running') {
           <h3>Envío masivo en curso</h3>
           <p class="bulk-send-phone">{{ bulkSendState().currentPhone || 'Preparando...' }}</p>
-        } @else {
-          <h3>Envío masivo pausado</h3>
-          <p class="bulk-send-phone">En espera</p>
-        }
-        <div class="bulk-send-progress-bar">
-          <div class="bulk-send-progress-fill" [style.width.%]="bulkSendProgress"></div>
-        </div>
-        <p class="bulk-send-count">
-          {{ bulkSendState().sentCount }} / {{ bulkSendState().totalRecipients }} enviados
-          @if (bulkSendState().failedCount > 0) {
-            <span class="bulk-send-failed">({{ bulkSendState().failedCount }} fallidos)</span>
-          }
-        </p>
-        <div class="bulk-send-actions">
-          @if (bulkSendState().state === 'running') {
+          <div class="bulk-send-progress-bar">
+            <div class="bulk-send-progress-fill" [style.width.%]="bulkSendProgress"></div>
+          </div>
+          <p class="bulk-send-count">
+            {{ bulkSendState().sentCount }} / {{ bulkSendState().totalRecipients }} enviados
+            @if (bulkSendState().failedCount > 0) {
+              <span class="bulk-send-failed">({{ bulkSendState().failedCount }} fallidos)</span>
+            }
+          </p>
+          <div class="bulk-send-actions">
             <button class="bulk-send-btn bulk-send-btn-pause" (click)="pauseBulkSend()">
               <i class="ph ph-pause"></i> Pausar
             </button>
-          } @else {
-            <button class="bulk-send-btn bulk-send-btn-resume" (click)="resumeBulkSend()">
-              <i class="ph ph-play"></i> Reanudar
+            <button class="bulk-send-btn bulk-send-btn-cancel" (click)="cancelBulkSend()">
+              <i class="ph ph-x"></i> Cancelar
             </button>
-          }
-          <button class="bulk-send-btn bulk-send-btn-cancel" (click)="cancelBulkSend()">
-            <i class="ph ph-x"></i> Cancelar
-          </button>
-        </div>
-        <p class="bulk-send-notice">La interfaz está bloqueada durante el envío masivo</p>
+          </div>
+          <p class="bulk-send-notice">La interfaz está bloqueada durante el envío masivo</p>
+        } @else {
+          <h3>Envío masivo pausado</h3>
+          <p class="bulk-send-phone">En espera</p>
+          <div class="bulk-send-progress-bar">
+            <div class="bulk-send-progress-fill" [style.width.%]="bulkSendProgress"></div>
+          </div>
+          <p class="bulk-send-count">
+            {{ bulkSendState().sentCount }} / {{ bulkSendState().totalRecipients }} enviados
+            @if (bulkSendState().failedCount > 0) {
+              <span class="bulk-send-failed">({{ bulkSendState().failedCount }} fallidos)</span>
+            }
+          </p>
+          <div class="bulk-send-actions">
+            <button class="bulk-send-btn bulk-send-btn-resume" (click)="dismissBulkSendOverlay()">
+              <i class="ph ph-x-circle"></i> Cerrar
+            </button>
+            <button class="bulk-send-btn bulk-send-btn-cancel" (click)="cancelBulkSend()">
+              <i class="ph ph-x"></i> Cancelar
+            </button>
+          </div>
+          <p class="bulk-send-notice">Para reanudar, ve a <strong>Envíos Masivos</strong></p>
+        }
       </div>
     </div>
   }

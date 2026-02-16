@@ -27,6 +27,7 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
   whatsappVisible = signal(false);
   bulkSendActive = signal(false);
   bulkSendState = signal<BulkSendState>({ state: 'idle', sentCount: 0, failedCount: 0, totalRecipients: 0, currentPhone: null });
+  private bulkSendOverlayDismissed = signal(false);
 
   // Responsive handling
   private readonly MOBILE_BREAKPOINT = 1024;
@@ -49,10 +50,21 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe(state => {
           this.bulkSendState.set(state);
-          this.bulkSendActive.set(state.state === 'running' || state.state === 'paused');
+          if (state.state === 'running') {
+            this.bulkSendOverlayDismissed.set(false);
+            this.bulkSendActive.set(true);
+          } else if (state.state === 'paused') {
+            if (!this.bulkSendOverlayDismissed()) {
+              this.bulkSendActive.set(true);
+            }
+          } else {
+            this.bulkSendOverlayDismissed.set(false);
+            this.bulkSendActive.set(false);
+          }
         });
 
       // Check for pending bulk send from previous session
+      // Only update state info (for /app/bulk_sends to use), don't show overlay
       this.electronService.checkPendingBulkSend().then(state => {
         if (state) {
           this.bulkSendState.set({
@@ -62,7 +74,8 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
             totalRecipients: state.totalRecipients || 0,
             currentPhone: null
           });
-          this.bulkSendActive.set(true);
+          // Don't show overlay for pending sends from previous sessions
+          // User can resume from /app/bulk_sends
         }
       });
     }
@@ -127,8 +140,9 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
     this.electronService.pauseBulkSend();
   }
 
-  resumeBulkSend(): void {
-    this.electronService.resumeBulkSend();
+  dismissBulkSendOverlay(): void {
+    this.bulkSendOverlayDismissed.set(true);
+    this.bulkSendActive.set(false);
   }
 
   cancelBulkSend(): void {
