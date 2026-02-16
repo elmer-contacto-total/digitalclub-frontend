@@ -101,21 +101,27 @@
 
   <!-- Periodic Pause Bubble -->
   @if (periodicPauseBubbleActive()) {
-    <div class="periodic-pause-bubble" [ngStyle]="bubbleStyle"
+    <div class="ppb" [ngStyle]="bubbleStyle"
          (mousedown)="onBubbleMouseDown($event)">
-      <div class="periodic-pause-bubble-content">
-        <i class="ph ph-timer"></i>
-        <span class="periodic-pause-bubble-timer">{{ periodicPauseCountdown() }}</span>
+      <div class="ppb-header">
+        <div class="ppb-timer-group">
+          <span class="ppb-pulse"></span>
+          <span class="ppb-timer">{{ periodicPauseCountdown() }}</span>
+        </div>
+        <span class="ppb-label">Pausa anti-ban</span>
       </div>
-      <div class="periodic-pause-bubble-info">
-        Pausa anti-ban &middot; {{ bulkSendState().sentCount }}/{{ bulkSendState().totalRecipients }}
+      <div class="ppb-progress">
+        <div class="ppb-progress-bar">
+          <div class="ppb-progress-fill" [style.width.%]="bubbleSendProgress"></div>
+        </div>
+        <span class="ppb-progress-text">{{ bulkSendState().sentCount }}/{{ bulkSendState().totalRecipients }} enviados</span>
       </div>
-      <div class="periodic-pause-bubble-actions">
-        <button class="periodic-pause-bubble-btn pause" (click)="pauseFromBubble()" title="Pausar permanentemente">
-          <i class="ph ph-pause"></i>
+      <div class="ppb-actions">
+        <button class="ppb-btn ppb-btn-pause" (click)="pauseFromBubble()" title="Pausar permanentemente">
+          <i class="ph ph-pause"></i> Pausar
         </button>
-        <button class="periodic-pause-bubble-btn cancel" (click)="cancelFromBubble()" title="Cancelar envío">
-          <i class="ph ph-x"></i>
+        <button class="ppb-btn ppb-btn-cancel" (click)="cancelFromBubble()" title="Cancelar envío">
+          <i class="ph ph-x"></i> Cancelar
         </button>
       </div>
     </div>

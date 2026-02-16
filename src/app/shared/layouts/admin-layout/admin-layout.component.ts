@@ -203,6 +203,12 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
     return Math.round((s.sentCount / s.totalRecipients) * 100);
   }
 
+  get bubbleSendProgress(): number {
+    const s = this.bulkSendState();
+    if (!s.totalRecipients) return 0;
+    return Math.round(((s.sentCount + s.failedCount) / s.totalRecipients) * 100);
+  }
+
   // --- Periodic Pause Bubble ---
 
   pauseFromBubble(): void {
