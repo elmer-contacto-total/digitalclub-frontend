@@ -164,6 +164,7 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
   dismissBulkSendOverlay(): void {
     this.bulkSendOverlayDismissed.set(true);
     this.bulkSendActive.set(false);
+    this.electronService.dismissBulkSendOverlay();
   }
 
   cancelBulkSend(): void {

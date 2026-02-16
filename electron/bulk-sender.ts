@@ -1274,6 +1274,10 @@ export class BulkSender {
     }
   }
 
+  async dismissOverlay(): Promise<void> {
+    await this.hideOverlay();
+  }
+
   private async hideOverlay(): Promise<void> {
     if (!this.whatsappView) return;
     try {

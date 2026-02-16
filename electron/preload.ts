@@ -240,6 +240,9 @@ const electronAPI = {
     },
     checkPending: (): Promise<any> => {
       return ipcRenderer.invoke('bulk-send:check-pending');
+    },
+    dismissOverlay: (): Promise<{ success: boolean }> => {
+      return ipcRenderer.invoke('bulk-send:dismiss-overlay');
     }
   },
 
@@ -344,6 +347,7 @@ declare global {
         cancel: () => Promise<{ success: boolean }>;
         getStatus: () => Promise<{ bulkSendId: number | null; state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; lastError: string | null }>;
         checkPending: () => Promise<any>;
+        dismissOverlay: () => Promise<{ success: boolean }>;
       };
       onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null }) => void) => void;
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;

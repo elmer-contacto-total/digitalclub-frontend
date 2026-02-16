@@ -544,6 +544,17 @@ export class ElectronService {
   }
 
   /**
+   * Dismiss the WhatsApp BrowserView overlay (used when closing the Angular overlay while paused)
+   */
+  async dismissBulkSendOverlay(): Promise<boolean> {
+    if ((window as any).electronAPI?.bulkSend?.dismissOverlay) {
+      const result = await (window as any).electronAPI.bulkSend.dismissOverlay();
+      return result.success;
+    }
+    return false;
+  }
+
+  /**
    * Cleanup listeners on service destroy
    */
   destroy(): void {

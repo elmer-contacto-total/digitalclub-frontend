@@ -2536,6 +2536,11 @@ function setupIPC(): void {
     return null;
   });
 
+  ipcMain.handle('bulk-send:dismiss-overlay', async () => {
+    await bulkSender.dismissOverlay();
+    return { success: true };
+  });
+
   // Restablecimiento completo - limpia TODOS los datos y reinicia
   ipcMain.handle('full-reset', async () => {
     console.log('[MWS] Ejecutando restablecimiento completo...');
