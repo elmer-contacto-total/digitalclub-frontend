@@ -8,11 +8,12 @@ import { AuthService } from '../../../../core/services/auth.service';
 import { UserRole } from '../../../../core/models/user.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
+import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-envio-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, LoadingSpinnerComponent, DatePipe],
+  imports: [CommonModule, RouterLink, LoadingSpinnerComponent, DatePipe, PaginationComponent],
   template: `
     <div class="envio-list-container">
       <div class="page-header">
@@ -146,15 +147,14 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         </div>
 
         @if (totalPages() > 1) {
-          <div class="pagination">
-            <button class="btn btn-sm" [disabled]="currentPage() === 0" (click)="loadPage(currentPage() - 1)">
-              <i class="ph ph-caret-left"></i>
-            </button>
-            <span>Página {{ currentPage() + 1 }} de {{ totalPages() }}</span>
-            <button class="btn btn-sm" [disabled]="currentPage() >= totalPages() - 1" (click)="loadPage(currentPage() + 1)">
-              <i class="ph ph-caret-right"></i>
-            </button>
-          </div>
+          <app-pagination
+            [currentPage]="currentPage()"
+            [totalItems]="totalItems()"
+            [pageSize]="pageSize()"
+            [pageSizeOptions]="[10, 20, 50]"
+            (pageChange)="onPageChange($event)"
+            (pageSizeChange)="onPageSizeChange($event)"
+          />
         }
       }
     </div>
@@ -238,11 +238,6 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       &.danger:hover { border-color: var(--error-default); color: var(--error-default); }
     }
 
-    .pagination {
-      display: flex; justify-content: center; align-items: center; gap: var(--space-3); margin-top: var(--space-4);
-      span { font-size: var(--text-base); color: var(--fg-muted); }
-    }
-
     .btn {
       display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px;
       border: none; border-radius: var(--radius-lg); font-size: var(--text-base); font-weight: var(--font-medium);
@@ -272,8 +267,10 @@ export class EnvioListComponent implements OnInit, OnDestroy {
   loadError = signal('');
   bulkSends = signal<BulkSend[]>([]);
   statusFilter = signal('');
-  currentPage = signal(0);
+  currentPage = signal(1);
   totalPages = signal(0);
+  totalItems = signal(0);
+  pageSize = signal(20);
 
   isSupervisor(): boolean {
     const user = this.authService.currentUser();
@@ -295,12 +292,18 @@ export class EnvioListComponent implements OnInit, OnDestroy {
 
   filterByStatus(status: string): void {
     this.statusFilter.set(status);
-    this.currentPage.set(0);
+    this.currentPage.set(1);
     this.loadBulkSends();
   }
 
-  loadPage(page: number): void {
+  onPageChange(page: number): void {
     this.currentPage.set(page);
+    this.loadBulkSends();
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.currentPage.set(1);
     this.loadBulkSends();
   }
 
@@ -308,12 +311,13 @@ export class EnvioListComponent implements OnInit, OnDestroy {
     this.isLoading.set(true);
     this.loadError.set('');
     const status = this.statusFilter() || undefined;
-    this.bulkSendService.getBulkSends(this.currentPage(), 20, status).pipe(
+    this.bulkSendService.getBulkSends(this.currentPage() - 1, this.pageSize(), status).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (res) => {
         this.bulkSends.set(res.bulk_sends);
         this.totalPages.set(res.totalPages);
+        this.totalItems.set(res.total);
         this.isLoading.set(false);
       },
       error: (err) => {
