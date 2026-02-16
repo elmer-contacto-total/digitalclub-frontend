@@ -809,12 +809,14 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   // Get current chat name — prefer Angular IPC value, fallback to DOM header
   function getCurrentChatHeaderName() {
-    if (window.__hablapeCurrentChatName) return window.__hablapeCurrentChatName;
-    // Fallback: read directly from WhatsApp chat header
+    // Always prefer DOM header — it reflects the actual visible chat,
+    // including groups. __hablapeCurrentChatName only updates for
+    // individual contacts (via phone extraction) and goes stale on groups.
     try {
       var headerEl = document.querySelector('#main header span[title]');
       if (headerEl) return headerEl.getAttribute('title');
     } catch (e) {}
+    if (window.__hablapeCurrentChatName) return window.__hablapeCurrentChatName;
     return null;
   }
 
@@ -2661,13 +2663,13 @@ const MEDIA_CAPTURE_SCRIPT = `
             next: nextNb ? nextNb.getAttribute('data-id') : null,
             prev: prevNb ? prevNb.getAttribute('data-id') : null
           });
-        } else {
-          // Message NOT in DOM (virtual scroll or deleted).
-          // Set lastSeen to current scan so the detection window starts fresh.
-          // On subsequent scans, absence-based detection will evaluate whether
-          // the message reappears or stays gone (using neighbor check).
+        } else if (messageSeenInDOM.has(rebaseId)) {
+          // Message was seen in DOM before but is now gone after chat change.
+          // Refresh lastSeen to reopen the detection window — this message
+          // may have been deleted while we were in another chat.
           messageLastSeen.set(rebaseId, deletionScanCount);
         }
+        // else: never seen in DOM (restored from storage) — don't set lastSeen
       }
     }
 
@@ -2748,7 +2750,7 @@ const MEDIA_CAPTURE_SCRIPT = `
             var nextInDOM = neighbors.next ? !!document.querySelector('[data-id="' + neighbors.next + '"]') : false;
             var prevInDOM = neighbors.prev ? !!document.querySelector('[data-id="' + neighbors.prev + '"]') : false;
             var anyNeighborInDOM = nextInDOM || prevInDOM;
-            if (anyNeighborInDOM && scansSinceSeen >= 1) {
+            if (anyNeighborInDOM && scansSinceSeen >= 1 && messageSeenInDOM.has(messageId)) {
               // At least one neighbor in DOM, our message gone → deleted
               // No time window limit: neighbor presence is a strong signal
               isDeleted = true;

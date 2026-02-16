@@ -27,7 +27,7 @@ interface SubordinateClient {
       <!-- Page Header -->
       <div class="page-header">
         <div class="page-header-content">
-          <h1 class="page-title">Asignar Managers</h1>
+          <h1 class="page-title">Asignaciones</h1>
           <p class="page-subtitle">Reasigna clientes entre tus agentes subordinados</p>
         </div>
       </div>
@@ -289,7 +289,11 @@ export class ManagerAssignmentsComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$)
     ).subscribe({
       next: ({ managers, clients }) => {
-        this.managers.set(managers);
+        // Backend returns firstName/lastName/fullName, not "name"
+        this.managers.set((managers as any[]).map(m => ({
+          ...m,
+          name: m.fullName || m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim() || `Usuario ${m.id}`
+        })));
         this.isLoadingManagers.set(false);
 
         // Map clients data

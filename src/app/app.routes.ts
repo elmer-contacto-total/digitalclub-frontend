@@ -108,7 +108,7 @@ export const routes: Routes = [
       {
         path: 'managers',
         loadComponent: () => import('./features/managers/manager-assignments.component').then(m => m.ManagerAssignmentsComponent),
-        title: 'Asignar Managers - MWS'
+        title: 'Asignaciones - MWS'
       },
       // Imports (implemented)
       {
