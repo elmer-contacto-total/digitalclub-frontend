@@ -199,7 +199,7 @@ export const routes: Routes = [
       },
       {
         path: 'export_contacts',
-        loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
+        loadComponent: () => import('./features/export-contacts/export-contacts.component').then(m => m.ExportContactsComponent),
         title: 'Exportar Contactos - MWS'
       }
     ]
