@@ -65,6 +65,7 @@ export class BulkSender {
   private isCancelled = false;
   private dailySentCount = 0;
   private stateFile: string | null = null;
+  private cdpAttached = false;
 
   constructor(apiBaseUrl: string) {
     this.apiBaseUrl = apiBaseUrl;
@@ -187,6 +188,9 @@ export class BulkSender {
     // Main send loop
     await this.processLoop();
 
+    // Detach CDP debugger
+    this.detachCdp();
+
     // Hide overlay when done
     await this.hideOverlay();
 
@@ -223,6 +227,7 @@ export class BulkSender {
     this.emitOverlayUpdate();
     this.clearPersistedState();
     this.cleanupTempAttachment();
+    this.detachCdp();
     this.hideOverlay();
     this.setBulkSendActiveFlag(false);
   }
@@ -463,9 +468,9 @@ export class BulkSender {
     if (!this.whatsappView) return false;
     try {
       // Press Escape 3 times to close any open panels/modals/search
-      // Use sendInputEvent for real Chromium-level events that WhatsApp (React) processes
+      // Use CDP for focus-independent keyboard events
       for (let i = 0; i < 3; i++) {
-        this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+        await this.cdpKey('Escape', 'Escape', 27);
         await this.sleep(300);
       }
 
@@ -496,9 +501,8 @@ export class BulkSender {
       `, true);
 
       if (hasSearchText) {
-        // Clear search text via real keyboard events (Ctrl+A, Backspace)
-        this.whatsappView.webContents.focus();
-        await this.clearInputViaKeyboard();
+        // Clear search text via CDP (focus-independent)
+        await this.cdpClear();
       }
 
       await this.sleep(300);
@@ -567,15 +571,14 @@ export class BulkSender {
 
       console.log(`[BulkSender] Search focused: ${searchFocus.focusInfo}`);
 
-      // --- PHASE 2B: Give BrowserView Chromium-level focus, then type via real keyboard events ---
-      this.whatsappView.webContents.focus();
+      // --- PHASE 2B: Type phone via CDP (focus-independent) ---
       await this.sleep(100);
 
       // Clear any existing text in the search input
-      await this.clearInputViaKeyboard();
+      await this.cdpClear();
 
-      // Type phone number character by character (real Chromium keyDown/char/keyUp events)
-      await this.typeViaKeyboard(normalizedPhone);
+      // Type phone number character by character via CDP
+      await this.cdpType(normalizedPhone);
 
       // Wait for WhatsApp to process the search query
       await this.sleep(500);
@@ -641,11 +644,10 @@ export class BulkSender {
         // Too many results — search didn't filter. Retry: clear, escape, re-enter search
         if (attempt < 2) {
           console.warn(`[BulkSender] Búsqueda no filtró (${searchCheck.count} items), reintentando (${attempt + 1}/2)...`);
-          await this.clearInputViaKeyboard();
+          await this.cdpClear();
           await this.sleep(300);
-          // Press Escape to exit search mode
-          this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
-          this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+          // Press Escape to exit search mode (CDP — focus-independent)
+          await this.cdpKey('Escape', 'Escape', 27);
           await this.sleep(500);
           // Re-click search box
           await this.whatsappView.webContents.executeJavaScript(`
@@ -665,11 +667,10 @@ export class BulkSender {
               if (input) { input.focus(); input.click(); }
             })()
           `, true);
-          this.whatsappView.webContents.focus();
           await this.sleep(200);
-          await this.clearInputViaKeyboard();
+          await this.cdpClear();
           await this.sleep(200);
-          await this.typeViaKeyboard(normalizedPhone);
+          await this.cdpType(normalizedPhone);
         }
       }
 
@@ -686,13 +687,10 @@ export class BulkSender {
 
       console.log(`[BulkSender] Search filtered to ${searchCheck.count} items, selecting via keyboard`);
 
-      // Select first result via ArrowDown, then open via Enter (real Chromium keyboard events)
-      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Down' });
-      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Down' });
+      // Select first result via ArrowDown, then open via Enter (CDP — focus-independent)
+      await this.cdpKey('ArrowDown', 'ArrowDown', 40);
       await this.sleep(200);
-
-      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
-      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+      await this.cdpKey('Enter', 'Enter', 13);
 
       // --- PHASE 5: Verify the correct chat loaded ---
       // Wait for compose box to appear (try multiple selectors for different WhatsApp versions)
@@ -778,12 +776,11 @@ export class BulkSender {
         return focusResult;
       }
 
-      // Step 2: Give BrowserView Chromium-level focus, clear, and type message
-      this.whatsappView.webContents.focus();
+      // Step 2: Clear and type message via CDP (focus-independent)
       await this.sleep(100);
 
-      await this.clearInputViaKeyboard();
-      await this.typeViaKeyboard(text);
+      await this.cdpClear();
+      await this.cdpType(text);
 
       // Wait for React to process
       await this.sleep(300);
@@ -807,9 +804,8 @@ export class BulkSender {
       // Step 3: Typing simulation delay
       await this.sleep(500 + Math.random() * 1000);
 
-      // Step 4: Send via Enter key (real Chromium keyboard event)
-      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
-      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+      // Step 4: Send via Enter key (CDP — focus-independent)
+      await this.cdpKey('Enter', 'Enter', 13);
 
       // Step 5: Poll — verify compose box is empty after send (message was sent)
       const sentOk = await this.waitForCondition(`
@@ -936,26 +932,24 @@ export class BulkSender {
         return focusResult;
       }
 
-      // 3. Give BrowserView Chromium-level focus
-      this.whatsappView!.webContents.focus();
+      // 3. Brief pause before typing (CDP doesn't need OS focus)
       await this.sleep(100);
-      rlog('Step 3 OK: BrowserView focused');
+      rlog('Step 3 OK: ready for CDP input');
 
-      // 4. Clear and type caption FIRST (before pasting image)
-      await this.clearInputViaKeyboard();
+      // 4. Clear and type caption FIRST via CDP (before pasting image)
+      await this.cdpClear();
       if (caption) {
-        await this.typeViaKeyboard(caption);
+        await this.cdpType(caption);
         await this.sleep(300);
         rlog('Step 4 OK: caption typed (' + caption.length + ' chars)');
       } else {
         rlog('Step 4 OK: no caption to type');
       }
 
-      // 5. Write image to system clipboard and paste via native Ctrl+V (trusted event)
+      // 5. Write image to system clipboard and paste via CDP Ctrl+V (focus-independent)
       clipboard.writeImage(image);
-      this.whatsappView!.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'v', modifiers: ['control'] });
-      this.whatsappView!.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'v', modifiers: ['control'] });
-      rlog('Step 5 OK: clipboard.writeImage + Ctrl+V dispatched');
+      await this.cdpKey('v', 'KeyV', 86, 2);  // 2 = Ctrl modifier
+      rlog('Step 5 OK: clipboard.writeImage + CDP Ctrl+V dispatched');
 
       // 6. Wait for media preview to appear
       // WhatsApp uses "Remove attachment" and "Add file" buttons in the media editor
@@ -1303,6 +1297,10 @@ export class BulkSender {
   }
 
   private async fetchNextRecipient(): Promise<any> {
+    if (!this.bulkSendId) {
+      console.warn('[BulkSender] bulkSendId is null, skipping fetchNextRecipient');
+      return null;
+    }
     try {
       const response = await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/next-recipient`, {
         headers: this.getHeaders()
@@ -1322,6 +1320,10 @@ export class BulkSender {
   }
 
   private async reportResult(recipientId: number, success: boolean, errorMessage?: string, action?: string): Promise<void> {
+    if (!this.bulkSendId) {
+      console.warn('[BulkSender] bulkSendId is null, skipping reportResult');
+      return;
+    }
     try {
       await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/recipient-result`, {
         method: 'POST',
@@ -1334,6 +1336,10 @@ export class BulkSender {
   }
 
   private async notifyBackend(action: 'pause' | 'resume' | 'cancel'): Promise<void> {
+    if (!this.bulkSendId) {
+      console.warn(`[BulkSender] bulkSendId is null, skipping notifyBackend(${action})`);
+      return;
+    }
     try {
       await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/${action}`, {
         method: 'POST',
@@ -1447,7 +1453,7 @@ export class BulkSender {
   }
 
   /**
-   * Clear focused input via Ctrl+A + Backspace using Electron's sendInputEvent.
+   * @deprecated Use cdpClear() instead — works without OS window focus.
    */
   private async clearInputViaKeyboard(): Promise<void> {
     if (!this.whatsappView) return;
@@ -1457,5 +1463,62 @@ export class BulkSender {
     this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
     this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Backspace' });
     await this.sleep(50);
+  }
+
+  // --- CDP (Chrome DevTools Protocol) keyboard helpers ---
+  // These generate isTrusted=true events that work WITHOUT OS window focus.
+
+  private async ensureCdpAttached(): Promise<void> {
+    if (this.cdpAttached || !this.whatsappView) return;
+    try {
+      this.whatsappView.webContents.debugger.attach('1.3');
+      this.cdpAttached = true;
+    } catch (e: any) {
+      if (e.message?.includes('Already attached')) this.cdpAttached = true;
+      else throw e;
+    }
+  }
+
+  private async cdpKey(key: string, code: string, vkCode: number, modifiers = 0): Promise<void> {
+    if (!this.whatsappView) return;
+    await this.ensureCdpAttached();
+    const dbg = this.whatsappView.webContents.debugger;
+    const base = { key, code, windowsVirtualKeyCode: vkCode, nativeVirtualKeyCode: vkCode, modifiers };
+    await dbg.sendCommand('Input.dispatchKeyEvent', { ...base, type: 'keyDown' });
+    await dbg.sendCommand('Input.dispatchKeyEvent', { ...base, type: 'keyUp' });
+  }
+
+  private async cdpType(text: string): Promise<void> {
+    if (!this.whatsappView) return;
+    await this.ensureCdpAttached();
+    const dbg = this.whatsappView.webContents.debugger;
+    for (const char of text) {
+      const code = char >= 'a' && char <= 'z' ? 'Key' + char.toUpperCase()
+                 : char >= '0' && char <= '9' ? 'Digit' + char : '';
+      await dbg.sendCommand('Input.dispatchKeyEvent', {
+        type: 'keyDown', key: char, code, text: char,
+        windowsVirtualKeyCode: char.charCodeAt(0), nativeVirtualKeyCode: char.charCodeAt(0)
+      });
+      await dbg.sendCommand('Input.dispatchKeyEvent', {
+        type: 'keyUp', key: char, code,
+        windowsVirtualKeyCode: char.charCodeAt(0), nativeVirtualKeyCode: char.charCodeAt(0)
+      });
+      await this.sleep(30 + Math.random() * 20);
+    }
+  }
+
+  private async cdpClear(): Promise<void> {
+    await this.cdpKey('a', 'KeyA', 65, 2);  // 2 = Ctrl modifier
+    await this.sleep(50);
+    await this.cdpKey('Backspace', 'Backspace', 8);
+    await this.sleep(50);
+  }
+
+  detachCdp(): void {
+    if (!this.cdpAttached || !this.whatsappView) return;
+    try {
+      this.whatsappView.webContents.debugger.detach();
+    } catch { /* ignore */ }
+    this.cdpAttached = false;
   }
 }
