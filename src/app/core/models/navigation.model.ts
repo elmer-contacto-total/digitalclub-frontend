@@ -142,7 +142,6 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLAS INTERNAS',
       items: [
         { id: 'audits', label: 'Tablas de Auditoría', icon: 'ph-list-checks', route: '/app/audits' },
-        { id: 'media-audit', label: 'Auditoría Medios', icon: 'ph-shield-check', route: '/app/media_audit_logs' },
         { id: 'app-versions', label: 'Versiones de App', icon: 'ph-rocket-launch', route: '/app/app_versions' }
       ]
     },
@@ -180,7 +179,6 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       items: [
         { id: 'internal-users', label: 'Usuarios Internos', icon: 'ph-user-gear', route: '/app/internal_users', badgeKey: 'internalUsersCount' },
         { id: 'audits', label: 'Tablas de Auditoría', icon: 'ph-list-checks', route: '/app/audits' },
-        { id: 'media-audit', label: 'Auditoría Medios', icon: 'ph-shield-check', route: '/app/media_audit_logs' }
       ]
     },
     {
@@ -227,7 +225,6 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
         { id: 'messages-list', label: 'Mensajes', icon: 'ph-envelope', route: '/app/messages', badgeKey: 'messagesCount' },
         // PARIDAD: Rails admin_agent_prospects_path
         { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/agent_prospects', badgeKey: 'prospectsCount' },
-        { id: 'media-audit', label: 'Auditoría Medios', icon: 'ph-shield-check', route: '/app/media_audit_logs' }
       ]
     },
     {
@@ -365,7 +362,6 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
         { id: 'messages-list', label: 'Mensajes', icon: 'ph-envelope', route: '/app/messages', badgeKey: 'messagesCount' },
         // PARIDAD: Rails admin_agent_prospects_path
         { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/agent_prospects', badgeKey: 'prospectsCount' },
-        { id: 'media-audit', label: 'Auditoría Medios', icon: 'ph-shield-check', route: '/app/media_audit_logs' }
       ]
     },
     {
@@ -415,7 +411,6 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
         { id: 'messages-list', label: 'Mensajes', icon: 'ph-envelope', route: '/app/messages', badgeKey: 'messagesCount' },
         // PARIDAD: Rails admin_agent_prospects_path
         { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/agent_prospects', badgeKey: 'prospectsCount' },
-        { id: 'media-audit', label: 'Auditoría Medios', icon: 'ph-shield-check', route: '/app/media_audit_logs' }
       ]
     },
     {
@@ -465,7 +460,6 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
         { id: 'messages-list', label: 'Mensajes', icon: 'ph-envelope', route: '/app/messages', badgeKey: 'messagesCount' },
         // PARIDAD: Rails admin_agent_prospects_path
         { id: 'prospects', label: 'Prospectos', icon: 'ph-user-plus', route: '/app/agent_prospects', badgeKey: 'prospectsCount' },
-        { id: 'media-audit', label: 'Auditoría Medios', icon: 'ph-shield-check', route: '/app/media_audit_logs' }
       ]
     },
     {

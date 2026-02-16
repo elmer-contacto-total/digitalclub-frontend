@@ -436,7 +436,10 @@ export class SupervisorClientsComponent implements OnInit, OnDestroy {
   private loadAgents(): void {
     this.userService.getSubordinates().pipe(takeUntil(this.destroy$)).subscribe({
       next: (agents) => {
-        this.agents.set(agents);
+        this.agents.set((agents as any[]).map(a => ({
+          ...a,
+          name: a.fullName || a.name || `${a.firstName || ''} ${a.lastName || ''}`.trim() || `Usuario ${a.id}`
+        })));
       },
       error: (err) => console.error('Error loading agents:', err)
     });
