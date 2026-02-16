@@ -956,9 +956,9 @@ export class BulkSender {
       rlog('Step 6: waiting for media preview...');
       const previewReady = await this.waitForCondition(`
         (function() {
-          var el = document.querySelector('button[aria-label="Remove attachment"]') ||
-                   document.querySelector('button[aria-label="Add file"]') ||
-                   document.querySelector('button[aria-label="Crop and rotate"]') ||
+          var el = document.querySelector('button[aria-label="Remove attachment"], button[aria-label="Eliminar archivo adjunto"]') ||
+                   document.querySelector('button[aria-label="Add file"], button[aria-label="Agregar archivo"]') ||
+                   document.querySelector('button[aria-label="Crop and rotate"], button[aria-label="Recortar y rotar"]') ||
                    document.querySelector('span[data-icon="wds-ic-send-filled"]');
           return el ? true : null;
         })()
@@ -989,15 +989,15 @@ export class BulkSender {
             // Strategy: find "Remove attachment" button, walk up DOM to find a shared
             // container that also has a Send button.
             var sendBtn = null;
-            var removeBtn = document.querySelector('button[aria-label="Remove attachment"]') ||
-                            document.querySelector('button[aria-label="Add file"]');
+            var removeBtn = document.querySelector('button[aria-label="Remove attachment"], button[aria-label="Eliminar archivo adjunto"]') ||
+                            document.querySelector('button[aria-label="Add file"], button[aria-label="Agregar archivo"]');
 
             if (removeBtn) {
               console.log('[IMG] Found Remove/Add button, searching for Send in same container...');
               var container = removeBtn.parentElement;
               for (var depth = 0; depth < 10 && container; depth++) {
                 // Search for Send button (could be <button> or [role="button"])
-                var candidates = container.querySelectorAll('button[aria-label="Send"], [role="button"][aria-label="Send"]');
+                var candidates = container.querySelectorAll('button[aria-label="Send"], button[aria-label="Enviar"], [role="button"][aria-label="Send"], [role="button"][aria-label="Enviar"]');
                 if (candidates.length > 0) {
                   sendBtn = candidates[0];
                   console.log('[IMG] Found Send button at depth ' + depth + ' from Remove/Add button');
@@ -1029,7 +1029,7 @@ export class BulkSender {
 
             // Fallback 2: all Send buttons/roles, pick the one NOT in footer
             if (!sendBtn) {
-              var allSends = document.querySelectorAll('button[aria-label="Send"], [role="button"][aria-label="Send"]');
+              var allSends = document.querySelectorAll('button[aria-label="Send"], button[aria-label="Enviar"], [role="button"][aria-label="Send"], [role="button"][aria-label="Enviar"]');
               console.log('[IMG] Fallback 2: found ' + allSends.length + ' Send buttons/roles');
               for (var i = 0; i < allSends.length; i++) {
                 var inFooter = allSends[i].closest('footer');
@@ -1056,7 +1056,7 @@ export class BulkSender {
             var timeout = 8000;
             var start = Date.now();
             while (Date.now() - start < timeout) {
-              var removeBtn = document.querySelector('button[aria-label="Remove attachment"]');
+              var removeBtn = document.querySelector('button[aria-label="Remove attachment"], button[aria-label="Eliminar archivo adjunto"]');
               if (!removeBtn) {
                 console.log('[IMG] Step 7 OK: media editor closed after ' + (Date.now() - start) + 'ms');
                 return { success: true };
