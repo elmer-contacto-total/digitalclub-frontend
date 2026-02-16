@@ -318,9 +318,10 @@
   pointer-events: auto;
 }
 
-// When WhatsApp is visible, constrain overlay to Angular area (left half)
+// When WhatsApp is visible, keep overlay full-width (covers header above BrowserView)
+// but center the card in the left half via padding
 .whatsapp-visible .bulk-send-overlay {
-  right: 50vw;
+  padding-right: 50vw;
 }
 
 .bulk-send-card {
