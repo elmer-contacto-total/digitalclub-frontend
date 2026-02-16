@@ -43,21 +43,33 @@
   @if (bulkSendActive()) {
     <div class="bulk-send-overlay">
       <div class="bulk-send-card">
-        <div class="bulk-send-icon">
-          <i class="ph ph-paper-plane-tilt"></i>
-        </div>
         @if (bulkSendState().state === 'running') {
+          <div class="bulk-send-icon"><i class="ph ph-paper-plane-tilt"></i></div>
           <h3>Envío masivo en curso</h3>
           <p class="bulk-send-phone">{{ bulkSendState().currentPhone || 'Preparando...' }}</p>
-          <div class="bulk-send-progress-bar">
-            <div class="bulk-send-progress-fill" [style.width.%]="bulkSendProgress"></div>
-          </div>
-          <p class="bulk-send-count">
-            {{ bulkSendState().sentCount }} / {{ bulkSendState().totalRecipients }} enviados
-            @if (bulkSendState().failedCount > 0) {
-              <span class="bulk-send-failed">({{ bulkSendState().failedCount }} fallidos)</span>
-            }
-          </p>
+        } @else if (bulkSendState().state === 'completed') {
+          <div class="bulk-send-icon bulk-send-icon-success"><i class="ph ph-check-circle"></i></div>
+          <h3>Envío completado</h3>
+          <p class="bulk-send-phone">{{ bulkSendState().sentCount }} de {{ bulkSendState().totalRecipients }} enviados</p>
+        } @else if (bulkSendState().state === 'cancelled') {
+          <div class="bulk-send-icon bulk-send-icon-cancel"><i class="ph ph-x-circle"></i></div>
+          <h3>Envío cancelado</h3>
+          <p class="bulk-send-phone">{{ bulkSendState().sentCount }} de {{ bulkSendState().totalRecipients }} enviados</p>
+        } @else {
+          <div class="bulk-send-icon"><i class="ph ph-paper-plane-tilt"></i></div>
+          <h3>Envío masivo pausado</h3>
+          <p class="bulk-send-phone">En espera</p>
+        }
+        <div class="bulk-send-progress-bar">
+          <div class="bulk-send-progress-fill" [style.width.%]="bulkSendProgress"></div>
+        </div>
+        <p class="bulk-send-count">
+          {{ bulkSendState().sentCount }} / {{ bulkSendState().totalRecipients }} enviados
+          @if (bulkSendState().failedCount > 0) {
+            <span class="bulk-send-failed">({{ bulkSendState().failedCount }} fallidos)</span>
+          }
+        </p>
+        @if (bulkSendState().state === 'running') {
           <div class="bulk-send-actions">
             <button class="bulk-send-btn bulk-send-btn-pause" (click)="pauseBulkSend()">
               <i class="ph ph-pause"></i> Pausar
@@ -66,19 +78,7 @@
               <i class="ph ph-x"></i> Cancelar
             </button>
           </div>
-          <p class="bulk-send-notice">La interfaz está bloqueada durante el envío masivo</p>
-        } @else {
-          <h3>Envío masivo pausado</h3>
-          <p class="bulk-send-phone">En espera</p>
-          <div class="bulk-send-progress-bar">
-            <div class="bulk-send-progress-fill" [style.width.%]="bulkSendProgress"></div>
-          </div>
-          <p class="bulk-send-count">
-            {{ bulkSendState().sentCount }} / {{ bulkSendState().totalRecipients }} enviados
-            @if (bulkSendState().failedCount > 0) {
-              <span class="bulk-send-failed">({{ bulkSendState().failedCount }} fallidos)</span>
-            }
-          </p>
+        } @else if (bulkSendState().state === 'paused') {
           <div class="bulk-send-actions">
             <button class="bulk-send-btn bulk-send-btn-resume" (click)="dismissBulkSendOverlay()">
               <i class="ph ph-x-circle"></i> Cerrar
@@ -87,7 +87,13 @@
               <i class="ph ph-x"></i> Cancelar
             </button>
           </div>
+        }
+        @if (bulkSendState().state === 'completed' || bulkSendState().state === 'cancelled') {
+          <p class="bulk-send-notice">Cerrando en unos segundos...</p>
+        } @else if (bulkSendState().state === 'paused') {
           <p class="bulk-send-notice">Para reanudar, ve a <strong>Envíos Masivos</strong></p>
+        } @else {
+          <p class="bulk-send-notice">La interfaz está bloqueada durante el envío masivo</p>
         }
       </div>
     </div>

@@ -356,6 +356,14 @@
     font-size: 24px;
     color: white;
   }
+
+  &-success {
+    background: var(--success-default);
+  }
+
+  &-cancel {
+    background: var(--error-default);
+  }
 }
 
 .bulk-send-phone {

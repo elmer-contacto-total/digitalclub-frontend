@@ -28,6 +28,7 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
   bulkSendActive = signal(false);
   bulkSendState = signal<BulkSendState>({ state: 'idle', sentCount: 0, failedCount: 0, totalRecipients: 0, currentPhone: null });
   private bulkSendOverlayDismissed = signal(false);
+  private completionTimeout: any = null;
 
   // Responsive handling
   private readonly MOBILE_BREAKPOINT = 1024;
@@ -49,8 +50,27 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
       this.electronService.bulkSendState$
         .pipe(takeUntil(this.destroy$))
         .subscribe(state => {
+          const prevState = this.bulkSendState().state;
           this.bulkSendState.set(state);
-          if (state.state === 'running') {
+
+          if ((state.state === 'completed' || state.state === 'cancelled')
+              && (prevState === 'running' || prevState === 'paused')) {
+            // Keep overlay visible briefly to show completion
+            this.bulkSendActive.set(true);
+
+            // Show toast
+            const msg = state.state === 'completed'
+              ? `Envío completado: ${state.sentCount} enviados` + (state.failedCount > 0 ? `, ${state.failedCount} fallidos` : '')
+              : 'Envío masivo cancelado';
+            this.toastService[state.state === 'completed' ? 'success' : 'warning'](msg);
+
+            // Auto-dismiss after 3 seconds
+            clearTimeout(this.completionTimeout);
+            this.completionTimeout = setTimeout(() => {
+              this.bulkSendActive.set(false);
+              this.bulkSendState.set({ state: 'idle', sentCount: 0, failedCount: 0, totalRecipients: 0, currentPhone: null });
+            }, 3000);
+          } else if (state.state === 'running') {
             this.bulkSendOverlayDismissed.set(false);
             this.bulkSendActive.set(true);
           } else if (state.state === 'paused') {
@@ -82,6 +102,7 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    clearTimeout(this.completionTimeout);
     this.destroy$.next();
     this.destroy$.complete();
   }
