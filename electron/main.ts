@@ -2497,7 +2497,8 @@ function setupIPC(): void {
 
   // Resume bulk send
   ipcMain.handle('bulk-send:resume', async () => {
-    bulkSender.resume();
+    bulkSender.setWhatsAppView(whatsappView);
+    const result = await bulkSender.resume();
     if (mainWindow) {
       const s = bulkSender.getStatus();
       mainWindow.webContents.send('bulk-send-state-changed', {
@@ -2505,7 +2506,7 @@ function setupIPC(): void {
         totalRecipients: s.totalRecipients, currentPhone: s.currentPhone
       });
     }
-    return { success: true };
+    return result;
   });
 
   // Cancel bulk send

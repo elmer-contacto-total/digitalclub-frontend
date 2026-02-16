@@ -420,6 +420,17 @@
     }
   }
 
+  &-resume {
+    background: var(--card-bg);
+    color: var(--success-default);
+    border-color: var(--success-default);
+
+    &:hover {
+      background: var(--success-default);
+      color: white;
+    }
+  }
+
   &-cancel {
     background: var(--card-bg);
     color: var(--error-default);

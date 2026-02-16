@@ -327,23 +327,28 @@ export class EnvioListComponent implements OnInit, OnDestroy {
   pause(bs: BulkSend): void {
     if (this.electronService.isElectron) {
       this.electronService.pauseBulkSend();
+      this.toast.success('Envío pausado');
+      this.loadBulkSends();
+    } else {
+      this.bulkSendService.pauseBulkSend(bs.id).pipe(takeUntil(this.destroy$)).subscribe({
+        next: () => { this.toast.success('Envío pausado'); this.loadBulkSends(); },
+        error: (err) => this.toast.error(err.error?.message || 'Error al pausar')
+      });
     }
-    this.bulkSendService.pauseBulkSend(bs.id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => { this.toast.success('Envío pausado'); this.loadBulkSends(); },
-      error: (err) => this.toast.error(err.error?.message || 'Error al pausar')
-    });
   }
 
   async resume(bs: BulkSend): Promise<void> {
-    await this.router.navigate(['/app/electron_clients']);
-    await new Promise(resolve => setTimeout(resolve, 500));
     if (this.electronService.isElectron) {
+      await this.router.navigate(['/app/electron_clients']);
+      await new Promise(resolve => setTimeout(resolve, 500));
       this.electronService.resumeBulkSend();
+      this.toast.success('Envío reanudado');
+    } else {
+      this.bulkSendService.resumeBulkSend(bs.id).pipe(takeUntil(this.destroy$)).subscribe({
+        next: () => { this.toast.success('Envío reanudado'); this.loadBulkSends(); },
+        error: (err) => this.toast.error(err.error?.message || 'Error al reanudar')
+      });
     }
-    this.bulkSendService.resumeBulkSend(bs.id).pipe(takeUntil(this.destroy$)).subscribe({
-      next: () => { this.toast.success('Envío reanudado'); this.loadBulkSends(); },
-      error: (err) => this.toast.error(err.error?.message || 'Error al reanudar')
-    });
   }
 
   isAssignedToMe(bs: BulkSend): boolean {

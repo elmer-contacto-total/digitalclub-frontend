@@ -49,8 +49,22 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe(state => {
           this.bulkSendState.set(state);
-          this.bulkSendActive.set(state.state === 'running');
+          this.bulkSendActive.set(state.state === 'running' || state.state === 'paused');
         });
+
+      // Check for pending bulk send from previous session
+      this.electronService.checkPendingBulkSend().then(state => {
+        if (state) {
+          this.bulkSendState.set({
+            state: state.state === 'running' ? 'paused' : state.state,
+            sentCount: state.sentCount || 0,
+            failedCount: state.failedCount || 0,
+            totalRecipients: state.totalRecipients || 0,
+            currentPhone: null
+          });
+          this.bulkSendActive.set(true);
+        }
+      });
     }
   }
 
@@ -111,6 +125,10 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
 
   pauseBulkSend(): void {
     this.electronService.pauseBulkSend();
+  }
+
+  resumeBulkSend(): void {
+    this.electronService.resumeBulkSend();
   }
 
   cancelBulkSend(): void {

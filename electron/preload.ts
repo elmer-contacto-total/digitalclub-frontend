@@ -229,7 +229,7 @@ const electronAPI = {
     pause: (): Promise<{ success: boolean }> => {
       return ipcRenderer.invoke('bulk-send:pause');
     },
-    resume: (): Promise<{ success: boolean }> => {
+    resume: (): Promise<{ success: boolean; error?: string }> => {
       return ipcRenderer.invoke('bulk-send:resume');
     },
     cancel: (): Promise<{ success: boolean }> => {
@@ -237,6 +237,9 @@ const electronAPI = {
     },
     getStatus: (): Promise<{ bulkSendId: number | null; state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; lastError: string | null }> => {
       return ipcRenderer.invoke('bulk-send:status');
+    },
+    checkPending: (): Promise<any> => {
+      return ipcRenderer.invoke('bulk-send:check-pending');
     }
   },
 
@@ -337,9 +340,10 @@ declare global {
       bulkSend: {
         start: (bulkSendId: number, authToken: string) => Promise<{ success: boolean; error?: string }>;
         pause: () => Promise<{ success: boolean }>;
-        resume: () => Promise<{ success: boolean }>;
+        resume: () => Promise<{ success: boolean; error?: string }>;
         cancel: () => Promise<{ success: boolean }>;
         getStatus: () => Promise<{ bulkSendId: number | null; state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; lastError: string | null }>;
+        checkPending: () => Promise<any>;
       };
       onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null }) => void) => void;
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;

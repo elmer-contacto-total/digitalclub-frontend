@@ -206,17 +206,55 @@ export class BulkSender {
     this._state = 'paused';
     this.notifyBackend('pause');
     this.emitOverlayUpdate();
-    this.hideOverlay();
+    // Do NOT hide overlay — it stays visible with "Paused" state so user can resume
   }
 
-  resume(): void {
-    if (this._state !== 'paused') return;
-    console.log(`[BulkSender] Resuming bulk send ${this.bulkSendId}`);
-    this.isPaused = false;
-    this._state = 'running';
-    this.notifyBackend('resume');
-    this.showOverlay();
-    this.processLoop().then(() => this.hideOverlay());
+  async resume(): Promise<{ success: boolean; error?: string }> {
+    // Case 1: Normal resume (same session, paused state in memory)
+    if (this._state === 'paused') {
+      console.log(`[BulkSender] Resuming bulk send ${this.bulkSendId} (same session)`);
+      this.isPaused = false;
+      this._state = 'running';
+      this.notifyBackend('resume');
+      this.emitOverlayUpdate();
+      await this.showOverlay();
+      await this.fetchRules();
+      await this.processLoop();
+      this.detachCdp();
+      await this.hideOverlay();
+      await this.setBulkSendActiveFlag(false);
+      return { success: true };
+    }
+
+    // Case 2: After app restart — state is 'idle' but persisted state says 'paused' or 'running'
+    if (this._state === 'idle') {
+      const persisted = this.getPersistedState();
+      if (persisted && (persisted.state === 'paused' || persisted.state === 'running') && persisted.bulkSendId) {
+        console.log(`[BulkSender] Resuming bulk send ${persisted.bulkSendId} (after app restart)`);
+        this.bulkSendId = persisted.bulkSendId;
+        this.sentCount = persisted.sentCount || 0;
+        this.failedCount = persisted.failedCount || 0;
+        this.totalRecipients = persisted.totalRecipients || 0;
+        this._state = 'running';
+        this.isPaused = false;
+        this.isCancelled = false;
+        this.consecutiveFailures = 0;
+        this.dailySentCount = 0;
+
+        this.notifyBackend('resume');
+        this.emitOverlayUpdate();
+        await this.setBulkSendActiveFlag(true);
+        await this.showOverlay();
+        await this.fetchRules();
+        await this.processLoop();
+        this.detachCdp();
+        await this.hideOverlay();
+        await this.setBulkSendActiveFlag(false);
+        return { success: true };
+      }
+    }
+
+    return { success: false, error: 'No hay envío para reanudar' };
   }
 
   cancel(): void {

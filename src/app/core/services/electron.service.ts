@@ -534,6 +534,16 @@ export class ElectronService {
   }
 
   /**
+   * Check for pending bulk send from previous session (persisted state)
+   */
+  async checkPendingBulkSend(): Promise<any> {
+    if ((window as any).electronAPI?.bulkSend?.checkPending) {
+      return await (window as any).electronAPI.bulkSend.checkPending();
+    }
+    return null;
+  }
+
+  /**
    * Cleanup listeners on service destroy
    */
   destroy(): void {
