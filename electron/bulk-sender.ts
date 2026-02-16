@@ -1271,7 +1271,7 @@ export class BulkSender {
 
   private async fetchRules(): Promise<void> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/app/bulk_sends/rules`, {
+      const response = await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/rules`, {
         headers: this.getHeaders()
       });
       if (response.ok) {
