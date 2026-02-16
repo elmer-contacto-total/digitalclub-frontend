@@ -1020,7 +1020,7 @@ function createWhatsAppView(): void {
   whatsappView.webContents.loadURL('https://web.whatsapp.com');
 
   // DevTools para WhatsApp BrowserView (debug)
-  whatsappView.webContents.openDevTools();
+  //whatsappView.webContents.openDevTools();
 
   // Marcar como inicializado
   whatsappInitialized = true;

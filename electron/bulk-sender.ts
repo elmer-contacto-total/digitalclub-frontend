@@ -463,15 +463,9 @@ export class BulkSender {
     if (!this.whatsappView) return false;
     try {
       // Press Escape 3 times to close any open panels/modals/search
-      // Use executeJavaScript to dispatch KeyboardEvent (works without OS-level focus)
+      // Use sendInputEvent for real Chromium-level events that WhatsApp (React) processes
       for (let i = 0; i < 3; i++) {
-        await this.whatsappView.webContents.executeJavaScript(`
-          (function() {
-            var el = document.activeElement || document.body;
-            el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true }));
-            el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true }));
-          })()
-        `);
+        this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
         await this.sleep(300);
       }
 
@@ -649,14 +643,9 @@ export class BulkSender {
           console.warn(`[BulkSender] Búsqueda no filtró (${searchCheck.count} items), reintentando (${attempt + 1}/2)...`);
           await this.clearInputViaKeyboard();
           await this.sleep(300);
-          // Press Escape to exit search mode (via JS dispatch, works without OS focus)
-          await this.whatsappView.webContents.executeJavaScript(`
-            (function() {
-              var el = document.activeElement || document.body;
-              el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true }));
-              el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true }));
-            })()
-          `);
+          // Press Escape to exit search mode
+          this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+          this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
           await this.sleep(500);
           // Re-click search box
           await this.whatsappView.webContents.executeJavaScript(`
@@ -697,41 +686,13 @@ export class BulkSender {
 
       console.log(`[BulkSender] Search filtered to ${searchCheck.count} items, selecting via keyboard`);
 
-      // Click the first matching search result directly (avoids isTrusted issues with keyboard events)
-      const clickResult = await this.whatsappView.webContents.executeJavaScript(`
-        (function() {
-          var results = document.querySelectorAll('[data-testid="cell-frame-container"]');
-          if (results.length === 0) results = document.querySelectorAll('#pane-side [role="listitem"]');
-          if (results.length === 0) results = document.querySelectorAll('#pane-side [role="row"]');
-          var target = null;
-          var phone = '${normalizedPhone}';
-          var suffix = phone.slice(-8);
-          // Priority 1: result containing the phone number
-          for (var i = 0; i < results.length; i++) {
-            var text = (results[i].textContent || '');
-            if (text.indexOf(phone) !== -1 || text.indexOf(suffix) !== -1) {
-              target = results[i];
-              break;
-            }
-          }
-          // Priority 2: first result that's NOT "Message yourself"
-          if (!target) {
-            for (var i = 0; i < results.length; i++) {
-              var text = (results[i].textContent || '').toLowerCase();
-              if (text.indexOf('message yourself') === -1 &&
-                  text.indexOf('envíate') === -1 &&
-                  text.indexOf('tú') === -1) {
-                target = results[i];
-                break;
-              }
-            }
-          }
-          // Priority 3: first result
-          if (!target && results.length > 0) target = results[0];
-          if (target) target.click();
-          return target ? true : false;
-        })()
-      `);
+      // Select first result via ArrowDown, then open via Enter (real Chromium keyboard events)
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Down' });
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Down' });
+      await this.sleep(200);
+
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
 
       // --- PHASE 5: Verify the correct chat loaded ---
       // Wait for compose box to appear (try multiple selectors for different WhatsApp versions)
@@ -846,17 +807,9 @@ export class BulkSender {
       // Step 3: Typing simulation delay
       await this.sleep(500 + Math.random() * 1000);
 
-      // Step 4: Send via Enter key (JS dispatch, works without OS focus)
-      await this.whatsappView.webContents.executeJavaScript(`
-        (function() {
-          var input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
-                      document.querySelector('footer div[contenteditable="true"]') ||
-                      document.querySelector('#main div[contenteditable="true"]');
-          if (input) {
-            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-          }
-        })()
-      `);
+      // Step 4: Send via Enter key (real Chromium keyboard event)
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
 
       // Step 5: Poll — verify compose box is empty after send (message was sent)
       const sentOk = await this.waitForCondition(`
@@ -1000,8 +953,9 @@ export class BulkSender {
 
       // 5. Write image to system clipboard and paste via native Ctrl+V (trusted event)
       clipboard.writeImage(image);
-      this.whatsappView!.webContents.paste();
-      rlog('Step 5 OK: clipboard.writeImage + paste() dispatched');
+      this.whatsappView!.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'v', modifiers: ['control'] });
+      this.whatsappView!.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'v', modifiers: ['control'] });
+      rlog('Step 5 OK: clipboard.writeImage + Ctrl+V dispatched');
 
       // 6. Wait for media preview to appear
       // WhatsApp uses "Remove attachment" and "Add file" buttons in the media editor
@@ -1265,14 +1219,19 @@ export class BulkSender {
           overlay.id = 'bulk-send-overlay';
           overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;pointer-events:auto;';
           overlay.innerHTML = \`
-            <div style="text-align:center;color:white;">
-              <div style="width:56px;height:56px;border-radius:50%;background:#4361ee;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <div style="background:white;border-radius:16px;padding:32px;text-align:center;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+              <div style="width:60px;height:60px;border-radius:50%;background:#4361ee;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
                   <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
                 </svg>
               </div>
-              <p style="margin:0;font-size:16px;font-weight:600;">Envío masivo en curso</p>
-              <p style="margin:8px 0 0;font-size:13px;opacity:0.7;">Los controles están en el panel izquierdo</p>
+              <h3 style="margin:0 0 8px;font-size:20px;color:#1a1a2e;">Envío masivo en curso</h3>
+              <p id="bulk-overlay-status" style="margin:0 0 16px;font-size:14px;color:#6c757d;">Iniciando...</p>
+              <div style="background:#e9ecef;border-radius:8px;height:8px;overflow:hidden;margin-bottom:8px;">
+                <div id="bulk-overlay-progress" style="height:100%;background:#4361ee;border-radius:8px;transition:width 0.3s;width:0%"></div>
+              </div>
+              <p id="bulk-overlay-count" style="margin:0 0 20px;font-size:13px;color:#999;">0 / 0 enviados</p>
+              <p style="font-size:12px;color:#aaa;margin:0;">WhatsApp está bloqueado durante el envío masivo</p>
             </div>
           \`;
           document.body.appendChild(overlay);
@@ -1298,7 +1257,20 @@ export class BulkSender {
   }
 
   private async updateOverlay(): Promise<void> {
-    // Progress is shown in Angular overlay; WhatsApp overlay is just a blocker
+    if (!this.whatsappView) return;
+    const pct = this.totalRecipients > 0 ? Math.round((this.sentCount + this.failedCount) * 100 / this.totalRecipients) : 0;
+    try {
+      await this.whatsappView.webContents.executeJavaScript(`
+        (function() {
+          const status = document.getElementById('bulk-overlay-status');
+          const progress = document.getElementById('bulk-overlay-progress');
+          const count = document.getElementById('bulk-overlay-count');
+          if (status) status.textContent = 'Enviando a ${(this.currentPhone || '').replace(/'/g, "\\'")}...';
+          if (progress) progress.style.width = '${pct}%';
+          if (count) count.textContent = '${this.sentCount} / ${this.totalRecipients} enviados' + (${this.failedCount} > 0 ? ' (${this.failedCount} fallidos)' : '');
+        })()
+      `);
+    } catch { /* ignore */ }
   }
 
   // --- API Communication ---
@@ -1461,29 +1433,29 @@ export class BulkSender {
   }
 
   /**
-   * Type text character by character using webContents.insertText().
-   * Works without OS-level window focus (unlike sendInputEvent).
+   * Type text character by character using Electron's sendInputEvent.
+   * Generates real Chromium keyboard events (keyDown/char/keyUp) that React detects.
    */
   private async typeViaKeyboard(text: string): Promise<void> {
     if (!this.whatsappView) return;
     for (const char of text) {
-      await this.whatsappView.webContents.executeJavaScript(
-        `document.execCommand('insertText', false, ${JSON.stringify(char)})`
-      );
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: char });
+      this.whatsappView.webContents.sendInputEvent({ type: 'char', keyCode: char });
+      this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: char });
       await this.sleep(30 + Math.random() * 20);
     }
   }
 
   /**
-   * Clear focused input via selectAll + delete using webContents APIs.
-   * Works without OS-level window focus (unlike sendInputEvent).
+   * Clear focused input via Ctrl+A + Backspace using Electron's sendInputEvent.
    */
   private async clearInputViaKeyboard(): Promise<void> {
     if (!this.whatsappView) return;
-    await this.whatsappView.webContents.executeJavaScript(`
-      document.execCommand('selectAll');
-      document.execCommand('delete');
-    `);
+    this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'a', modifiers: ['control'] });
+    this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'a', modifiers: ['control'] });
+    await this.sleep(50);
+    this.whatsappView.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
+    this.whatsappView.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Backspace' });
     await this.sleep(50);
   }
 }
