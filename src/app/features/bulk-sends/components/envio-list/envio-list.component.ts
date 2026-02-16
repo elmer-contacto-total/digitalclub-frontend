@@ -59,7 +59,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
           <h3>No hay envíos masivos</h3>
           <p>Crea tu primer envío masivo subiendo un CSV con destinatarios</p>
           <a routerLink="/app/bulk_sends/new" class="btn btn-primary">
-            <i class="ph ph-plus"></i> Nuevo Envío
+            Nuevo Envío
           </a>
         </div>
       } @else {
