@@ -71,6 +71,14 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   actionHistory = signal<UserActionHistory[]>([]);
   loadingHistory = signal(false);
   showHistoryPanel = signal(false);
+  historyPage = signal(0);
+  readonly historyPageSize = 5;
+  paginatedHistory = computed(() => {
+    const all = this.actionHistory();
+    const start = this.historyPage() * this.historyPageSize;
+    return all.slice(start, start + this.historyPageSize);
+  });
+  historyTotalPages = computed(() => Math.ceil(this.actionHistory().length / this.historyPageSize));
 
   // Require response state (last message was from client → disable close buttons)
   requiresResponse = signal(false);
@@ -460,7 +468,9 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     return date.toLocaleDateString('es-PE', {
       day: '2-digit',
       month: 'short',
-      year: 'numeric'
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   }
 
@@ -583,6 +593,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           c.registered.openTicketId = undefined;
           this.contact.set({ ...c });          // trigger signal change detection
           this.requiresResponse.set(false);     // no ticket = no response needed
+          this.notesField.set('');              // clear notes textarea after close
 
           // Reload action history to show the close audit
           this.loadActionHistoryAuto(c.registered.id);
@@ -672,6 +683,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     this.contactsService.getActionHistory(c.registered.id).subscribe({
       next: (response) => {
         this.actionHistory.set(response.history);
+        this.historyPage.set(0);
         this.loadingHistory.set(false);
         this.showHistoryPanel.set(true);
       },
@@ -688,10 +700,12 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   private loadActionHistoryAuto(userId: number): void {
     this.loadingHistory.set(true);
     this.actionHistory.set([]); // Clear previous history
+    this.historyPage.set(0);
 
     this.contactsService.getActionHistory(userId).subscribe({
       next: (response) => {
         this.actionHistory.set(response.history);
+        this.historyPage.set(0);
         this.loadingHistory.set(false);
       },
       error: (err) => {
@@ -706,6 +720,14 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
    */
   closeHistoryPanel(): void {
     this.showHistoryPanel.set(false);
+  }
+
+  historyPrevPage(): void {
+    this.historyPage.update(p => Math.max(0, p - 1));
+  }
+
+  historyNextPage(): void {
+    this.historyPage.update(p => Math.min(this.historyTotalPages() - 1, p + 1));
   }
 
   /**

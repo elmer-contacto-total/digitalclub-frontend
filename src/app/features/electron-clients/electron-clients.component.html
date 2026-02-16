@@ -281,7 +281,7 @@
                     </div>
                   } @else if (actionHistory().length > 0) {
                     <div class="history-list">
-                      @for (item of actionHistory(); track item.id) {
+                      @for (item of paginatedHistory(); track item.id) {
                         <div class="history-item">
                           <div class="history-row">
                             <span class="history-user">{{ item.username }}</span>
@@ -304,6 +304,17 @@
                         </div>
                       }
                     </div>
+                    @if (historyTotalPages() > 1) {
+                      <div class="history-pagination">
+                        <button (click)="historyPrevPage()" [disabled]="historyPage() === 0">
+                          <i class="ph ph-caret-left"></i>
+                        </button>
+                        <span>{{ historyPage() + 1 }} / {{ historyTotalPages() }}</span>
+                        <button (click)="historyNextPage()" [disabled]="historyPage() >= historyTotalPages() - 1">
+                          <i class="ph ph-caret-right"></i>
+                        </button>
+                      </div>
+                    }
                   } @else {
                     <div class="history-empty">
                       <i class="ph ph-clock"></i>

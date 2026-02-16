@@ -682,9 +682,6 @@
 }
 
 .history-notes {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
   margin-top: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: var(--bg-subtle);
@@ -692,11 +689,12 @@
   font-size: var(--text-sm);
   color: var(--fg-muted);
   font-style: italic;
+  text-align: center;
 
   i {
     font-size: 14px;
-    flex-shrink: 0;
-    margin-top: 2px;
+    margin-right: var(--space-1);
+    vertical-align: middle;
   }
 
   span {
@@ -726,6 +724,42 @@
 
 .history-list {
   // Uses existing .history-item styles
+}
+
+.history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--fg-muted);
+    cursor: pointer;
+    transition: all var(--duration-normal);
+
+    &:hover:not(:disabled) {
+      background: var(--bg-muted);
+      color: var(--fg-default);
+    }
+
+    &:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+  }
 }
 
 .history-empty {
