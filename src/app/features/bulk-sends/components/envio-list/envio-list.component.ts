@@ -178,7 +178,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
     .empty-state {
       text-align: center; padding: 60px var(--space-5); background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius-lg);
-      i { font-size: 48px; color: var(--fg-subtle); }
+      > i { font-size: 48px; color: var(--fg-subtle); }
       h3 { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-xl); color: var(--fg-default); }
       p { color: var(--fg-muted); margin-bottom: var(--space-4); }
     }
