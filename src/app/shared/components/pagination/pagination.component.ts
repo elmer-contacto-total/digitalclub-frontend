@@ -60,7 +60,7 @@ import { CommonModule } from '@angular/common';
               (change)="onPageSizeChange($event)"
             >
               @for (size of pageSizeOptions(); track size) {
-                <option [value]="size">{{ size }}</option>
+                <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
               }
             </select>
           </label>
