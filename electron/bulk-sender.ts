@@ -467,6 +467,9 @@ export class BulkSender {
         let remainingSec = this.rules.pause_duration_minutes * 60;
         console.log(`[BulkSender] Periodic pause: ${this.rules.pause_duration_minutes} minutes`);
 
+        // Hide WhatsApp overlay — allow user interaction during pause
+        await this.hideOverlay();
+
         while (remainingSec > 0 && !this.isPaused && !this.isCancelled) {
           // Emit countdown directly (skip persistState/updateOverlay)
           if (this.onOverlayUpdate) {
@@ -484,8 +487,9 @@ export class BulkSender {
         }
 
         // If interrupted by cancel/pause, the main loop will detect it
-        // If finished naturally, emit end of periodic pause
+        // If finished naturally, restore overlay and emit end of periodic pause
         if (!this.isPaused && !this.isCancelled) {
+          await this.showOverlay();
           if (this.onOverlayUpdate) {
             this.onOverlayUpdate({
               state: this._state,

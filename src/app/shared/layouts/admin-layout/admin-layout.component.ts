@@ -230,8 +230,11 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
   @HostListener('window:mousemove', ['$event'])
   onMouseMove(event: MouseEvent): void {
     if (!this.isDragging) return;
+    const maxX = this.whatsappVisible()
+      ? Math.floor(window.innerWidth / 2) - 260
+      : window.innerWidth - 260;
     this.bubblePosition.set({
-      x: Math.max(0, Math.min(event.clientX - this.dragOffset.x, window.innerWidth - 260)),
+      x: Math.max(0, Math.min(event.clientX - this.dragOffset.x, maxX)),
       y: Math.max(0, Math.min(event.clientY - this.dragOffset.y, window.innerHeight - 50))
     });
   }
@@ -241,7 +244,10 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
 
   get bubbleStyle(): Record<string, string> {
     const p = this.bubblePosition();
-    if (p.x === 0 && p.y === 0) return { top: '12px', left: '50%', transform: 'translateX(-50%)' };
+    if (p.x === 0 && p.y === 0) {
+      const left = this.whatsappVisible() ? '25%' : '50%';
+      return { top: '12px', left, transform: 'translateX(-50%)' };
+    }
     return { top: p.y + 'px', left: p.x + 'px' };
   }
 }
