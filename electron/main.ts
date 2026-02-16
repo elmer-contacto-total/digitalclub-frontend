@@ -1787,7 +1787,9 @@ async function checkWhatsAppSessionState(): Promise<void> {
         const hasLinkingScreen = !!document.querySelector('[data-testid="intro-md-beta-message"]') ||
                                 !!document.querySelector('div._al_b'); // Pantalla de "Usa WhatsApp en tu teléfono"
         const hasPhoneLink = document.body.innerText?.includes('Escanea el código') ||
-                            document.body.innerText?.includes('Link with phone number');
+                            document.body.innerText?.includes('Scan the code') ||
+                            document.body.innerText?.includes('Link with phone number') ||
+                            document.body.innerText?.includes('Vincular con número');
 
         // Determinar estado
         const isLoggedIn = (hasConversations || hasMainPanel || hasSearchBox) &&
@@ -2360,7 +2362,7 @@ function setupIPC(): void {
 
             // Click send button or press Enter
             const sendBtn = document.querySelector('[data-testid="send"]') ||
-                            document.querySelector('button[aria-label="Send"]') ||
+                            document.querySelector('button[aria-label="Send"], button[aria-label="Enviar"]') ||
                             document.querySelector('span[data-icon="send"]')?.closest('button');
 
             if (sendBtn) {
