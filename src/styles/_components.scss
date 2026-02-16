@@ -527,7 +527,7 @@
   text-align: center;
   color: var(--fg-muted);
 
-  i {
+  > i {
     font-size: 48px;
     margin-bottom: var(--space-4);
     color: var(--fg-subtle);
