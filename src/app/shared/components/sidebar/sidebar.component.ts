@@ -63,8 +63,11 @@ export class SidebarComponent implements OnInit, OnDestroy {
     if (!user) return [];
 
     // PARIDAD RAILS: @current_client.whatsapp_business?
-    const client = this.activeClient();
-    const isWhatsAppBusiness = client?.clientType === 'whatsapp_business';
+    // Super admin: uses activeClient (can switch clients via selector)
+    // Other roles: uses currentUser.clientType (from auth response)
+    const isWhatsAppBusiness = this.isSuperAdmin()
+      ? this.activeClient()?.clientType === 'whatsapp_business'
+      : user.clientType === 'whatsapp_business';
 
     return getNavigationForRole(user.role, isWhatsAppBusiness);
   });

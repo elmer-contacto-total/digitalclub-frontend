@@ -229,6 +229,7 @@ export class AuthService {
     this.storage.remove(REFRESH_TOKEN_KEY);
     this.storage.remove(USER_KEY);
     this.storage.remove(OTP_SESSION_KEY);
+    this.storage.remove('active_client');
 
     // Reset signals
     this._currentUser.set(null);
