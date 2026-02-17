@@ -140,6 +140,14 @@ export class UserService {
   }
 
   /**
+   * Get paginated subordinates of a user
+   */
+  getUserSubordinates(userId: number, params: PaginationParams = {}): Observable<PagedResponse<UserListItem>> {
+    const httpParams = this.buildPaginationParams(params);
+    return this.http.get<PagedResponse<UserListItem>>(`${this.baseUrl}/${userId}/subordinates`, { params: httpParams });
+  }
+
+  /**
    * Create new user
    * Converts numeric role to string name for backend
    */

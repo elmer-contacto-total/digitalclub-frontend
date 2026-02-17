@@ -3,9 +3,11 @@
  * Vista detalle de usuario
  * PARIDAD: Rails admin/users/show.html.erb
  */
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { UserService, UserDetailResponse } from '../../../../core/services/user.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { User, UserRole, UserStatus, RoleUtils, getFullName, getInitials } from '../../../../core/models/user.model';
@@ -17,6 +19,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     RouterLink,
     LoadingSpinnerComponent,
     ConfirmDialogComponent
@@ -191,21 +194,68 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
           </div>
 
           <!-- Subordinates Card (if any) -->
-          @if (subordinates().length > 0) {
+          @if (hasSubordinates()) {
             <div class="info-card full-width">
-              <h3>Subordinados ({{ subordinates().length }})</h3>
-              <div class="subordinates-list">
-                @for (sub of subordinates(); track sub.id) {
-                  <a [routerLink]="['/app/users', sub.id]" class="subordinate-item">
-                    <div class="sub-avatar">{{ getInitials(sub) }}</div>
-                    <div class="sub-info">
-                      <span class="sub-name">{{ getFullName(sub) }}</span>
-                      <span class="sub-email">{{ sub.email }}</span>
-                    </div>
-                    <span class="role-badge small" [class]="'role-' + sub.role">
-                      {{ getRoleDisplayName(sub.role) }}
-                    </span>
-                  </a>
+              <h3>Subordinados ({{ subTotalRecords }})</h3>
+              <div class="sub-controls">
+                <div class="page-size-wrapper">
+                  <label>Mostrar</label>
+                  <select class="form-control page-size-select" [(ngModel)]="subPageSize" (ngModelChange)="onSubPageSizeChange()">
+                    <option [ngValue]="10">10</option>
+                    <option [ngValue]="25">25</option>
+                    <option [ngValue]="50">50</option>
+                    <option [ngValue]="100">100</option>
+                  </select>
+                  <label>entradas</label>
+                </div>
+                <div class="sub-search-wrapper">
+                  <label>Buscar:</label>
+                  <input type="text" class="form-control sub-search-input"
+                    [(ngModel)]="subSearchTerm"
+                    (ngModelChange)="onSubSearchChange($event)"
+                    placeholder="" />
+                </div>
+              </div>
+
+              @if (isLoadingSubordinates()) {
+                <div class="sub-loading">
+                  <div class="spinner"></div>
+                  <span>Cargando...</span>
+                </div>
+              } @else {
+                <div class="subordinates-list">
+                  @for (sub of paginatedSubordinates(); track sub.id) {
+                    <a [routerLink]="['/app/users', sub.id]" class="subordinate-item">
+                      <div class="sub-avatar">{{ getInitials(sub) }}</div>
+                      <div class="sub-info">
+                        <span class="sub-name">{{ getFullName(sub) }}</span>
+                        <span class="sub-email">{{ sub.email }}</span>
+                      </div>
+                      <span class="role-badge small" [class]="'role-' + sub.role">
+                        {{ getRoleDisplayName(sub.role) }}
+                      </span>
+                    </a>
+                  } @empty {
+                    <div class="empty-sub">No se encontraron subordinados</div>
+                  }
+                </div>
+              }
+
+              <!-- Pagination footer -->
+              <div class="sub-footer">
+                <div class="sub-footer-info">
+                  Mostrando {{ paginatedSubordinates().length ? subCurrentPage * subPageSize + 1 : 0 }}
+                  a {{ subCurrentPage * subPageSize + paginatedSubordinates().length }}
+                  de {{ subTotalRecords }} registros
+                </div>
+                @if (subTotalPages > 1) {
+                  <div class="sub-pagination">
+                    <button class="sub-page-btn" [disabled]="subCurrentPage === 0" (click)="goToSubPage(0)">Primera</button>
+                    <button class="sub-page-btn" [disabled]="subCurrentPage === 0" (click)="goToSubPage(subCurrentPage - 1)">Anterior</button>
+                    <span class="sub-page-info">Página {{ subCurrentPage + 1 }} de {{ subTotalPages }}</span>
+                    <button class="sub-page-btn" [disabled]="subCurrentPage >= subTotalPages - 1" (click)="goToSubPage(subCurrentPage + 1)">Siguiente</button>
+                    <button class="sub-page-btn" [disabled]="subCurrentPage >= subTotalPages - 1" (click)="goToSubPage(subTotalPages - 1)">Última</button>
+                  </div>
                 }
               </div>
             </div>
@@ -513,6 +563,116 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       }
     }
 
+    .sub-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .page-size-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      label {
+        font-size: 13px;
+        color: var(--fg-muted);
+      }
+    }
+
+    .page-size-select {
+      width: auto;
+      padding: 6px 10px;
+      border: 1px solid var(--input-border);
+      border-radius: 6px;
+      font-size: 13px;
+      background: var(--input-bg);
+      color: var(--fg-default);
+    }
+
+    .sub-search-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      label {
+        font-size: 13px;
+        color: var(--fg-muted);
+      }
+    }
+
+    .sub-search-input {
+      width: 200px;
+      padding: 6px 10px;
+      border: 1px solid var(--input-border);
+      border-radius: 6px;
+      font-size: 13px;
+      background: var(--input-bg);
+      color: var(--fg-default);
+    }
+
+    .sub-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-default);
+    }
+
+    .sub-footer-info {
+      font-size: 13px;
+      color: var(--fg-muted);
+    }
+
+    .sub-pagination {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sub-page-info {
+      font-size: 13px;
+      color: var(--fg-muted);
+    }
+
+    .sub-page-btn {
+      padding: 4px 10px;
+      border: 1px solid var(--border-default);
+      border-radius: 6px;
+      background: var(--card-bg);
+      color: var(--fg-default);
+      cursor: pointer;
+      font-size: 12px;
+
+      &:hover:not(:disabled) {
+        background: var(--bg-muted);
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+
+    .sub-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 24px;
+      color: var(--fg-muted);
+      font-size: 13px;
+    }
+
+    .empty-sub {
+      text-align: center;
+      padding: 24px;
+      color: var(--fg-muted);
+      font-size: 13px;
+    }
+
     .not-found {
       text-align: center;
       padding: 80px 24px;
@@ -530,7 +690,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     }
   `]
 })
-export class UserDetailComponent implements OnInit {
+export class UserDetailComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private userService = inject(UserService);
@@ -544,14 +704,40 @@ export class UserDetailComponent implements OnInit {
   showDeleteConfirm = signal(false);
   showLoginAsConfirm = signal(false);
 
+  // Subordinates pagination & search
+  hasSubordinates = signal(false);
+  subSearchTerm = '';
+  subCurrentPage = 0;
+  subPageSize = 10;
+  subTotalRecords = 0;
+  subTotalPages = 0;
+  isLoadingSubordinates = signal(false);
+  paginatedSubordinates = signal<any[]>([]);
+  private subSearchSubject = new Subject<string>();
+  private destroy$ = new Subject<void>();
+
   // Current user
   currentUser = this.authService.currentUser;
 
   ngOnInit(): void {
+    this.subSearchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.subCurrentPage = 0;
+      this.loadSubordinates();
+    });
+
     const id = this.route.snapshot.params['id'];
     if (id) {
       this.loadUser(parseInt(id, 10));
     }
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   private loadUser(id: number): void {
@@ -560,14 +746,52 @@ export class UserDetailComponent implements OnInit {
       next: (response: UserDetailResponse) => {
         this.user.set(response.user);
         this.subordinates.set(response.subordinates || []);
+        this.hasSubordinates.set((response.subordinates || []).length > 0);
         this.managerName.set(response.manager?.name || null);
         this.isLoading.set(false);
+        if ((response.subordinates || []).length > 0) {
+          this.loadSubordinates();
+        }
       },
       error: (err) => {
         console.error('Error loading user:', err);
         this.isLoading.set(false);
       }
     });
+  }
+
+  private loadSubordinates(): void {
+    const user = this.user();
+    if (!user) return;
+    this.isLoadingSubordinates.set(true);
+    this.userService.getUserSubordinates(user.id, {
+      page: this.subCurrentPage,
+      pageSize: this.subPageSize,
+      search: this.subSearchTerm || undefined
+    }).subscribe({
+      next: (response) => {
+        this.paginatedSubordinates.set(response.data);
+        this.subTotalRecords = response.meta.totalItems;
+        this.subTotalPages = response.meta.totalPages;
+        this.isLoadingSubordinates.set(false);
+      },
+      error: () => this.isLoadingSubordinates.set(false)
+    });
+  }
+
+  onSubSearchChange(term: string): void {
+    this.subSearchSubject.next(term);
+  }
+
+  onSubPageSizeChange(): void {
+    this.subCurrentPage = 0;
+    this.loadSubordinates();
+  }
+
+  goToSubPage(page: number): void {
+    if (page < 0 || page >= this.subTotalPages) return;
+    this.subCurrentPage = page;
+    this.loadSubordinates();
   }
 
   canEdit(): boolean {

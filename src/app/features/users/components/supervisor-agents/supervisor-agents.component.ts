@@ -5,6 +5,7 @@
  */
 import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { UserService, PaginationParams } from '../../../../core/services/user.service';
@@ -20,7 +21,7 @@ interface AgentClient {
 @Component({
   selector: 'app-supervisor-agents',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="supervisor-agents-container">
       <!-- Page Header -->
@@ -184,8 +185,7 @@ interface AgentClient {
                         <td class="client-date">{{ formatDate(client.lastMessageAt) }}</td>
                         <td class="client-actions">
                           <a
-                            [routerLink]="['/app/messages']"
-                            [queryParams]="{client_id: client.id, chat_view_type: 'clients'}"
+                            [routerLink]="['/app/supervisor_clients', client.id]"
                             class="action-btn"
                             title="Ver chat"
                           >
@@ -201,27 +201,39 @@ interface AgentClient {
           </div>
 
           <!-- Pagination -->
-          @if (selectedAgent() && totalClientPages() > 1) {
+          @if (selectedAgent()) {
             <div class="panel-footer">
-              <div class="pagination">
-                <button
-                  class="pagination-btn"
-                  [disabled]="currentClientPage() === 1"
-                  (click)="goToClientPage(currentClientPage() - 1)"
-                >
-                  <i class="ph ph-caret-left"></i>
-                </button>
-                <span class="pagination-info">
-                  Página {{ currentClientPage() }} de {{ totalClientPages() }}
-                </span>
-                <button
-                  class="pagination-btn"
-                  [disabled]="currentClientPage() === totalClientPages()"
-                  (click)="goToClientPage(currentClientPage() + 1)"
-                >
-                  <i class="ph ph-caret-right"></i>
-                </button>
+              <div class="page-size-wrapper">
+                <label>Mostrar</label>
+                <select class="form-control page-size-select" [(ngModel)]="clientPageSize" (ngModelChange)="onClientPageSizeChange()">
+                  <option [ngValue]="10">10</option>
+                  <option [ngValue]="25">25</option>
+                  <option [ngValue]="50">50</option>
+                  <option [ngValue]="100">100</option>
+                </select>
+                <label>entradas</label>
               </div>
+              @if (totalClientPages() > 1) {
+                <div class="pagination">
+                  <button
+                    class="pagination-btn"
+                    [disabled]="currentClientPage() === 1"
+                    (click)="goToClientPage(currentClientPage() - 1)"
+                  >
+                    <i class="ph ph-caret-left"></i>
+                  </button>
+                  <span class="pagination-info">
+                    Página {{ currentClientPage() }} de {{ totalClientPages() }}
+                  </span>
+                  <button
+                    class="pagination-btn"
+                    [disabled]="currentClientPage() === totalClientPages()"
+                    (click)="goToClientPage(currentClientPage() + 1)"
+                  >
+                    <i class="ph ph-caret-right"></i>
+                  </button>
+                </div>
+              }
             </div>
           }
         </div>
@@ -440,6 +452,11 @@ export class SupervisorAgentsComponent implements OnInit, OnDestroy {
 
   clearClientSearch(): void {
     this.clientSearchTerm.set('');
+    this.currentClientPage.set(1);
+    this.loadClients();
+  }
+
+  onClientPageSizeChange(): void {
     this.currentClientPage.set(1);
     this.loadClients();
   }

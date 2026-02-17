@@ -91,6 +91,16 @@ interface ProspectsResponse {
         <div class="table-container">
           <!-- Search -->
           <div class="datatable-header">
+            <div class="page-size-wrapper">
+              <label>Mostrar</label>
+              <select class="form-control page-size-select" [(ngModel)]="pageSize" (ngModelChange)="onPageSizeChange()">
+                <option [ngValue]="10">10</option>
+                <option [ngValue]="25">25</option>
+                <option [ngValue]="50">50</option>
+                <option [ngValue]="100">100</option>
+              </select>
+              <label>entradas</label>
+            </div>
             <div class="search-wrapper">
               <label>Buscar:</label>
               <input
@@ -281,7 +291,7 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
 
   // Pagination
   currentPage = 0;
-  private pageSize = 25;
+  pageSize = 25;
   totalRecords = 0;
 
   // Prospect Detail Modal
@@ -338,6 +348,10 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
 
   onSearchChange(term: string): void {
     this.searchSubject.next(term);
+  }
+
+  onPageSizeChange(): void {
+    this.resetAndLoad();
   }
 
   onFilterChange(): void {
