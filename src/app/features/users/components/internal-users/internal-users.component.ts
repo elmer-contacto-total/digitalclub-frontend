@@ -32,9 +32,9 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           <p class="subtitle">Administradores, managers, agentes y staff</p>
         </div>
         <div class="header-actions">
-          <a routerLink="/app/users/new" class="btn btn-primary">
+          <a routerLink="/app/users/new" [queryParams]="{ from: 'internal' }" class="btn btn-primary">
             <i class="ph ph-plus"></i>
-            Nuevo Usuario
+            Crear Usuario
           </a>
           <a routerLink="/app/imports/new" [queryParams]="{ import_type: 'users' }" class="btn btn-secondary">
             <i class="ph ph-upload-simple"></i>
@@ -134,6 +134,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
     .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; text-decoration: none; }
     .btn-primary { background: var(--accent-default); color: white; }
     .btn-primary:hover { background: var(--accent-emphasis); }
+    .header-actions { display: flex; gap: 12px; }
     .filters-bar { margin-bottom: 24px; }
     .search-box { position: relative; max-width: 400px; }
     .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--fg-muted); }

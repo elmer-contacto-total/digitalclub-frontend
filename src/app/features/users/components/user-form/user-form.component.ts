@@ -28,7 +28,7 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
       <!-- Header -->
       <div class="page-header">
         <div class="header-content">
-          <a routerLink="/app/users" class="back-link">
+          <a [routerLink]="backUrl()" class="back-link">
             <i class="ph ph-arrow-left"></i>
             Volver a usuarios
           </a>
@@ -226,7 +226,7 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
 
           <!-- Actions -->
           <div class="form-actions">
-            <a routerLink="/app/users" class="btn btn-secondary">Cancelar</a>
+            <a [routerLink]="backUrl()" class="btn btn-secondary">Cancelar</a>
             <button
               type="submit"
               class="btn btn-primary"
@@ -475,6 +475,9 @@ export class UserFormComponent implements OnInit {
   private userService = inject(UserService);
   private authService = inject(AuthService);
 
+  // Navigation
+  backUrl = signal('/app/users');
+
   // State
   isLoading = signal(false);
   isSaving = signal(false);
@@ -540,6 +543,12 @@ export class UserFormComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    // Determine back navigation URL
+    const from = this.route.snapshot.queryParams['from'];
+    if (from === 'internal') {
+      this.backUrl.set('/app/internal_users');
+    }
+
     // Check for edit mode FIRST, before initializing the form
     const id = this.route.snapshot.params['id'];
     if (id && id !== 'new') {

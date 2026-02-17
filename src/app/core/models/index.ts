@@ -27,3 +27,6 @@ export * from './conversation.model';
 
 // CRM Contact models (for Electron clients)
 export * from './crm-contact.model';
+
+// WhatsApp Onboarding models
+export * from './whatsapp-onboarding.model';
