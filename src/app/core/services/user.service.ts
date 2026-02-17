@@ -359,6 +359,18 @@ export class UserService {
   }
 
   /**
+   * Upload avatar for a user
+   * PARIDAD RAILS: Shrine avatar upload
+   */
+  uploadAvatar(userId: number, file: File): Observable<{ avatarUrl: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<{ avatarUrl: string }>(
+      `${this.baseUrl}/${userId}/avatar`, formData
+    );
+  }
+
+  /**
    * Send password reset instructions
    */
   sendResetPassword(userId: number): Observable<{ message: string }> {

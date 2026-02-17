@@ -47,6 +47,36 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
           <div class="form-section">
             <h3>Información Personal</h3>
 
+            <!-- Avatar Upload -->
+            <div class="avatar-upload-row">
+              <div class="avatar-preview" (click)="avatarInput.click()">
+                @if (avatarPreview()) {
+                  <img [src]="avatarPreview()" alt="Avatar" />
+                } @else if (existingAvatarUrl()) {
+                  <img [src]="existingAvatarUrl()" alt="Avatar" />
+                } @else {
+                  <i class="ph ph-user"></i>
+                }
+              </div>
+              <div class="avatar-actions">
+                <button type="button" class="btn btn-secondary btn-sm" (click)="avatarInput.click()">
+                  <i class="ph ph-camera"></i>
+                  {{ existingAvatarUrl() || avatarPreview() ? 'Cambiar foto' : 'Subir foto' }}
+                </button>
+                @if (avatarPreview()) {
+                  <button type="button" class="btn-link" (click)="removeAvatar()">Quitar</button>
+                }
+                <span class="field-hint">JPG, PNG, GIF o WebP. Máximo 5MB.</span>
+              </div>
+              <input
+                #avatarInput
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                style="display: none"
+                (change)="onAvatarSelected($event)"
+              />
+            </div>
+
             <div class="form-row">
               <div class="form-group">
                 <label for="firstName">Nombre <span class="required">*</span></label>
@@ -286,6 +316,64 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
       padding: 24px;
     }
 
+    .avatar-upload-row {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .avatar-preview {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: var(--bg-subtle);
+      border: 2px dashed var(--border-default);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      overflow: hidden;
+      flex-shrink: 0;
+      transition: border-color 0.2s;
+
+      &:hover { border-color: var(--accent-default); }
+
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      i {
+        font-size: 32px;
+        color: var(--fg-subtle);
+      }
+    }
+
+    .avatar-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+
+      .btn-sm {
+        padding: 6px 14px;
+        font-size: 13px;
+      }
+
+      .btn-link {
+        background: none;
+        border: none;
+        color: var(--error-default);
+        cursor: pointer;
+        font-size: 13px;
+        padding: 0;
+        text-align: left;
+
+        &:hover { text-decoration: underline; }
+      }
+    }
+
     .form-section {
       margin-bottom: 32px;
 
@@ -485,6 +573,10 @@ export class UserFormComponent implements OnInit {
   showPassword = signal(false);
   availableManagers = signal<UserOption[]>([]);
 
+  // Avatar
+  avatarFile = signal<File | null>(null);
+  avatarPreview = signal<string | null>(null);
+
   // Edit mode
   userId = signal<number | null>(null);
   isEditMode = computed(() => this.userId() !== null);
@@ -495,6 +587,21 @@ export class UserFormComponent implements OnInit {
 
   // Current user for permissions
   currentUser = this.authService.currentUser;
+
+  // Existing avatar URL from user data (parsed from Shrine JSON or direct URL)
+  existingAvatarUrl = computed(() => {
+    const user = this.existingUser();
+    if (!user) return null;
+    const avatarData = (user as any).avatarData;
+    if (!avatarData) return null;
+    // avatarData may be Shrine JSON or a direct URL
+    if (avatarData.startsWith('http')) return avatarData;
+    try {
+      const parsed = JSON.parse(avatarData);
+      if (parsed.id) return null; // S3 key only — would need presigned URL from backend
+    } catch { /* not JSON */ }
+    return null;
+  });
 
   // Available roles based on current user's role
   availableRoles = computed(() => {
@@ -664,6 +771,40 @@ export class UserFormComponent implements OnInit {
     return RoleUtils.getDisplayName(role);
   }
 
+  onAvatarSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    // Validate type
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      this.errorMessage.set('Tipo de archivo no permitido. Use JPG, PNG, GIF o WebP.');
+      return;
+    }
+
+    // Validate size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      this.errorMessage.set('El archivo excede el tamaño máximo de 5MB.');
+      return;
+    }
+
+    this.avatarFile.set(file);
+
+    // Show local preview
+    const reader = new FileReader();
+    reader.onload = () => this.avatarPreview.set(reader.result as string);
+    reader.readAsDataURL(file);
+
+    // Reset file input for re-selection of same file
+    input.value = '';
+  }
+
+  removeAvatar(): void {
+    this.avatarFile.set(null);
+    this.avatarPreview.set(null);
+  }
+
   onSubmit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -694,8 +835,22 @@ export class UserFormComponent implements OnInit {
 
     this.userService.createUser(request).subscribe({
       next: (user) => {
-        this.isSaving.set(false);
-        this.router.navigate(['/app/users', user.id]);
+        if (this.avatarFile() && user.id) {
+          this.userService.uploadAvatar(user.id, this.avatarFile()!).subscribe({
+            next: () => {
+              this.isSaving.set(false);
+              this.router.navigate(['/app/users', user.id]);
+            },
+            error: () => {
+              // User created but avatar failed — navigate anyway
+              this.isSaving.set(false);
+              this.router.navigate(['/app/users', user.id]);
+            }
+          });
+        } else {
+          this.isSaving.set(false);
+          this.router.navigate(['/app/users', user.id]);
+        }
       },
       error: (err) => {
         console.error('Error creating user:', err);
@@ -718,8 +873,22 @@ export class UserFormComponent implements OnInit {
 
     this.userService.updateUser(this.userId()!, request).subscribe({
       next: () => {
-        this.isSaving.set(false);
-        this.router.navigate(['/app/users', this.userId()]);
+        if (this.avatarFile()) {
+          this.userService.uploadAvatar(this.userId()!, this.avatarFile()!).subscribe({
+            next: () => {
+              this.isSaving.set(false);
+              this.router.navigate(['/app/users', this.userId()]);
+            },
+            error: () => {
+              // User updated but avatar failed — navigate anyway
+              this.isSaving.set(false);
+              this.router.navigate(['/app/users', this.userId()]);
+            }
+          });
+        } else {
+          this.isSaving.set(false);
+          this.router.navigate(['/app/users', this.userId()]);
+        }
       },
       error: (err) => {
         console.error('Error updating user:', err);
