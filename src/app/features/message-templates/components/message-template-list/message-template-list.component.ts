@@ -131,7 +131,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                       } @else if (template.paramsStatus === 'pending') {
                         <span class="status-badge pending">Pendiente</span>
                       } @else {
-                        <span>-</span>
+                        <span class="text-muted">Sin parámetros</span>
                       }
                     </td>
                     <td class="col-actions">
@@ -387,6 +387,11 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
         background: var(--bg-muted);
         color: var(--fg-muted);
       }
+    }
+
+    .text-muted {
+      color: var(--fg-subtle);
+      font-size: 13px;
     }
 
     /* Actions Column */
