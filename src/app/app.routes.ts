@@ -119,7 +119,7 @@ export const routes: Routes = [
       // Templates (implemented)
       {
         path: 'message_templates',
-        loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
+        loadChildren: () => import('./features/message-templates/message-templates.routes').then(m => m.MESSAGE_TEMPLATES_ROUTES),
         title: 'Plantillas - MWS'
       },
       // Bulk Messages (implemented)
@@ -131,7 +131,7 @@ export const routes: Routes = [
       // Template Bulk Sends (implemented)
       {
         path: 'template_bulk_sends',
-        loadComponent: () => import('./shared/components/coming-soon/coming-soon.component').then(m => m.ComingSoonComponent),
+        loadChildren: () => import('./features/template-bulk-sends/template-bulk-sends.routes').then(m => m.TEMPLATE_BULK_SENDS_ROUTES),
         title: 'Envíos Masivos - MWS'
       },
       // Envíos Masivos (bulk sending via Electron)

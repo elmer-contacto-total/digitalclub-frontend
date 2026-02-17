@@ -138,6 +138,14 @@ export class MessageTemplateService {
   }
 
   /**
+   * Actualizar parámetros de plantilla
+   * PARIDAD: Rails Admin::MessageTemplateParamsController#update
+   */
+  updateParams(templateId: number, params: { id: number; dataField: string; defaultValue: string }[]): Observable<any> {
+    return this.http.put(`${this.baseUrl}/${templateId}/params`, params);
+  }
+
+  /**
    * Helper: Obtener texto de estado en español
    * PARIDAD: Rails status labels
    */

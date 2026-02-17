@@ -383,10 +383,24 @@ export class TemplateParamsComponent implements OnInit, OnDestroy {
   saveParams(): void {
     this.isSaving.set(true);
 
-    // For now, just show success - actual save would need a dedicated API endpoint
-    setTimeout(() => {
-      this.isSaving.set(false);
-      this.toast.success('Parámetros guardados correctamente');
-    }, 500);
+    const paramsToSave = this.params().map(p => ({
+      id: p.id,
+      dataField: p.dataField,
+      defaultValue: p.defaultValue
+    }));
+
+    this.templateService.updateParams(this.templateId, paramsToSave).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: () => {
+        this.isSaving.set(false);
+        this.toast.success('Parámetros guardados correctamente');
+      },
+      error: (err) => {
+        console.error('Error saving params:', err);
+        this.isSaving.set(false);
+        this.toast.error('Error al guardar parámetros');
+      }
+    });
   }
 }
