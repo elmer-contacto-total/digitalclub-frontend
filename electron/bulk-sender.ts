@@ -502,6 +502,7 @@ export class BulkSender {
           console.log(`[BulkSender] Periodic pause ended, resuming`);
         }
         messagesSinceLastPause = 0;
+        continue; // Skip inter-message delay after periodic pause
       }
 
       // Random delay between messages
