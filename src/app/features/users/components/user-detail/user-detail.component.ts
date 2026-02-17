@@ -272,12 +272,13 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       <!-- Delete Confirmation -->
       @if (showDeleteConfirm()) {
         <app-confirm-dialog
+          [isOpen]="true"
           title="Eliminar Usuario"
           [message]="'¿Estás seguro de eliminar a ' + getFullName(user()!) + '? Esta acción desactivará al usuario.'"
-          confirmText="Eliminar"
-          confirmClass="btn-danger"
-          (confirm)="deleteUser()"
-          (cancel)="showDeleteConfirm.set(false)"
+          type="danger"
+          confirmLabel="Eliminar"
+          (confirmed)="deleteUser()"
+          (cancelled)="showDeleteConfirm.set(false)"
         />
       }
 
