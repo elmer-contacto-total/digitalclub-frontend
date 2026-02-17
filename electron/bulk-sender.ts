@@ -67,6 +67,7 @@ export class BulkSender {
   private dailySentCount = 0;
   private stateFile: string | null = null;
   private cdpAttached = false;
+  private processLoopPromise: Promise<void> | null = null;
 
   constructor(apiBaseUrl: string) {
     this.apiBaseUrl = apiBaseUrl;
@@ -187,7 +188,10 @@ export class BulkSender {
     await this.fetchRules();
 
     // Main send loop
-    await this.processLoop();
+    const loopPromise = this.processLoop();
+    this.processLoopPromise = loopPromise;
+    await loopPromise;
+    this.processLoopPromise = null;
 
     // Detach CDP debugger
     this.detachCdp();
@@ -212,6 +216,10 @@ export class BulkSender {
     this._state = 'paused';
     this.persistState();
     await this.notifyBackend('pause');
+    // Wait for processLoop to finish current operation before app.quit()
+    if (this.processLoopPromise) {
+      await Promise.race([this.processLoopPromise, this.sleep(15000)]);
+    }
   }
 
   pause(): void {
@@ -233,7 +241,10 @@ export class BulkSender {
       this.emitOverlayUpdate();
       await this.showOverlay();
       await this.fetchRules();
-      await this.processLoop();
+      const loopPromise = this.processLoop();
+      this.processLoopPromise = loopPromise;
+      await loopPromise;
+      this.processLoopPromise = null;
       this.detachCdp();
       await this.hideOverlay();
       await this.setBulkSendActiveFlag(false);
@@ -260,7 +271,10 @@ export class BulkSender {
         await this.setBulkSendActiveFlag(true);
         await this.showOverlay();
         await this.fetchRules();
-        await this.processLoop();
+        const loopPromise = this.processLoop();
+        this.processLoopPromise = loopPromise;
+        await loopPromise;
+        this.processLoopPromise = null;
         this.detachCdp();
         await this.hideOverlay();
         await this.setBulkSendActiveFlag(false);
@@ -487,11 +501,14 @@ export class BulkSender {
         // Hide WhatsApp overlay — allow user interaction during pause
         await this.hideOverlay();
 
+        let sessionLostDuringPause = false;
+
         while (remainingSec > 0 && !this.isPaused && !this.isCancelled) {
           // Check WhatsApp session every iteration (~1s) — lightweight (2 DOM queries)
           const sessionOk = await this.checkWhatsAppSession();
           if (!sessionOk) {
             console.warn('[BulkSender] WhatsApp disconnected during periodic pause');
+            sessionLostDuringPause = true;
             break;  // Exit countdown → main loop detects session loss and auto-pauses
           }
 
@@ -510,9 +527,9 @@ export class BulkSender {
           remainingSec--;
         }
 
-        // If interrupted by cancel/pause, the main loop will detect it
+        // If interrupted by cancel/pause/session-loss, the main loop will detect it
         // If finished naturally, restore overlay and emit end of periodic pause
-        if (!this.isPaused && !this.isCancelled) {
+        if (!this.isPaused && !this.isCancelled && !sessionLostDuringPause) {
           await this.showOverlay();
           if (this.onOverlayUpdate) {
             this.onOverlayUpdate({
@@ -1443,10 +1460,14 @@ export class BulkSender {
       return;
     }
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/${action}`, {
         method: 'POST',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
     } catch (err) {
       console.error(`[BulkSender] Failed to notify backend (${action}):`, err);
     }
