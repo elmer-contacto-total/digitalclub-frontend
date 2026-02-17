@@ -32,21 +32,22 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     <div class="user-list-container">
       <!-- Page Header -->
       <div class="page-header">
-        <div class="header-row">
+        <div class="header-content">
           <h1>Lista de usuarios</h1>
-          @if (canCreateUsers()) {
-            <div class="header-actions">
-              <a routerLink="new" class="btn btn-primary">
-                <i class="ph ph-plus"></i>
-                <span class="btn-text">Crear usuario</span>
-              </a>
-              <a routerLink="import" class="btn btn-secondary">
-                <i class="ph ph-upload-simple"></i>
-                <span class="btn-text">Importar</span>
-              </a>
-            </div>
-          }
+          <p class="subtitle">Gestión de todos los usuarios del sistema</p>
         </div>
+        @if (canCreateUsers()) {
+          <div class="header-actions">
+            <a routerLink="new" class="btn btn-primary">
+              <i class="ph ph-plus"></i>
+              Crear usuario
+            </a>
+            <a routerLink="import" class="btn btn-secondary">
+              <i class="ph ph-upload-simple"></i>
+              Importar
+            </a>
+          </div>
+        }
       </div>
 
       <!-- Table Container -->
@@ -364,23 +365,24 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
 
     /* Page Header */
     .page-header {
-      padding: 16px 24px;
-      background: var(--card-bg);
-      border-bottom: 1px solid var(--border-default);
-    }
-
-    .header-row {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 24px;
+      padding: 24px 24px 0;
     }
 
     h1 {
-      margin: 0;
-      font-size: 1.25rem;
+      margin: 0 0 4px 0;
+      font-size: 24px;
       font-weight: 600;
       color: var(--fg-default);
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--fg-muted);
+      font-size: 14px;
     }
 
     .header-actions {
@@ -392,11 +394,10 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     .btn {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 8px 16px;
+      gap: 8px;
+      padding: 10px 20px;
       border: 1px solid transparent;
-      border-radius: 6px;
+      border-radius: 8px;
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
