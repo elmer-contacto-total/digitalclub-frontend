@@ -310,6 +310,7 @@ export class BulkSender {
         this.isPaused = true;
         this._state = 'paused';
         this.lastError = 'WhatsApp desconectado - escanee el código QR y reanude';
+        this.notifyBackend('pause');
         this.emitOverlayUpdate();
         return;
       }
@@ -327,6 +328,7 @@ export class BulkSender {
         this.isPaused = true;
         this._state = 'paused';
         this.lastError = `Límite diario alcanzado (${this.rules.max_daily_messages} mensajes)`;
+        this.notifyBackend('pause');
         this.emitOverlayUpdate();
         return;
       }
@@ -397,6 +399,7 @@ export class BulkSender {
           this.isPaused = true;
           this._state = 'paused';
           this.lastError = 'Pausado automáticamente tras 5 fallos consecutivos';
+          this.notifyBackend('pause');
           this.emitOverlayUpdate();
           return;
         }
@@ -463,6 +466,7 @@ export class BulkSender {
           this.isPaused = true;
           this._state = 'paused';
           this.lastError = 'Pausado automáticamente tras 5 fallos consecutivos';
+          this.notifyBackend('pause');
           this.emitOverlayUpdate();
           return;
         }
@@ -484,6 +488,13 @@ export class BulkSender {
         await this.hideOverlay();
 
         while (remainingSec > 0 && !this.isPaused && !this.isCancelled) {
+          // Check WhatsApp session every iteration (~1s) — lightweight (2 DOM queries)
+          const sessionOk = await this.checkWhatsAppSession();
+          if (!sessionOk) {
+            console.warn('[BulkSender] WhatsApp disconnected during periodic pause');
+            break;  // Exit countdown → main loop detects session loss and auto-pauses
+          }
+
           // Emit countdown directly (skip persistState/updateOverlay)
           if (this.onOverlayUpdate) {
             this.onOverlayUpdate({
