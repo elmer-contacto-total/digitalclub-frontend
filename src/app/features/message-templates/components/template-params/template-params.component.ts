@@ -127,7 +127,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                 [disabled]="isSaving()"
               >
                 @if (isSaving()) {
-                  <span class="spinner-border spinner-border-sm"></span>
+                  <i class="ph ph-spinner ph-spin"></i>
                   Guardando...
                 } @else {
                   <i class="ph ph-floppy-disk"></i>
@@ -142,9 +142,15 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
   `,
   styles: [`
     .template-params-container {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-base);
+      color: var(--fg-default);
       padding: 24px;
     }
 
+    /* Page Header */
     .page-header {
       margin-bottom: 24px;
     }
@@ -153,69 +159,73 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       margin-top: 16px;
 
       h1 {
-        margin: 0 0 8px 0;
-        font-size: 1.5rem;
-        font-weight: 500;
-        color: var(--text-primary, #212529);
+        margin: 0 0 4px 0;
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--fg-default);
       }
 
       .template-name {
         margin: 0;
         font-size: 14px;
-        color: var(--text-secondary, #6c757d);
+        color: var(--fg-muted);
       }
     }
 
+    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
+      gap: 8px;
+      padding: 10px 20px;
       border: 1px solid transparent;
-      border-radius: 4px;
+      border-radius: 8px;
       font-size: 14px;
+      font-weight: 500;
       cursor: pointer;
       text-decoration: none;
-      transition: all 0.15s;
+      transition: all 0.15s ease;
 
       &:disabled {
-        opacity: 0.65;
+        opacity: 0.5;
         cursor: not-allowed;
       }
     }
 
     .btn-primary {
-      background-color: var(--primary-color, #0d6efd);
-      border-color: var(--primary-color, #0d6efd);
+      background: var(--accent-default);
+      border-color: var(--accent-default);
       color: white;
 
       &:hover:not(:disabled) {
-        background-color: var(--primary-dark, #0b5ed7);
+        background: var(--accent-emphasis);
+        border-color: var(--accent-emphasis);
       }
     }
 
     .btn-secondary {
-      background-color: var(--secondary-color, #6c757d);
-      border-color: var(--secondary-color, #6c757d);
-      color: white;
+      background: var(--card-bg);
+      border-color: var(--border-default);
+      color: var(--fg-default);
 
       &:hover {
-        background-color: #5c636a;
+        background: var(--bg-subtle);
       }
     }
 
     /* Template Preview Card */
     .template-preview-card {
-      background: white;
-      border: 1px solid var(--border-color, #dee2e6);
-      border-radius: 4px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
       padding: 20px;
       margin-bottom: 24px;
 
       h3 {
         margin: 0 0 16px 0;
-        font-size: 1.1rem;
-        font-weight: 500;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--fg-default);
       }
     }
 
@@ -226,16 +236,18 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         display: block;
         font-weight: 600;
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--fg-subtle);
         margin-bottom: 4px;
         text-transform: uppercase;
+        letter-spacing: 0.5px;
       }
 
       p {
         margin: 0;
         padding: 8px 12px;
-        background: var(--bg-light, #f8f9fa);
-        border-radius: 4px;
+        background: var(--bg-subtle);
+        border-radius: 6px;
+        color: var(--fg-default);
       }
 
       .body-content {
@@ -248,32 +260,35 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     .params-section {
       h3 {
         margin: 0 0 16px 0;
-        font-size: 1.1rem;
-        font-weight: 500;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--fg-default);
       }
     }
 
     .empty-state {
-      background: var(--bg-light, #f8f9fa);
-      border: 1px dashed var(--border-color, #dee2e6);
-      border-radius: 4px;
+      background: var(--bg-subtle);
+      border: 1px dashed var(--border-default);
+      border-radius: 8px;
       padding: 24px;
       text-align: center;
 
       p {
         margin: 0;
-        color: var(--text-secondary, #6c757d);
+        color: var(--fg-muted);
       }
 
       .hint {
         margin-top: 8px;
         font-size: 13px;
+        color: var(--fg-subtle);
       }
     }
 
     .table-responsive {
-      background: white;
-      border-radius: 4px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
       overflow: auto;
     }
 
@@ -286,30 +301,49 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
     .table th,
     .table td {
-      padding: 12px;
-      border: 1px solid var(--border-color, #dee2e6);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--table-border);
+      vertical-align: middle;
+      text-align: left;
     }
 
     .table thead th {
-      background: var(--bg-light, #f8f9fa);
+      background: var(--table-header-bg);
       font-weight: 600;
+      color: var(--fg-muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border-default);
+    }
+
+    .table tbody tr {
+      transition: background 0.15s;
+
+      &:hover {
+        background: var(--table-row-hover);
+      }
     }
 
     .form-control {
       width: 100%;
-      padding: 6px 10px;
-      border: 1px solid var(--border-color, #ced4da);
-      border-radius: 4px;
+      padding: 8px 12px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 6px;
       font-size: 14px;
+      color: var(--fg-default);
+      transition: border-color 0.15s, box-shadow 0.15s;
 
       &:focus {
         outline: none;
-        border-color: var(--primary-color, #86b7fe);
+        border-color: var(--input-border-focus);
+        box-shadow: 0 0 0 3px var(--accent-subtle);
       }
     }
 
     .form-control-sm {
-      padding: 4px 8px;
+      padding: 6px 10px;
       font-size: 13px;
     }
 
@@ -317,10 +351,12 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       margin-top: 20px;
     }
 
-    .spinner-border-sm {
-      width: 16px;
-      height: 16px;
-      border-width: 2px;
+    .ph-spin {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
 
     @media (max-width: 768px) {

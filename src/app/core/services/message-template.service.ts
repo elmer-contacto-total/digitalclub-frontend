@@ -23,6 +23,7 @@ export interface MessageTemplate {
   totButtons: number;
   closesTicket: boolean;
   visibility: number;
+  paramsStatus: string;
   params?: MessageTemplateParam[];
   createdAt: string;
   updatedAt: string;
@@ -77,14 +78,14 @@ export class MessageTemplateService {
   getTemplates(
     page: number = 0,
     size: number = 20,
-    status?: string
+    search?: string
   ): Observable<TemplateListResponse> {
     let params = new HttpParams()
       .set('page', page.toString())
       .set('size', size.toString());
 
-    if (status) {
-      params = params.set('status', status);
+    if (search) {
+      params = params.set('search', search);
     }
 
     return this.http.get<TemplateListResponse>(this.baseUrl, { params });

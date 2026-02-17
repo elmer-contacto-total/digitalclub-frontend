@@ -21,13 +21,13 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
   ],
   template: `
     <div class="template-detail-container">
-      <!-- Header - PARIDAD: Rails admin/message_templates/show.html.erb -->
+      <!-- Page Header -->
       <div class="page-header">
-        <a routerLink="/app/message_templates" class="btn btn-secondary">
-          <i class="ph ph-list"></i>
-          Volver
-        </a>
-        <div class="title-container">
+        <div class="header-content">
+          <a routerLink="/app/message_templates" class="btn btn-secondary">
+            <i class="ph ph-arrow-left"></i>
+            Volver
+          </a>
           <h1>Ver plantilla de mensaje</h1>
         </div>
       </div>
@@ -90,7 +90,12 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
             <dl class="dl-horizontal">
               <dt>Estado WhatsApp:</dt>
               <dd>
-                <span class="badge" [ngClass]="getStatusClass(template()!.status)">
+                <span class="status-badge"
+                  [class.approved]="template()!.status === 'approved'"
+                  [class.pending]="template()!.status === 'pending' || template()!.status === 'draft'"
+                  [class.rejected]="template()!.status === 'rejected'"
+                  [class.disabled]="template()!.status === 'disabled'"
+                >
                   {{ getStatusLabel(template()!.status) }}
                 </span>
               </dd>
@@ -167,22 +172,30 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
   `,
   styles: [`
     .template-detail-container {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-base);
+      color: var(--fg-default);
       padding: 24px;
     }
 
+    /* Page Header */
     .page-header {
       margin-bottom: 24px;
     }
 
-    .title-container {
-      margin-top: 16px;
+    .header-content {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
 
-      h1 {
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 500;
-        color: var(--text-primary, #212529);
-      }
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--fg-default);
     }
 
     .row {
@@ -200,57 +213,61 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       width: 350px;
     }
 
+    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
+      gap: 8px;
+      padding: 10px 20px;
       border: 1px solid transparent;
-      border-radius: 4px;
+      border-radius: 8px;
       font-size: 14px;
+      font-weight: 500;
       cursor: pointer;
       text-decoration: none;
-      transition: all 0.15s;
+      transition: all 0.15s ease;
     }
 
     .btn-primary {
-      background-color: var(--primary-color, #0d6efd);
-      border-color: var(--primary-color, #0d6efd);
+      background: var(--accent-default);
+      border-color: var(--accent-default);
       color: white;
 
       &:hover {
-        background-color: var(--primary-dark, #0b5ed7);
+        background: var(--accent-emphasis);
+        border-color: var(--accent-emphasis);
       }
     }
 
     .btn-secondary {
-      background-color: var(--secondary-color, #6c757d);
-      border-color: var(--secondary-color, #6c757d);
-      color: white;
+      background: var(--card-bg);
+      border-color: var(--border-default);
+      color: var(--fg-default);
 
       &:hover {
-        background-color: #5c636a;
+        background: var(--bg-subtle);
       }
     }
 
-    /* DL Horizontal - PARIDAD: Rails dl-horizontal */
+    /* DL Horizontal */
     .dl-horizontal {
       display: flex;
-      margin: 0 0 12px 0;
+      margin: 0 0 8px 0;
       padding: 12px 16px;
-      background: white;
-      border: 1px solid var(--border-color, #dee2e6);
-      border-radius: 4px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
 
       dt {
         min-width: 180px;
         font-weight: 600;
-        color: var(--text-primary, #212529);
+        font-size: 13px;
+        color: var(--fg-default);
       }
 
       dd {
         margin: 0;
-        color: var(--text-secondary, #6c757d);
+        color: var(--fg-muted);
         flex: 1;
       }
 
@@ -260,23 +277,38 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       }
     }
 
-    /* Badge */
-    .badge {
+    /* Status Badge */
+    .status-badge {
       display: inline-block;
       padding: 4px 10px;
-      border-radius: 4px;
+      border-radius: 20px;
       font-size: 12px;
       font-weight: 500;
+
+      &.approved {
+        background: var(--success-subtle);
+        color: var(--success-text);
+      }
+
+      &.pending {
+        background: var(--warning-subtle);
+        color: var(--warning-text);
+      }
+
+      &.rejected {
+        background: var(--error-subtle);
+        color: var(--error-text);
+      }
+
+      &.disabled {
+        background: var(--bg-muted);
+        color: var(--fg-muted);
+      }
     }
 
-    .badge-secondary { background: #e9ecef; color: #495057; }
-    .badge-success { background: #d1fae5; color: #065f46; }
-    .badge-danger { background: #fee2e2; color: #991b1b; }
-    .badge-warning { background: #fff3cd; color: #856404; }
-
-    /* Preview - PARIDAD: Rails WhatsApp preview */
+    /* Preview - WhatsApp */
     .preview-container {
-      background: #e5ddd5;
+      background: var(--chat-bg);
       border-radius: 8px;
       padding: 16px;
     }
@@ -284,7 +316,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     .preview-title {
       font-weight: 600;
       margin-bottom: 12px;
-      color: var(--text-primary);
+      color: var(--fg-default);
     }
 
     .whatsapp-preview {
@@ -293,28 +325,28 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     }
 
     .message-bubble {
-      background: white;
+      background: var(--message-incoming-bg);
       border-radius: 8px;
       padding: 8px 12px;
       max-width: 280px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-sm);
     }
 
     .message-header {
       font-weight: 600;
       margin-bottom: 4px;
-      color: var(--text-primary);
+      color: var(--message-incoming-text);
     }
 
     .message-body {
-      color: var(--text-primary);
+      color: var(--message-incoming-text);
       white-space: pre-wrap;
       word-break: break-word;
     }
 
     .message-footer {
       font-size: 12px;
-      color: var(--text-secondary);
+      color: var(--fg-subtle);
       margin-top: 8px;
     }
 
@@ -323,15 +355,17 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       margin-top: 32px;
 
       h3 {
-        font-size: 1.1rem;
-        font-weight: 500;
+        font-size: 16px;
+        font-weight: 600;
         margin-bottom: 16px;
+        color: var(--fg-default);
       }
     }
 
     .table-responsive {
-      background: white;
-      border-radius: 4px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
       overflow: auto;
     }
 
@@ -344,13 +378,28 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
     .table th,
     .table td {
-      padding: 12px;
-      border: 1px solid var(--border-color, #dee2e6);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--table-border);
+      vertical-align: middle;
+      text-align: left;
     }
 
     .table thead th {
-      background: var(--bg-light, #f8f9fa);
+      background: var(--table-header-bg);
       font-weight: 600;
+      color: var(--fg-muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border-default);
+    }
+
+    .table tbody tr {
+      transition: background 0.15s;
+
+      &:hover {
+        background: var(--table-row-hover);
+      }
     }
 
     .form-actions {
@@ -362,7 +411,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       .row { flex-direction: column; }
       .col-lg-4 { width: 100%; }
       .dl-horizontal { flex-direction: column; }
-      .dl-horizontal dt { margin-bottom: 4px; }
+      .dl-horizontal dt { margin-bottom: 4px; min-width: auto; }
     }
   `]
 })
