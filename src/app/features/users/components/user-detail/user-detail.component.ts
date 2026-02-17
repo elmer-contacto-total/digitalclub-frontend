@@ -4,7 +4,7 @@
  * PARIDAD: Rails admin/users/show.html.erb
  */
 import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
@@ -31,7 +31,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       } @else if (user()) {
         <!-- Header -->
         <div class="page-header">
-          <a routerLink="/app/users" class="back-link">
+          <a (click)="goBack()" class="back-link" style="cursor: pointer;">
             <i class="ph ph-arrow-left"></i>
             Volver a usuarios
           </a>
@@ -693,6 +693,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
 export class UserDetailComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private location = inject(Location);
   private userService = inject(UserService);
   private authService = inject(AuthService);
 
@@ -792,6 +793,10 @@ export class UserDetailComponent implements OnInit, OnDestroy {
     if (page < 0 || page >= this.subTotalPages) return;
     this.subCurrentPage = page;
     this.loadSubordinates();
+  }
+
+  goBack(): void {
+    this.location.back();
   }
 
   canEdit(): boolean {
