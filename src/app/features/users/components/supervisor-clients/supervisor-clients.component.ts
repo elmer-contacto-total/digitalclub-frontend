@@ -472,8 +472,7 @@ export class SupervisorClientsComponent implements OnInit, OnDestroy {
     this.loadConversationDetail(client.id);
     // Update URL
     this.router.navigate(['/app/supervisor_clients', client.id], {
-      queryParams: this.activeOnly() ? { active_only: 'true' } : {},
-      queryParamsHandling: 'merge'
+      queryParams: this.activeOnly() ? { active_only: 'true' } : {}
     });
   }
 
