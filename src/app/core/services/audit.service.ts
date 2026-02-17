@@ -72,25 +72,13 @@ export class AuditService {
   }
 
   /**
-   * Export audits as CSV
-   * Returns the URL to download the CSV file
+   * Export audits as CSV (blob download with auth headers)
    */
-  getExportUrl(startDate?: string, endDate?: string): string {
-    let url = `${this.baseUrl}/export`;
-    const params: string[] = [];
-
-    if (startDate) {
-      params.push(`startDate=${startDate}`);
-    }
-    if (endDate) {
-      params.push(`endDate=${endDate}`);
-    }
-
-    if (params.length > 0) {
-      url += '?' + params.join('&');
-    }
-
-    return url;
+  exportAuditsCsv(startDate?: string, endDate?: string): Observable<Blob> {
+    let httpParams = new HttpParams();
+    if (startDate) httpParams = httpParams.set('startDate', startDate);
+    if (endDate) httpParams = httpParams.set('endDate', endDate);
+    return this.http.get(`${this.baseUrl}/export`, { params: httpParams, responseType: 'blob' });
   }
 
   /**
@@ -123,13 +111,13 @@ export class AuditService {
   getActionBadgeClass(action: string): string {
     switch (action) {
       case 'create':
-        return 'bg-success';
+        return 'badge-success';
       case 'update':
-        return 'bg-primary';
+        return 'badge-info';
       case 'destroy':
-        return 'bg-danger';
+        return 'badge-danger';
       default:
-        return 'bg-secondary';
+        return 'badge-secondary';
     }
   }
 

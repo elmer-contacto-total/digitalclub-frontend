@@ -4,7 +4,7 @@
  *
  * DataTable with:
  * - Date range filters (Desde/Hasta)
- * - Export CSV button
+ * - Export CSV button (blob download with auth)
  * - Client column (only for SUPER_ADMIN)
  * - Columns: ID, Action, Auditable Type, Auditable ID, User, Changes, Created At
  */
@@ -17,255 +17,229 @@ import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { Audit } from '../../../../core/models/audit.model';
 import { UserRole } from '../../../../core/models/user.model';
+import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
+import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
+import { ModalComponent } from '../../../../shared/components/modal/modal.component';
 
 @Component({
   selector: 'app-audit-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoadingSpinnerComponent, PaginationComponent, ModalComponent],
   template: `
-    <div class="container-fluid py-4">
+    <div class="audit-list-container">
       <!-- Page Header -->
-      <div class="page-header mb-4">
-        <div class="row align-items-center">
-          <div class="col">
-            <h1 class="h3 mb-0">Auditorías</h1>
-          </div>
+      <div class="page-header">
+        <div class="header-left">
+          <h1>Auditorías</h1>
+          <p class="subtitle">Registro de cambios del sistema</p>
         </div>
-      </div>
-
-      <!-- Export Form - PARIDAD: Rails export form -->
-      <div class="row mb-3">
-        <div class="col d-flex justify-content-end">
-          <form
-            class="d-flex align-items-center border p-3 rounded bg-white"
-            (ngSubmit)="exportAudits()">
-            <div class="me-3">
-              <label for="from-date" class="visually-hidden">From Date</label>
-              <input
-                type="date"
-                id="from-date"
-                class="form-control form-control-sm bg-light rounded-2"
-                [(ngModel)]="fromDate"
-                name="fromDate"
-                placeholder="Desde...">
-            </div>
-            <div class="me-3">
-              <label for="to-date" class="visually-hidden">To Date</label>
-              <input
-                type="date"
-                id="to-date"
-                class="form-control form-control-sm bg-light rounded-2"
-                [(ngModel)]="toDate"
-                name="toDate"
-                placeholder="Hasta...">
-            </div>
-            <button type="submit" class="btn btn-primary">
-              <i class="bi bi-download me-1"></i>
-              Exportar Auditorías
-            </button>
-          </form>
+        <div class="export-group">
+          <input
+            type="date"
+            class="date-input"
+            [(ngModel)]="fromDate"
+            placeholder="Desde...">
+          <input
+            type="date"
+            class="date-input"
+            [(ngModel)]="toDate"
+            placeholder="Hasta...">
+          <button class="btn btn-primary" (click)="exportAudits()" [disabled]="isExporting()">
+            <i class="ph ph-download-simple"></i>
+            {{ isExporting() ? 'Exportando...' : 'Exportar' }}
+          </button>
         </div>
       </div>
 
       <!-- Quick Date Filters -->
-      <div class="card mb-4">
-        <div class="card-body py-2">
-          <div class="d-flex gap-2 flex-wrap">
-            <button
-              type="button"
-              class="btn btn-sm"
-              [class.btn-primary]="selectedQuickFilter() === 'today'"
-              [class.btn-outline-secondary]="selectedQuickFilter() !== 'today'"
-              (click)="setQuickFilter('today')">
-              Hoy
-            </button>
-            <button
-              type="button"
-              class="btn btn-sm"
-              [class.btn-primary]="selectedQuickFilter() === 'week'"
-              [class.btn-outline-secondary]="selectedQuickFilter() !== 'week'"
-              (click)="setQuickFilter('week')">
-              Última semana
-            </button>
-            <button
-              type="button"
-              class="btn btn-sm"
-              [class.btn-primary]="selectedQuickFilter() === 'month'"
-              [class.btn-outline-secondary]="selectedQuickFilter() !== 'month'"
-              (click)="setQuickFilter('month')">
-              Último mes
-            </button>
-            <button
-              type="button"
-              class="btn btn-sm"
-              [class.btn-primary]="selectedQuickFilter() === 'all'"
-              [class.btn-outline-secondary]="selectedQuickFilter() !== 'all'"
-              (click)="setQuickFilter('all')">
-              Todos
-            </button>
-          </div>
-        </div>
+      <div class="filter-bar">
+        <button class="filter-btn" [class.active]="selectedQuickFilter() === 'today'"
+                (click)="setQuickFilter('today')">Hoy</button>
+        <button class="filter-btn" [class.active]="selectedQuickFilter() === 'week'"
+                (click)="setQuickFilter('week')">Última semana</button>
+        <button class="filter-btn" [class.active]="selectedQuickFilter() === 'month'"
+                (click)="setQuickFilter('month')">Último mes</button>
+        <button class="filter-btn" [class.active]="selectedQuickFilter() === 'all'"
+                (click)="setQuickFilter('all')">Todos</button>
       </div>
 
       <!-- Loading -->
       @if (isLoading()) {
-        <div class="text-center py-5">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Cargando...</span>
-          </div>
+        <app-loading-spinner message="Cargando auditorías..." />
+      } @else if (audits().length === 0) {
+        <div class="empty-state">
+          <i class="ph ph-clipboard-text"></i>
+          <h3>No hay auditorías</h3>
+          <p>No se encontraron registros en el período seleccionado</p>
         </div>
-      }
-
-      <!-- DataTable - PARIDAD: Rails DataTable -->
-      @if (!isLoading()) {
-        <div class="card">
-          <div class="table-responsive">
-            <table class="table table-striped table-bordered table-hover mb-0">
-              <thead class="table-light">
+      } @else {
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                @if (isSuperAdmin()) {
+                  <th>Cliente</th>
+                }
+                <th class="sortable" (click)="toggleSort('id')">
+                  ID
+                  @if (sortField() === 'id') {
+                    <i class="ph" [class.ph-sort-ascending]="sortDirection() === 'asc'"
+                       [class.ph-sort-descending]="sortDirection() === 'desc'"></i>
+                  }
+                </th>
+                <th>Acción</th>
+                <th>Tipo</th>
+                <th>ID Entidad</th>
+                <th>Usuario</th>
+                <th>Cambios</th>
+                <th class="sortable" (click)="toggleSort('created_at')">
+                  Fecha
+                  @if (sortField() === 'created_at') {
+                    <i class="ph" [class.ph-sort-ascending]="sortDirection() === 'asc'"
+                       [class.ph-sort-descending]="sortDirection() === 'desc'"></i>
+                  }
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (audit of audits(); track audit.id) {
                 <tr>
                   @if (isSuperAdmin()) {
-                    <th>Cliente</th>
+                    <td>{{ audit.client_name || '-' }}</td>
                   }
-                  <th class="sortable" (click)="toggleSort('id')">
-                    ID
-                    @if (sortField() === 'id') {
-                      <i class="bi" [class.bi-sort-up]="sortDirection() === 'asc'"
-                         [class.bi-sort-down]="sortDirection() === 'desc'"></i>
+                  <td class="id-cell">{{ audit.id }}</td>
+                  <td>
+                    <span class="status-badge" [ngClass]="getActionBadgeClass(audit.action)">
+                      {{ getActionLabel(audit.action) }}
+                    </span>
+                  </td>
+                  <td>{{ audit.auditable_type }}</td>
+                  <td>{{ audit.auditable_id }}</td>
+                  <td>{{ audit.username || 'Admin BD' }}</td>
+                  <td>
+                    @if (hasChanges(audit.audited_changes)) {
+                      <button class="action-btn" (click)="showChanges(audit)" title="Ver cambios">
+                        <i class="ph ph-eye"></i>
+                      </button>
+                    } @else {
+                      <span class="text-muted">-</span>
                     }
-                  </th>
-                  <th>Acción</th>
-                  <th>Tipo</th>
-                  <th>ID Entidad</th>
-                  <th>Usuario</th>
-                  <th>Cambios</th>
-                  <th class="sortable" (click)="toggleSort('created_at')">
-                    Fecha
-                    @if (sortField() === 'created_at') {
-                      <i class="bi" [class.bi-sort-up]="sortDirection() === 'asc'"
-                         [class.bi-sort-down]="sortDirection() === 'desc'"></i>
-                    }
-                  </th>
+                  </td>
+                  <td class="date-cell">{{ formatDate(audit.created_at) }}</td>
                 </tr>
-              </thead>
-              <tbody>
-                @if (audits().length === 0) {
-                  <tr>
-                    <td [attr.colspan]="isSuperAdmin() ? 8 : 7" class="text-center py-4 text-muted">
-                      No hay auditorías en el período seleccionado
-                    </td>
-                  </tr>
-                } @else {
-                  @for (audit of audits(); track audit.id) {
-                    <tr>
-                      @if (isSuperAdmin()) {
-                        <td>{{ audit.client_name || '-' }}</td>
-                      }
-                      <td>{{ audit.id }}</td>
-                      <td>
-                        <span class="badge" [ngClass]="getActionBadgeClass(audit.action)">
-                          {{ getActionLabel(audit.action) }}
-                        </span>
-                      </td>
-                      <td>{{ audit.auditable_type }}</td>
-                      <td>{{ audit.auditable_id }}</td>
-                      <td>{{ audit.username || 'Admin BD' }}</td>
-                      <td>
-                        @if (hasChanges(audit.audited_changes)) {
-                          <button
-                            type="button"
-                            class="btn btn-sm btn-outline-secondary"
-                            (click)="showChanges(audit)"
-                            title="Ver cambios">
-                            <i class="bi bi-eye"></i> Ver
-                          </button>
-                        } @else {
-                          <span class="text-muted">-</span>
-                        }
-                      </td>
-                      <td>{{ formatDate(audit.created_at) }}</td>
-                    </tr>
-                  }
-                }
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Pagination -->
-          @if (totalPages() > 1) {
-            <div class="card-footer">
-              <div class="d-flex justify-content-between align-items-center">
-                <div class="text-muted small">
-                  Mostrando {{ (currentPage() * pageSize()) + 1 }} -
-                  {{ Math.min((currentPage() + 1) * pageSize(), totalCount()) }}
-                  de {{ totalCount() }} registros
-                </div>
-                <nav>
-                  <ul class="pagination pagination-sm mb-0">
-                    <li class="page-item" [class.disabled]="currentPage() === 0">
-                      <button class="page-link" (click)="goToPage(currentPage() - 1)">
-                        <i class="bi bi-chevron-left"></i>
-                      </button>
-                    </li>
-                    @for (page of getPageNumbers(); track page) {
-                      <li class="page-item" [class.active]="page === currentPage()">
-                        <button class="page-link" (click)="goToPage(page)">
-                          {{ page + 1 }}
-                        </button>
-                      </li>
-                    }
-                    <li class="page-item" [class.disabled]="currentPage() >= totalPages() - 1">
-                      <button class="page-link" (click)="goToPage(currentPage() + 1)">
-                        <i class="bi bi-chevron-right"></i>
-                      </button>
-                    </li>
-                  </ul>
-                </nav>
-              </div>
-            </div>
-          }
+              }
+            </tbody>
+          </table>
         </div>
+
+        <app-pagination
+          [currentPage]="currentPage()"
+          [totalItems]="totalCount()"
+          [pageSize]="pageSize()"
+          [pageSizeOptions]="[20, 50, 100]"
+          (pageChange)="onPageChange($event)"
+          (pageSizeChange)="onPageSizeChange($event)"
+        />
       }
 
       <!-- Changes Modal -->
-      @if (showChangesModal()) {
-        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-          <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-              <div class="modal-header">
-                <h5 class="modal-title">
-                  Cambios - {{ selectedAudit()?.auditable_type }} #{{ selectedAudit()?.auditable_id }}
-                </h5>
-                <button type="button" class="btn-close" (click)="closeChangesModal()"></button>
-              </div>
-              <div class="modal-body">
-                <pre class="bg-light p-3 rounded overflow-auto" style="max-height: 400px;">{{ formatChanges(selectedAudit()?.audited_changes) }}</pre>
-              </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" (click)="closeChangesModal()">
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      }
+      <app-modal
+        [isOpen]="showChangesModal()"
+        [title]="'Cambios - ' + (selectedAudit()?.auditable_type || '') + ' #' + (selectedAudit()?.auditable_id || '')"
+        size="lg"
+        [showFooter]="false"
+        (closed)="closeChangesModal()"
+      >
+        <pre class="changes-pre">{{ formatChanges(selectedAudit()?.audited_changes) }}</pre>
+      </app-modal>
     </div>
   `,
   styles: [`
+    .audit-list-container { padding: var(--space-6); }
+
+    .page-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: var(--space-5); flex-wrap: wrap; gap: var(--space-3);
+    }
+    .header-left h1 { font-size: var(--text-2xl); font-weight: var(--font-semibold); margin: 0; color: var(--fg-default); }
+    .subtitle { font-size: var(--text-base); color: var(--fg-muted); margin: var(--space-1) 0 0; }
+
+    .export-group {
+      display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+    }
+    .date-input {
+      padding: 8px 12px; border: 1px solid var(--border-default); border-radius: var(--radius-md);
+      background: var(--input-bg); color: var(--fg-default); font-size: var(--text-sm);
+      &:focus { outline: none; border-color: var(--accent-default); }
+    }
+
+    .filter-bar {
+      display: flex; gap: var(--space-1); margin-bottom: var(--space-4); flex-wrap: wrap;
+    }
+    .filter-btn {
+      padding: 6px 14px; border: 1px solid var(--border-default); border-radius: var(--radius-full);
+      background: var(--card-bg); color: var(--fg-default); font-size: var(--text-sm); cursor: pointer; transition: all var(--duration-normal);
+      &:hover { border-color: var(--accent-default); color: var(--accent-default); }
+      &.active { background: var(--accent-default); color: white; border-color: var(--accent-default); }
+    }
+
+    .empty-state {
+      text-align: center; padding: 60px var(--space-5); background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius-lg);
+      > i { font-size: 48px; color: var(--fg-subtle); }
+      h3 { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-xl); color: var(--fg-default); }
+      p { color: var(--fg-muted); margin-bottom: var(--space-4); }
+    }
+
+    .table-wrapper { overflow-x: auto; }
+    .data-table {
+      width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: var(--radius-xl); overflow: hidden;
+      border: 1px solid var(--card-border);
+      th, td { padding: var(--space-3) var(--space-4); text-align: left; border-bottom: 1px solid var(--border-muted); }
+      th { background: var(--table-header-bg); font-size: var(--text-sm); font-weight: var(--font-semibold); text-transform: uppercase; color: var(--fg-muted); letter-spacing: 0.3px; }
+      tbody tr:hover td { background: var(--table-row-hover); }
+    }
+
     .sortable {
-      cursor: pointer;
-      user-select: none;
+      cursor: pointer; user-select: none;
+      &:hover { color: var(--accent-default); }
+      i { margin-left: var(--space-1); font-size: var(--text-xs); }
     }
 
-    .sortable:hover {
-      background-color: var(--bs-gray-200);
+    .id-cell { font-weight: var(--font-semibold); color: var(--accent-default); font-size: var(--text-sm); }
+    .date-cell { font-size: var(--text-sm); color: var(--fg-muted); white-space: nowrap; }
+    .text-muted { color: var(--fg-muted); }
+
+    .status-badge {
+      display: inline-flex; align-items: center; height: var(--badge-height); padding: 0 var(--space-3);
+      border-radius: var(--radius-full); font-size: var(--text-sm); font-weight: var(--font-medium);
+    }
+    .badge-success { background: var(--success-subtle); color: var(--success-text); }
+    .badge-info { background: var(--accent-subtle); color: var(--accent-emphasis); }
+    .badge-danger { background: var(--error-subtle); color: var(--error-text); }
+    .badge-secondary { background: var(--bg-muted); color: var(--fg-muted); }
+
+    .action-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: var(--radius-md); border: 1px solid var(--border-default);
+      background: var(--card-bg); cursor: pointer; font-size: 16px; color: var(--fg-muted);
+      transition: all var(--duration-normal);
+      &:hover { border-color: var(--accent-default); color: var(--accent-default); }
     }
 
-    pre {
-      font-size: 0.85rem;
-      white-space: pre-wrap;
-      word-break: break-word;
+    .changes-pre {
+      background: var(--bg-muted); color: var(--fg-default); padding: var(--space-4);
+      border-radius: var(--radius-md); overflow: auto; max-height: 400px;
+      font-size: 0.85rem; white-space: pre-wrap; word-break: break-word;
+      border: 1px solid var(--border-muted); margin: 0;
     }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px;
+      border: none; border-radius: var(--radius-lg); font-size: var(--text-base); font-weight: var(--font-medium);
+      cursor: pointer; transition: all var(--duration-normal);
+      &:disabled { opacity: 0.5; cursor: not-allowed; }
+    }
+    .btn-primary { background: var(--accent-default); color: white; &:hover:not(:disabled) { background: var(--accent-emphasis); } }
   `]
 })
 export class AuditListComponent implements OnInit, OnDestroy {
@@ -274,13 +248,11 @@ export class AuditListComponent implements OnInit, OnDestroy {
   private toastService = inject(ToastService);
   private destroy$ = new Subject<void>();
 
-  // For template
-  Math = Math;
-
   // State signals
   audits = signal<Audit[]>([]);
   isLoading = signal(true);
-  currentPage = signal(0);
+  isExporting = signal(false);
+  currentPage = signal(1);
   pageSize = signal(50);
   totalCount = signal(0);
   totalPages = signal(0);
@@ -317,17 +289,14 @@ export class AuditListComponent implements OnInit, OnDestroy {
     this.auditService.getAudits({
       startDate: this.fromDate,
       endDate: this.toDate,
-      page: this.currentPage(),
+      page: this.currentPage() - 1,
       size: this.pageSize()
     })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
           let audits = response.audits;
-
-          // Client-side sorting
           audits = this.sortAudits(audits);
-
           this.audits.set(audits);
           this.totalCount.set(response.total);
           this.totalPages.set(response.totalPages);
@@ -372,7 +341,6 @@ export class AuditListComponent implements OnInit, OnDestroy {
       this.sortField.set(field);
       this.sortDirection.set('desc');
     }
-    // Re-sort current data
     this.audits.update(audits => this.sortAudits(audits));
   }
 
@@ -398,40 +366,47 @@ export class AuditListComponent implements OnInit, OnDestroy {
         this.toDate = this.formatDateForInput(today);
         break;
       case 'all':
-        this.fromDate = '';
-        this.toDate = '';
+        this.fromDate = '2020-01-01';
+        this.toDate = this.formatDateForInput(today);
         break;
     }
 
-    this.currentPage.set(0);
+    this.currentPage.set(1);
     this.loadAudits();
   }
 
-  goToPage(page: number): void {
-    if (page >= 0 && page < this.totalPages()) {
-      this.currentPage.set(page);
-      this.loadAudits();
-    }
+  onPageChange(page: number): void {
+    this.currentPage.set(page);
+    this.loadAudits();
   }
 
-  getPageNumbers(): number[] {
-    const total = this.totalPages();
-    const current = this.currentPage();
-    const pages: number[] = [];
-
-    const start = Math.max(0, current - 2);
-    const end = Math.min(total, start + 5);
-
-    for (let i = start; i < end; i++) {
-      pages.push(i);
-    }
-
-    return pages;
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.currentPage.set(1);
+    this.loadAudits();
   }
 
   exportAudits(): void {
-    const url = this.auditService.getExportUrl(this.fromDate, this.toDate);
-    window.open(url, '_blank');
+    this.isExporting.set(true);
+    this.auditService.exportAuditsCsv(this.fromDate, this.toDate)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (blob) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `auditorias_${this.fromDate || 'all'}_${this.toDate || 'all'}.csv`;
+          a.click();
+          window.URL.revokeObjectURL(url);
+          this.isExporting.set(false);
+          this.toastService.success('Auditorías exportadas correctamente');
+        },
+        error: (error) => {
+          console.error('Error exporting audits:', error);
+          this.toastService.error('Error al exportar las auditorías');
+          this.isExporting.set(false);
+        }
+      });
   }
 
   showChanges(audit: Audit): void {
