@@ -201,6 +201,19 @@ export class BulkSender {
     return { success: true };
   }
 
+  isActive(): boolean {
+    return this._state === 'running';
+  }
+
+  /** Pause and wait for backend notification — used on app shutdown */
+  async pauseForShutdown(): Promise<void> {
+    console.log(`[BulkSender] Pausing for shutdown, bulk send ${this.bulkSendId}`);
+    this.isPaused = true;
+    this._state = 'paused';
+    this.persistState();
+    await this.notifyBackend('pause');
+  }
+
   pause(): void {
     console.log(`[BulkSender] Pausing bulk send ${this.bulkSendId}`);
     this.isPaused = true;

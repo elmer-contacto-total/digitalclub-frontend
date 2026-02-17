@@ -2685,7 +2685,16 @@ app.on('will-quit', () => {
 });
 
 // Manejar cierre de la ventana principal - notificar al renderer
+let isQuitting = false;
 app.on('before-quit', (event) => {
+  if (bulkSender.isActive() && !isQuitting) {
+    isQuitting = true;
+    event.preventDefault();
+    bulkSender.pauseForShutdown().finally(() => {
+      app.quit();
+    });
+    return;
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     // Notificar a Angular que la app se está cerrando
     // Angular puede decidir si hacer logout o no
