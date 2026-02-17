@@ -22,14 +22,16 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           <p class="subtitle">Historial de envíos masivos via WhatsApp</p>
         </div>
         <div class="header-actions">
-          @if (isSupervisor()) {
+          @if (isSupervisor() && canCreateSends()) {
             <a routerLink="/app/bulk_sends/rules" class="btn btn-outline">
               <i class="ph ph-sliders"></i> Reglas
             </a>
           }
-          <a routerLink="/app/bulk_sends/new" class="btn btn-primary">
-            <i class="ph ph-plus"></i> Nuevo Envío
-          </a>
+          @if (canCreateSends()) {
+            <a routerLink="/app/bulk_sends/new" class="btn btn-primary">
+              <i class="ph ph-plus"></i> Nuevo Envío
+            </a>
+          }
         </div>
       </div>
 
@@ -58,10 +60,12 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
         <div class="empty-state">
           <i class="ph ph-paper-plane-tilt"></i>
           <h3>No hay envíos masivos</h3>
-          <p>Crea tu primer envío masivo subiendo un CSV con destinatarios</p>
-          <a routerLink="/app/bulk_sends/new" class="btn btn-primary">
-            Nuevo Envío
-          </a>
+          <p>{{ canCreateSends() ? 'Crea tu primer envío masivo subiendo un CSV con destinatarios' : 'No se encontraron envíos masivos' }}</p>
+          @if (canCreateSends()) {
+            <a routerLink="/app/bulk_sends/new" class="btn btn-primary">
+              Nuevo Envío
+            </a>
+          }
         </div>
       } @else {
         <div class="table-wrapper">
@@ -279,6 +283,12 @@ export class EnvioListComponent implements OnInit, OnDestroy {
     return role === UserRole.SUPER_ADMIN || role === UserRole.ADMIN ||
            role === UserRole.MANAGER_LEVEL_1 || role === UserRole.MANAGER_LEVEL_2 ||
            role === UserRole.MANAGER_LEVEL_3 || role === UserRole.MANAGER_LEVEL_4;
+  }
+
+  canCreateSends(): boolean {
+    const user = this.authService.currentUser();
+    if (!user) return false;
+    return user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.ADMIN;
   }
 
   ngOnInit(): void {
