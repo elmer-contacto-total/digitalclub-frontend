@@ -12,6 +12,8 @@ import { AuthService } from '../../../../core/services/auth.service';
 import { User, UserRole, UserStatus, UserOption, RoleUtils } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
+
 @Component({
   selector: 'app-user-form',
   standalone: true,
@@ -561,7 +563,7 @@ export class UserFormComponent implements OnInit {
     this.form = this.fb.group({
       firstName: ['', Validators.required],
       lastName: ['', Validators.required],
-      email: ['', [Validators.required, Validators.email]],
+      email: ['', [Validators.required, Validators.pattern(EMAIL_REGEX)]],
       phone: [''],
       importString: [''],
       role: [null, Validators.required],

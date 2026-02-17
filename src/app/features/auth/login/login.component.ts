@@ -7,6 +7,8 @@ import { ToastService } from '../../../core/services/toast.service';
 import { parseApiError, AuthErrorCode } from '../../../core/models/auth.model';
 import { LogoComponent } from '../../../shared/components/logo/logo.component';
 
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
+
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -27,7 +29,7 @@ export class LoginComponent {
 
   constructor() {
     this.loginForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
+      email: ['', [Validators.required, Validators.pattern(EMAIL_REGEX)]],
       password: ['', [Validators.required, Validators.minLength(6)]]
     });
   }

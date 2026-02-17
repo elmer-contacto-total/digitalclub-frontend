@@ -6,6 +6,8 @@ import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { LogoComponent } from '../../../shared/components/logo/logo.component';
 
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
+
 @Component({
   selector: 'app-forgot-password',
   standalone: true,
@@ -25,7 +27,7 @@ export class ForgotPasswordComponent {
 
   constructor() {
     this.forgotForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]]
+      email: ['', [Validators.required, Validators.pattern(EMAIL_REGEX)]]
     });
   }
 
