@@ -31,10 +31,16 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           <h1>Usuarios Internos</h1>
           <p class="subtitle">Administradores, managers, agentes y staff</p>
         </div>
-        <a routerLink="/app/users/new" class="btn btn-primary">
-          <i class="ph ph-plus"></i>
-          Nuevo Usuario
-        </a>
+        <div class="header-actions">
+          <a routerLink="/app/users/new" class="btn btn-primary">
+            <i class="ph ph-plus"></i>
+            Nuevo Usuario
+          </a>
+          <a routerLink="/app/imports/new" [queryParams]="{ import_type: 'users' }" class="btn btn-secondary">
+            <i class="ph ph-upload-simple"></i>
+            Importar
+          </a>
+        </div>
       </div>
 
       <div class="filters-bar">

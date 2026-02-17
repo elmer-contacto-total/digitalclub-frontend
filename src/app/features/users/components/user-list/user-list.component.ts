@@ -42,7 +42,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
               <i class="ph ph-plus"></i>
               Crear usuario
             </a>
-            <a routerLink="import" class="btn btn-secondary">
+            <a routerLink="/app/imports/new" [queryParams]="{ import_type: 'users' }" class="btn btn-secondary">
               <i class="ph ph-upload-simple"></i>
               Importar
             </a>
