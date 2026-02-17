@@ -205,7 +205,7 @@ interface AgentClient {
             <div class="panel-footer">
               <div class="page-size-wrapper">
                 <label>Mostrar</label>
-                <select class="form-control page-size-select" [(ngModel)]="clientPageSize" (ngModelChange)="onClientPageSizeChange()">
+                <select class="page-size-select" [(ngModel)]="clientPageSize" (ngModelChange)="onClientPageSizeChange()">
                   <option [ngValue]="10">10</option>
                   <option [ngValue]="25">25</option>
                   <option [ngValue]="50">50</option>

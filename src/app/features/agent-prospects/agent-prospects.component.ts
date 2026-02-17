@@ -93,7 +93,7 @@ interface ProspectsResponse {
           <div class="datatable-header">
             <div class="page-size-wrapper">
               <label>Mostrar</label>
-              <select class="form-control page-size-select" [(ngModel)]="pageSize" (ngModelChange)="onPageSizeChange()">
+              <select class="page-size-select" [(ngModel)]="pageSize" (ngModelChange)="onPageSizeChange()">
                 <option [ngValue]="10">10</option>
                 <option [ngValue]="25">25</option>
                 <option [ngValue]="50">50</option>

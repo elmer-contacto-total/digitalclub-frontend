@@ -200,7 +200,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
               <div class="sub-controls">
                 <div class="page-size-wrapper">
                   <label>Mostrar</label>
-                  <select class="form-control page-size-select" [(ngModel)]="subPageSize" (ngModelChange)="onSubPageSizeChange()">
+                  <select class="page-size-select" [(ngModel)]="subPageSize" (ngModelChange)="onSubPageSizeChange()">
                     <option [ngValue]="10">10</option>
                     <option [ngValue]="25">25</option>
                     <option [ngValue]="50">50</option>
