@@ -49,7 +49,8 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           <input
             type="text"
             placeholder="Buscar por nombre, email..."
-            [(ngModel)]="searchTerm"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
             (input)="onSearch()"
           />
         </div>
