@@ -33,7 +33,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
         <div class="page-header">
           <a (click)="goBack()" class="back-link" style="cursor: pointer;">
             <i class="ph ph-arrow-left"></i>
-            Volver a usuarios
+            {{ backLabel() }}
           </a>
 
           <div class="header-content">
@@ -60,7 +60,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
 
             <div class="header-actions">
               @if (canEdit()) {
-                <a [routerLink]="['edit']" class="btn btn-secondary">
+                <a [routerLink]="['edit']" queryParamsHandling="preserve" class="btn btn-secondary">
                   <i class="ph ph-pencil"></i>
                   Editar
                 </a>
@@ -697,6 +697,10 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   private userService = inject(UserService);
   private authService = inject(AuthService);
 
+  // Navigation
+  backUrl = signal('/app/users');
+  backLabel = signal('Volver a usuarios');
+
   // State
   isLoading = signal(true);
   user = signal<User | null>(null);
@@ -729,6 +733,12 @@ export class UserDetailComponent implements OnInit, OnDestroy {
       this.subCurrentPage = 0;
       this.loadSubordinates();
     });
+
+    const from = this.route.snapshot.queryParams['from'];
+    if (from === 'internal') {
+      this.backUrl.set('/app/internal_users');
+      this.backLabel.set('Volver a usuarios internos');
+    }
 
     const id = this.route.snapshot.params['id'];
     if (id) {
@@ -796,7 +806,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   }
 
   goBack(): void {
-    this.router.navigate(['/app/users']);
+    this.router.navigate([this.backUrl()]);
   }
 
   canEdit(): boolean {

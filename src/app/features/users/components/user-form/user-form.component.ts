@@ -660,7 +660,7 @@ export class UserFormComponent implements OnInit {
     const id = this.route.snapshot.params['id'];
     if (id && id !== 'new') {
       this.userId.set(parseInt(id, 10));
-      this.backUrl.set(`/app/users/${id}`);
+      this.backUrl.set(from === 'internal' ? `/app/users/${id}?from=internal` : `/app/users/${id}`);
     }
 
     // Now initialize form with correct validators based on mode

@@ -99,10 +99,10 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                     </span>
                   </td>
                   <td class="actions-col">
-                    <a [routerLink]="['/app/users', user.id]" class="action-btn" title="Ver">
+                    <a [routerLink]="['/app/users', user.id]" [queryParams]="{ from: 'internal' }" class="action-btn" title="Ver">
                       <i class="ph ph-eye"></i>
                     </a>
-                    <a [routerLink]="['/app/users', user.id, 'edit']" class="action-btn" title="Editar">
+                    <a [routerLink]="['/app/users', user.id, 'edit']" [queryParams]="{ from: 'internal' }" class="action-btn" title="Editar">
                       <i class="ph ph-pencil"></i>
                     </a>
                   </td>
