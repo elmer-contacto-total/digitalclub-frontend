@@ -31,6 +31,9 @@ export * from './crm-contact.model';
 // WhatsApp Onboarding models
 export * from './whatsapp-onboarding.model';
 
+// Search models
+export * from './search.model';
+
 // Message Template models
 // Note: MessageTemplate and MessageTemplateParam interfaces are also exported from
 // message-template.service.ts (with different shapes). Selectively re-export to

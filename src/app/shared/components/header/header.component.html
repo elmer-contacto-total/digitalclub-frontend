@@ -11,7 +11,7 @@
       <i class="ph ph-list"></i>
     </button>
 
-    <!-- Search Bar -->
+    <!-- Search Bar with Global Search Dropdown -->
     <div class="header-search">
       <i class="ph ph-magnifying-glass search-icon"></i>
       <input
@@ -19,9 +19,77 @@
         class="search-input"
         placeholder="Buscar..."
         [value]="searchQuery()"
-        (input)="searchQuery.set($any($event.target).value)"
+        (input)="onSearchInput($any($event.target).value)"
+        (focus)="onSearchFocus()"
+        (keydown)="onSearchKeydown($event)"
         (keyup.enter)="onSearch()"
+        autocomplete="off"
       />
+      @if (searchQuery().length > 0) {
+        <button type="button" class="search-clear" (click)="clearSearch()">
+          <i class="ph ph-x"></i>
+        </button>
+      }
+
+      <!-- Search Results Dropdown -->
+      @if (showSearchResults()) {
+        <div class="search-dropdown">
+          @if (isSearching()) {
+            <div class="search-loading">
+              <div class="search-spinner"></div>
+              <span>Buscando...</span>
+            </div>
+          } @else if (searchResults(); as results) {
+            @if (results.groups.length === 0) {
+              <div class="search-empty">
+                <i class="ph ph-magnifying-glass-minus"></i>
+                <span>No se encontraron resultados para "{{ results.query }}"</span>
+              </div>
+            } @else {
+              <div class="search-results-body">
+                @for (group of results.groups; track group.category; let gi = $index) {
+                  <div class="search-group">
+                    <div class="search-group-header">
+                      <span class="search-group-title">
+                        <i class="ph {{ group.icon }}"></i>
+                        {{ group.category }}
+                      </span>
+                      <span class="search-group-count">{{ group.totalCount }}</span>
+                    </div>
+                    @for (item of group.items; track item.id; let ii = $index) {
+                      <a
+                        class="search-result-item"
+                        [class.selected]="selectedIndex() === getGlobalIndex(gi, ii)"
+                        (click)="navigateToResult(item)"
+                        (mouseenter)="selectedIndex.set(getGlobalIndex(gi, ii))"
+                      >
+                        <div class="result-info">
+                          <span class="result-title">{{ item.title }}</span>
+                          <span class="result-subtitle">{{ item.subtitle }}</span>
+                        </div>
+                        <i class="ph ph-arrow-right result-arrow"></i>
+                      </a>
+                    }
+                    @if (group.totalCount > group.items.length) {
+                      <a class="search-view-all" (click)="navigateToViewAll(group)">
+                        Ver todos ({{ group.totalCount }})
+                        <i class="ph ph-arrow-right"></i>
+                      </a>
+                    }
+                  </div>
+                }
+              </div>
+              <div class="search-footer">
+                <span class="search-hint">
+                  <kbd>&uarr;</kbd><kbd>&darr;</kbd> navegar
+                  <kbd>Enter</kbd> seleccionar
+                  <kbd>Esc</kbd> cerrar
+                </span>
+              </div>
+            }
+          }
+        </div>
+      }
     </div>
   </div>
 
