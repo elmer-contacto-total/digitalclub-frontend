@@ -115,7 +115,7 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
                   </td>
                   <td>{{ audit.auditable_type }}</td>
                   <td>{{ audit.auditable_id }}</td>
-                  <td>{{ audit.username || 'Admin BD' }}</td>
+                  <td>{{ audit.user_name || audit.username || 'Admin BD' }}</td>
                   <td>
                     @if (hasChanges(audit.audited_changes)) {
                       <button class="action-btn" (click)="showChanges(audit)" title="Ver cambios">

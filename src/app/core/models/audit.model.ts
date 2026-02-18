@@ -13,6 +13,7 @@ export interface Audit {
   version: number;
   created_at: string;
   user_id?: number;
+  user_name?: string;
   // Additional field for super_admin view
   client_name?: string;
 }
