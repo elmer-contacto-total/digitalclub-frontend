@@ -143,12 +143,13 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       <!-- Delete Confirmation Dialog -->
       @if (importToDelete()) {
         <app-confirm-dialog
+          [isOpen]="true"
           title="Eliminar Importación"
           message="¿Estás seguro de eliminar esta importación? Esta acción no se puede deshacer."
-          confirmText="Eliminar"
-          confirmClass="btn-danger"
-          (confirm)="deleteImport()"
-          (cancel)="importToDelete.set(null)"
+          type="danger"
+          confirmLabel="Eliminar"
+          (confirmed)="deleteImport()"
+          (cancelled)="importToDelete.set(null)"
         />
       }
     </div>
@@ -445,7 +446,7 @@ export class ImportListComponent implements OnInit, OnDestroy {
     const importItem = this.importToDelete();
     if (!importItem) return;
 
-    this.importService.cancelImport(importItem.id).pipe(
+    this.importService.deleteImport(importItem.id).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {

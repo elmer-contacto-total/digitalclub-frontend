@@ -243,6 +243,14 @@ export class ImportService {
   }
 
   /**
+   * Eliminar importación
+   * PARIDAD: Rails Admin::ImportsController#destroy
+   */
+  deleteImport(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+
+  /**
    * Obtener errores de importación
    */
   getErrors(id: number): Observable<{ id: number; errors_text: string }> {
