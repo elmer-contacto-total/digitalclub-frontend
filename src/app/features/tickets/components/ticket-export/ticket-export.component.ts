@@ -9,12 +9,10 @@ import { FormsModule } from '@angular/forms';
 import { TicketService } from '../../../chat/services/ticket.service';
 import { UserService } from '../../../../core/services/user.service';
 import { UserListItem, UserRole } from '../../../../core/models/user.model';
-import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
-
 @Component({
   selector: 'app-ticket-export',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, LoadingSpinnerComponent],
+  imports: [CommonModule, RouterLink, FormsModule],
   template: `
     <div class="ticket-export-container">
       <div class="page-header">
@@ -37,8 +35,8 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         <div class="export-form">
           <div class="form-row">
             <div class="form-group">
-              <label>Estado</label>
-              <select [(ngModel)]="exportParams.status">
+              <label class="form-label">Estado</label>
+              <select class="form-input" [(ngModel)]="exportParams.status">
                 <option value="all">Todos</option>
                 <option value="open">Abiertos</option>
                 <option value="closed">Cerrados</option>
@@ -46,8 +44,8 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
             </div>
 
             <div class="form-group">
-              <label>Agente</label>
-              <select [(ngModel)]="exportParams.agentId">
+              <label class="form-label">Agente</label>
+              <select class="form-input" [(ngModel)]="exportParams.agentId">
                 <option value="">Todos los agentes</option>
                 @for (agent of agents(); track agent.id) {
                   <option [value]="agent.id">{{ agent.firstName }} {{ agent.lastName }}</option>
@@ -58,17 +56,17 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
           <div class="form-row">
             <div class="form-group">
-              <label>Fecha Desde</label>
-              <input type="date" [(ngModel)]="exportParams.dateFrom" />
+              <label class="form-label">Fecha Desde</label>
+              <input type="date" class="form-input" [(ngModel)]="exportParams.dateFrom" />
             </div>
 
             <div class="form-group">
-              <label>Fecha Hasta</label>
-              <input type="date" [(ngModel)]="exportParams.dateTo" />
+              <label class="form-label">Fecha Hasta</label>
+              <input type="date" class="form-input" [(ngModel)]="exportParams.dateTo" />
             </div>
           </div>
 
-          <div class="export-info">
+          <div class="alert alert-info">
             <i class="ph ph-info"></i>
             <div class="info-content">
               <p><strong>Formato de exportación:</strong> ZIP con archivos TXT</p>
@@ -135,51 +133,40 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     .ticket-export-container { padding: 24px; max-width: 800px; margin: 0 auto; }
 
     .page-header { margin-bottom: 32px; }
-    .back-link { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); text-decoration: none; font-size: 14px; margin-bottom: 16px; }
-    .back-link:hover { color: var(--primary-color); }
+    .back-link { display: flex; align-items: center; gap: 8px; color: var(--fg-muted); text-decoration: none; font-size: 14px; margin-bottom: 16px; }
+    .back-link:hover { color: var(--accent-default); }
     .page-header h1 { margin: 0 0 8px 0; font-size: 28px; font-weight: 600; }
-    .subtitle { margin: 0; color: var(--text-secondary); font-size: 16px; }
+    .subtitle { margin: 0; color: var(--fg-muted); font-size: 16px; }
 
-    .export-card { background: white; border-radius: 16px; border: 1px solid var(--border-color); overflow: hidden; margin-bottom: 32px; }
-    .card-header { display: flex; align-items: center; gap: 12px; padding: 20px 24px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); }
-    .card-header i { font-size: 24px; color: var(--primary-color); }
+    .export-card { background: var(--card-bg); border-radius: 16px; border: 1px solid var(--border-default); overflow: hidden; margin-bottom: 32px; }
+    .card-header { display: flex; align-items: center; gap: 12px; padding: 20px 24px; background: var(--bg-subtle); border-bottom: 1px solid var(--border-default); }
+    .card-header i { font-size: 24px; color: var(--accent-default); }
     .card-header h2 { margin: 0; font-size: 18px; font-weight: 600; }
 
     .export-form { padding: 24px; }
 
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
 
-    .form-group { display: flex; flex-direction: column; gap: 8px; }
-    .form-group label { font-size: 14px; font-weight: 500; color: var(--text-primary); }
-    .form-group select,
-    .form-group input { padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; background: white; }
-    .form-group select:focus,
-    .form-group input:focus { outline: none; border-color: var(--primary-color); }
+    .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 0; }
+    .form-group .form-label { margin-bottom: 0; text-transform: none; }
 
-    .export-info { display: flex; gap: 14px; padding: 16px; background: #eff6ff; border-radius: 10px; margin-bottom: 24px; }
-    .export-info > i { font-size: 24px; color: #3b82f6; flex-shrink: 0; }
-    .info-content p { margin: 0 0 8px 0; font-size: 14px; color: #1e40af; }
+    .alert.alert-info { align-items: flex-start; border-radius: 10px; }
+    .info-content p { margin: 0 0 8px 0; font-size: 14px; }
     .info-content p:last-child { margin-bottom: 0; }
-    .info-content code { display: inline-block; padding: 4px 10px; background: #dbeafe; border-radius: 6px; font-size: 13px; color: #1e40af; margin-top: 4px; }
+    .info-content code { display: inline-block; padding: 4px 10px; background: var(--accent-muted); border-radius: 6px; font-size: 13px; margin-top: 4px; }
 
     .form-actions { display: flex; justify-content: center; }
 
-    .btn { display: inline-flex; align-items: center; gap: 10px; padding: 12px 24px; border-radius: 10px; font-size: 15px; font-weight: 500; cursor: pointer; border: none; transition: all 0.2s; }
-    .btn-primary { background: var(--primary-color); color: white; }
-    .btn-primary:hover { background: var(--primary-hover); }
-    .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
-    .btn-lg { padding: 14px 32px; font-size: 16px; }
-
-    .recent-exports { background: white; border-radius: 16px; border: 1px solid var(--border-color); padding: 24px; }
+    .recent-exports { background: var(--card-bg); border-radius: 16px; border: 1px solid var(--border-default); padding: 24px; }
     .recent-exports h3 { margin: 0 0 8px 0; font-size: 18px; font-weight: 600; }
-    .help-text { margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px; }
+    .help-text { margin: 0 0 20px 0; color: var(--fg-muted); font-size: 14px; }
 
     .export-contents { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 16px; }
-    .export-contents li { display: flex; align-items: flex-start; gap: 14px; padding: 16px; background: var(--bg-secondary); border-radius: 10px; }
-    .export-contents li i { font-size: 24px; color: var(--primary-color); flex-shrink: 0; }
+    .export-contents li { display: flex; align-items: flex-start; gap: 14px; padding: 16px; background: var(--bg-subtle); border-radius: 10px; }
+    .export-contents li i { font-size: 24px; color: var(--accent-default); flex-shrink: 0; }
     .export-contents li div { display: flex; flex-direction: column; gap: 4px; }
     .export-contents li strong { font-size: 14px; }
-    .export-contents li span { font-size: 13px; color: var(--text-secondary); }
+    .export-contents li span { font-size: 13px; color: var(--fg-muted); }
 
     .ph-spin { animation: spin 1s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
