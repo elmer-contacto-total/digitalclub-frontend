@@ -74,7 +74,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
             <span class="detail-label">Archivo</span>
             <span class="detail-value">
               @if (importData()?.importFileName) {
-                <a [href]="importData()?.importFileUrl" target="_blank" class="file-link">
+                <a (click)="downloadFile()" class="file-link" style="cursor:pointer">
                   <i class="ph ph-file-csv"></i>
                   {{ importData()?.importFileName }}
                 </a>
@@ -330,6 +330,13 @@ export class ImportDetailComponent implements OnInit, OnDestroy {
     const data = this.importData();
     if (!data) return 'badge-secondary';
     return this.importService.getStatusClass(data.status);
+  }
+
+  downloadFile(): void {
+    const data = this.importData();
+    if (data) {
+      this.importService.downloadFile(data.id, (data as any).importFileName);
+    }
   }
 
   formatDate(dateStr: string | undefined): string {

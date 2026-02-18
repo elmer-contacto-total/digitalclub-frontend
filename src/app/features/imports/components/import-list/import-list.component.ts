@@ -92,7 +92,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
                   </td>
                   <td>
                     @if (importItem.importFileName) {
-                      <a [href]="importItem.importFileUrl" target="_blank" class="file-link">
+                      <a (click)="downloadFile(importItem)" class="file-link" style="cursor:pointer">
                         <i class="ph ph-file-csv"></i>
                         {{ importItem.importFileName }}
                       </a>
@@ -468,6 +468,10 @@ export class ImportListComponent implements OnInit, OnDestroy {
 
   getStatusClass(status: ImportStatus): string {
     return this.importService.getStatusClass(status);
+  }
+
+  downloadFile(importItem: Import & { importFileName?: string }): void {
+    this.importService.downloadFile(importItem.id, importItem.importFileName);
   }
 
   getImportTypeLabel(type: string): string {

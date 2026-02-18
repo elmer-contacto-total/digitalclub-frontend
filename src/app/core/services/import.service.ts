@@ -227,6 +227,28 @@ export class ImportService {
   }
 
   /**
+   * Descargar archivo CSV original de una importación.
+   * Usa HttpClient (con auth headers) y dispara descarga via blob URL.
+   */
+  downloadFile(id: number, filename?: string): void {
+    this.http.get(`${this.baseUrl}/${id}/download`, { responseType: 'blob', observe: 'response' })
+      .subscribe({
+        next: (response) => {
+          const blob = response.body;
+          if (!blob) return;
+          const downloadFilename = filename || `import_${id}.csv`;
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = downloadFilename;
+          a.click();
+          window.URL.revokeObjectURL(url);
+        },
+        error: (err) => console.error('Error downloading file:', err)
+      });
+  }
+
+  /**
    * Descargar CSV de muestra
    * PARIDAD: Rails Admin::ImportsController#sample_csv
    */
