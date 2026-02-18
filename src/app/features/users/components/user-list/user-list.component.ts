@@ -720,7 +720,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.5);
-      z-index: 1000;
+      z-index: var(--z-modal-backdrop);
     }
 
     .modal-container {
@@ -728,7 +728,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      z-index: 1001;
+      z-index: var(--z-modal);
       width: 100%;
       max-width: 600px;
       max-height: 90vh;
