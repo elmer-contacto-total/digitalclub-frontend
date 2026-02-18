@@ -158,8 +158,8 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
     .role-badge.role-8 { background: var(--accent-subtle); color: var(--accent-default); }
     .status-badge.status-0 { background: var(--success-subtle); color: var(--success-text); }
     .status-badge.status-1 { background: var(--error-subtle); color: var(--error-text); }
-    .actions-col { width: 100px; text-align: center; }
-    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: var(--bg-subtle); color: var(--fg-muted); text-decoration: none; margin: 0 4px; }
+    .actions-col { width: 120px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: var(--bg-subtle); color: var(--fg-muted); text-decoration: none; }
     .action-btn:hover { background: var(--accent-default); color: white; }
     .table-footer { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; background: var(--table-header-bg); border-top: 1px solid var(--border-default); }
     .records-info { font-size: 14px; color: var(--fg-muted); }
