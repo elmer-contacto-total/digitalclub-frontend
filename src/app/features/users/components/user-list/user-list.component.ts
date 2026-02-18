@@ -82,7 +82,6 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
               <p>{{ searchTerm() ? 'No se encontraron usuarios' : 'No hay usuarios registrados' }}</p>
               @if (canCreateUsers() && !searchTerm()) {
                 <a routerLink="new" class="btn btn-primary">
-                  <i class="ph ph-plus"></i>
                   Crear primer usuario
                 </a>
               }
