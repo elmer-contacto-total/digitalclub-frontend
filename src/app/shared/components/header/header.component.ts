@@ -39,7 +39,6 @@ export class HeaderComponent implements OnDestroy {
   // State
   showUserMenu = signal(false);
   showNotifications = signal(false);
-  showLanguageMenu = signal(false);
   searchQuery = signal('');
 
   // Search state
@@ -64,13 +63,6 @@ export class HeaderComponent implements OnDestroy {
 
   // Mock notifications count (replace with real data)
   notificationsCount = signal(3);
-
-  // Language options
-  languages = [
-    { code: 'es', label: 'Español', flag: 'es' },
-    { code: 'en', label: 'English', flag: 'us' }
-  ];
-  currentLanguage = signal(this.languages[0]);
 
   constructor() {
     this.searchSubscription = this.searchSubject.pipe(
@@ -109,7 +101,6 @@ export class HeaderComponent implements OnDestroy {
     const willOpen = !this.showUserMenu();
     this.showUserMenu.set(willOpen);
     this.showNotifications.set(false);
-    this.showLanguageMenu.set(false);
     this.closeSearch();
     this.updateOverlayMode(willOpen);
   }
@@ -118,25 +109,8 @@ export class HeaderComponent implements OnDestroy {
     const willOpen = !this.showNotifications();
     this.showNotifications.set(willOpen);
     this.showUserMenu.set(false);
-    this.showLanguageMenu.set(false);
     this.closeSearch();
     this.updateOverlayMode(willOpen);
-  }
-
-  onToggleLanguageMenu(): void {
-    const willOpen = !this.showLanguageMenu();
-    this.showLanguageMenu.set(willOpen);
-    this.showUserMenu.set(false);
-    this.showNotifications.set(false);
-    this.closeSearch();
-    this.updateOverlayMode(willOpen);
-  }
-
-  onSelectLanguage(lang: typeof this.languages[0]): void {
-    this.currentLanguage.set(lang);
-    this.showLanguageMenu.set(false);
-    this.updateOverlayMode(false);
-    // TODO: Implement i18n language change
   }
 
   onToggleTheme(): void {
@@ -236,10 +210,9 @@ export class HeaderComponent implements OnDestroy {
   // --- Menus ---
 
   closeAllMenus(): void {
-    const hadOpenMenu = this.showUserMenu() || this.showNotifications() || this.showLanguageMenu() || this.showSearchResults();
+    const hadOpenMenu = this.showUserMenu() || this.showNotifications() || this.showSearchResults();
     this.showUserMenu.set(false);
     this.showNotifications.set(false);
-    this.showLanguageMenu.set(false);
     this.closeSearch();
     if (hadOpenMenu) {
       this.updateOverlayMode(false);

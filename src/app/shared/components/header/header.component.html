@@ -153,34 +153,6 @@
       }
     </div>
 
-    <!-- Language Switcher -->
-    <div class="header-dropdown">
-      <button
-        type="button"
-        class="btn btn-ghost header-icon-btn"
-        (click)="onToggleLanguageMenu()"
-        aria-label="Cambiar idioma"
-      >
-        <span class="flag-icon">{{ currentLanguage().flag === 'es' ? '🇪🇸' : '🇺🇸' }}</span>
-      </button>
-
-      @if (showLanguageMenu()) {
-        <div class="dropdown-menu dropdown-language">
-          @for (lang of languages; track lang.code) {
-            <button
-              type="button"
-              class="dropdown-item"
-              [class.active]="currentLanguage().code === lang.code"
-              (click)="onSelectLanguage(lang)"
-            >
-              <span class="flag-icon">{{ lang.flag === 'es' ? '🇪🇸' : '🇺🇸' }}</span>
-              <span>{{ lang.label }}</span>
-            </button>
-          }
-        </div>
-      }
-    </div>
-
     <!-- User Profile Dropdown -->
     <div class="header-dropdown">
       <button
