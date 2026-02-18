@@ -52,6 +52,8 @@ import { MessageInputComponent } from '../message-input/message-input.component'
           [capturedMedia]="capturedMedia()"
           [clientId]="clientId()"
           [isTyping]="isTyping()"
+          [isLoadingMore]="isLoadingMore()"
+          [hasMore]="hasMoreMessages()"
           (loadMore)="loadMoreMessages()"
         />
 
@@ -98,6 +100,11 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
   // Mutable signal for captured media (REST + WebSocket updates)
   capturedMedia = signal<CapturedMedia[]>([]);
 
+  // Pagination state for loading older messages
+  currentMessagesPage = signal(0);
+  hasMoreMessages = signal(true);
+  isLoadingMore = signal(false);
+
   constructor() {
     // Update messages and captured media when conversation detail changes
     effect(() => {
@@ -106,6 +113,10 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
         this.messages.set(detail.messages || []);
         this.capturedMedia.set(detail.capturedMedia || []);
         this.subscribeToTicket(detail.ticket?.id);
+        // Reset pagination state for new conversation
+        this.currentMessagesPage.set(detail.messagesPage ?? 0);
+        this.hasMoreMessages.set(detail.messagesHasMore ?? false);
+        this.isLoadingMore.set(false);
       }
     }, { allowSignalWrites: true });
   }
@@ -195,8 +206,24 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
   }
 
   loadMoreMessages(): void {
-    // Implement pagination for messages
-    // This would load older messages
+    if (this.isLoadingMore() || !this.hasMoreMessages()) return;
+    this.isLoadingMore.set(true);
+    const nextPage = this.currentMessagesPage() + 1;
+
+    this.chatService.loadOlderMessages(this.clientId(), nextPage)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (result) => {
+          // Prepend older messages before current ones
+          this.messages.update(current => [...result.messages, ...current]);
+          this.currentMessagesPage.set(nextPage);
+          this.hasMoreMessages.set(result.hasMore);
+          this.isLoadingMore.set(false);
+        },
+        error: () => {
+          this.isLoadingMore.set(false);
+        }
+      });
   }
 
   onMessageSent(message: Message): void {

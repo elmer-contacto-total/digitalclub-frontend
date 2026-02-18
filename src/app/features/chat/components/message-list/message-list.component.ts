@@ -40,12 +40,24 @@ interface TimelineGroup {
   styleUrl: './message-list.component.scss',
   template: `
     <div class="message-list" #scrollContainer (scroll)="onScroll($event)">
-      @if (timelineGroups().length === 0) {
+      @if (timelineGroups().length === 0 && !isLoadingMore()) {
         <div class="empty-state">
           <i class="ph ph-chat-text"></i>
           <p>No hay mensajes en esta conversación</p>
         </div>
       } @else {
+        <!-- Loading older messages indicator -->
+        @if (isLoadingMore()) {
+          <div class="loading-more">
+            <div class="spinner-sm"></div>
+            <span>Cargando mensajes anteriores...</span>
+          </div>
+        } @else if (!hasMore()) {
+          <div class="no-more-messages">
+            <span>Inicio de la conversación</span>
+          </div>
+        }
+
         @for (group of timelineGroups(); track group.date) {
           <div class="message-group">
             <!-- Date Separator -->
@@ -92,6 +104,8 @@ export class MessageListComponent implements AfterViewInit {
   capturedMedia = input<CapturedMedia[]>([]);
   clientId = input<number>(0);
   isTyping = input(false);
+  isLoadingMore = input(false);
+  hasMore = input(true);
 
   // Outputs
   loadMore = output<void>();
@@ -101,18 +115,30 @@ export class MessageListComponent implements AfterViewInit {
 
   private autoScrollEnabled = true;
   private lastItemCount = 0;
+  private previousScrollHeight = 0;
 
   constructor() {
     // Group timeline items by date when messages or capturedMedia change
     effect(() => {
       const msgs = this.messages();
       const media = this.capturedMedia();
+
+      // Save scroll height before updating to preserve position on prepend
+      if (this.scrollContainer?.nativeElement) {
+        this.previousScrollHeight = this.scrollContainer.nativeElement.scrollHeight;
+      }
+
       this.timelineGroups.set(this.groupTimelineByDate(msgs, media));
 
-      // Auto-scroll to bottom on new items
       const totalItems = msgs.length + media.length;
-      if (totalItems > this.lastItemCount && this.autoScrollEnabled) {
-        setTimeout(() => this.scrollToBottom(), 100);
+      if (totalItems > this.lastItemCount) {
+        if (this.autoScrollEnabled) {
+          // New messages at bottom → scroll to bottom
+          setTimeout(() => this.scrollToBottom(), 100);
+        } else {
+          // Older messages prepended → preserve scroll position
+          setTimeout(() => this.preserveScrollPosition(), 50);
+        }
       }
       this.lastItemCount = totalItems;
     }, { allowSignalWrites: true });
@@ -231,6 +257,20 @@ export class MessageListComponent implements AfterViewInit {
     if (this.scrollContainer?.nativeElement) {
       const element = this.scrollContainer.nativeElement;
       element.scrollTop = element.scrollHeight;
+    }
+  }
+
+  /**
+   * Preserve scroll position after prepending older messages.
+   * Adjusts scrollTop by the difference in scrollHeight so the user
+   * stays looking at the same messages they were viewing before.
+   */
+  private preserveScrollPosition(): void {
+    if (this.scrollContainer?.nativeElement) {
+      const element = this.scrollContainer.nativeElement;
+      const newScrollHeight = element.scrollHeight;
+      const heightDiff = newScrollHeight - this.previousScrollHeight;
+      element.scrollTop += heightDiff;
     }
   }
 }

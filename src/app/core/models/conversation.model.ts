@@ -143,6 +143,11 @@ export interface ConversationDetail {
 
   // Captured media from Electron (images and audios)
   capturedMedia?: CapturedMedia[];
+
+  // Pagination metadata for messages
+  messagesTotalCount?: number;
+  messagesPage?: number;
+  messagesHasMore?: boolean;
 }
 
 /**

@@ -59,6 +59,10 @@ interface ConversationApiResponse {
    * Captured media from Electron (images and audios)
    */
   capturedMedia?: any[];
+  // Pagination metadata for messages
+  messagesTotalCount?: number;
+  messagesPage?: number;
+  messagesHasMore?: boolean;
 }
 
 interface DataTablesResponse {
@@ -101,16 +105,38 @@ export class ChatService {
   /**
    * Get full conversation detail with client info, messages, CRM fields
    * PARIDAD: GET /app/messages?client_id=X&chat_view_type=Y (with expanded data)
+   * Paginated: loads last 100 messages by default
    */
   getConversationDetail(clientId: number, viewType: ChatViewType = 'clients'): Observable<ConversationDetail> {
     return this.api.get<ConversationApiResponse>('/app/messages', {
       params: {
         client_id: clientId,
         chat_view_type: viewType,
-        include_detail: true
+        include_detail: true,
+        pageSize: 100
       }
     }).pipe(
       map(response => this.mapConversationDetail(response))
+    );
+  }
+
+  /**
+   * Load older messages for pagination (scroll-up to load more)
+   * Returns messages in chronological ASC order (oldest first)
+   */
+  loadOlderMessages(clientId: number, page: number): Observable<{ messages: Message[]; hasMore: boolean }> {
+    return this.api.get<ConversationApiResponse>('/app/messages', {
+      params: {
+        client_id: clientId,
+        include_detail: true,
+        page,
+        pageSize: 100
+      }
+    }).pipe(
+      map(response => ({
+        messages: (response.messages || []).map((msg: any) => this.mapMessage(msg)),
+        hasMore: response.messagesHasMore || false
+      }))
     );
   }
 
@@ -364,7 +390,11 @@ export class ChatService {
         kpiName: ct.kpi_name || ct.kpiName
       })),
       // Captured media from Electron (images and audios)
-      capturedMedia: (response.capturedMedia || []).map((media: any) => this.mapCapturedMedia(media))
+      capturedMedia: (response.capturedMedia || []).map((media: any) => this.mapCapturedMedia(media)),
+      // Pagination metadata
+      messagesTotalCount: response.messagesTotalCount,
+      messagesPage: response.messagesPage ?? 0,
+      messagesHasMore: response.messagesHasMore ?? false
     };
   }
 
