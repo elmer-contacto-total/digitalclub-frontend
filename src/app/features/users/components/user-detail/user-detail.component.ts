@@ -4,7 +4,7 @@
  * PARIDAD: Rails admin/users/show.html.erb
  */
 import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule, Location } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
@@ -694,7 +694,6 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
 export class UserDetailComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  private location = inject(Location);
   private userService = inject(UserService);
   private authService = inject(AuthService);
 
@@ -797,7 +796,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   }
 
   goBack(): void {
-    this.location.back();
+    this.router.navigate(['/app/users']);
   }
 
   canEdit(): boolean {
