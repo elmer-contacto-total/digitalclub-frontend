@@ -139,23 +139,21 @@ export type WhatsAppMessageType = 'p2p' | 'centralized';
       }
 
       <!-- Custom Fields - Datos de Cobranza (PARIDAD RAILS: _header_custom_fields.html.erb) -->
-      <!-- Siempre visible encima del chat -->
+      <!-- Lista dinámica de todos los campos del JSON custom_fields -->
       @if (hasCustomFields()) {
         <div class="header-custom-fields">
-          <p class="custom-field-line">
-            <strong>Datos de Cobranza:</strong> {{ getCustomField('codigo') }}
-          </p>
-          <p class="custom-field-line">
-            <strong>Saldo Total:</strong> {{ getCustomField('saldo_total') }} |
-            <strong>Saldo Mora:</strong> {{ getCustomField('saldo_mora') }} |
-            <strong>Días mora:</strong> {{ getCustomField('dias_mora') }} |
-            <strong>Día Venc:</strong> {{ getCustomField('dia_venc') }}
-          </p>
-          <p class="custom-field-line">
-            <strong>Ult Acc:</strong> {{ getCustomField('ult_acc') }} |
-            <strong>Dist Dom:</strong> {{ getCustomField('dist_dom') }} |
-            <strong>Campaña:</strong> {{ getCustomField('list_tra') }}
-          </p>
+          <div class="custom-fields-title">
+            <i class="ph ph-database"></i>
+            <span>Datos de Cobranza</span>
+          </div>
+          <div class="custom-fields-grid">
+            @for (entry of customFieldEntries(); track entry.key) {
+              <div class="custom-field-item">
+                <span class="custom-field-label">{{ entry.label }}</span>
+                <span class="custom-field-value">{{ entry.value }}</span>
+              </div>
+            }
+          </div>
         </div>
       }
 
@@ -328,15 +326,21 @@ export class ChatHeaderComponent {
   }
 
   /**
-   * Get a specific custom field value
-   * PARIDAD RAILS: header_custom_fields["key"]
+   * Computed: all custom field entries as an iterable array
+   * Dynamically lists ALL fields from the customFields JSON
    */
-  getCustomField(key: string): string {
+  customFieldEntries = computed(() => {
     const cf = this.customFields();
-    if (!cf || cf[key] === undefined || cf[key] === null) {
-      return '';
-    }
-    return String(cf[key]);
+    if (!cf) return [];
+    return Object.entries(cf).map(([key, value]) => ({
+      key,
+      label: this.formatFieldLabel(key),
+      value: value !== null && value !== undefined ? String(value) : '-'
+    }));
+  });
+
+  private formatFieldLabel(key: string): string {
+    return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   }
 
   /**
