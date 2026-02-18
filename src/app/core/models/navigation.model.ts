@@ -170,7 +170,8 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       id: 'tables',
       title: 'TABLAS',
       items: [
-        { id: 'users', label: 'Usuarios', icon: 'ph-users', route: '/app/users', badgeKey: 'usersCount' }
+        { id: 'users', label: 'Usuarios', icon: 'ph-users', route: '/app/users', badgeKey: 'usersCount' },
+        { id: 'imports', label: 'Importaciones', icon: 'ph-download', route: '/app/imports', badgeKey: 'importsCount' }
       ]
     },
     {
