@@ -211,7 +211,7 @@ export class UserService {
    */
   getAvailableManagers(role?: UserRole): Observable<PagedResponse<UserOption>> {
     let httpParams = new HttpParams();
-    if (role !== undefined) httpParams = httpParams.set('role', role.toString());
+    if (role != null) httpParams = httpParams.set('role', role.toString());
 
     return this.http.get<PagedResponse<UserOption>>(`${this.baseUrl}/available_managers`, { params: httpParams });
   }

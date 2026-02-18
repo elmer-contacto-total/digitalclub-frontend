@@ -30,7 +30,7 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
         <div class="header-content">
           <a [routerLink]="backUrl()" class="back-link">
             <i class="ph ph-arrow-left"></i>
-            Volver a usuarios
+            {{ isEditMode() ? 'Volver a usuario' : 'Volver a usuarios' }}
           </a>
           <h1>{{ isEditMode() ? 'Editar Usuario' : 'Nuevo Usuario' }}</h1>
         </div>
@@ -660,6 +660,7 @@ export class UserFormComponent implements OnInit {
     const id = this.route.snapshot.params['id'];
     if (id && id !== 'new') {
       this.userId.set(parseInt(id, 10));
+      this.backUrl.set(`/app/users/${id}`);
     }
 
     // Now initialize form with correct validators based on mode
