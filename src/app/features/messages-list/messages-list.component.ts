@@ -311,12 +311,11 @@ export class MessagesListComponent implements OnInit, OnDestroy {
 
     let params = new HttpParams()
       .set('direction', this.activeTab())
-      .set('draw', (this.currentPage + 1).toString())
-      .set('start', (this.currentPage * this.pageSize).toString())
-      .set('length', this.pageSize.toString());
+      .set('page', this.currentPage.toString())
+      .set('pageSize', this.pageSize.toString());
 
     if (this.searchTerm) {
-      params = params.set('search[value]', this.searchTerm);
+      params = params.set('search', this.searchTerm);
     }
 
     this.http.get<MessagesApiResponse>(`${environment.apiUrl}/app/messages`, { params })

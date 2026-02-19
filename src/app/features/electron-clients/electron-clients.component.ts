@@ -27,7 +27,7 @@ import {
 import { TicketCloseType } from '../../core/models/ticket.model';
 import { CannedMessageService, CannedMessage } from '../../core/services/canned-message.service';
 
-type ViewState = 'empty' | 'loading' | 'contact';
+type ViewState = 'empty' | 'loading' | 'contact' | 'not-found';
 
 @Component({
   selector: 'app-electron-clients',
@@ -208,9 +208,9 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           this.loadActionHistoryAuto(result.registered.id);
         }
       } else if (processedPhone) {
-        // No contact found in backend, but we have a phone - show local contact state
+        // No contact found in backend - show info message
         this.contact.set(null);
-        this.viewState.set('contact');
+        this.viewState.set('not-found');
         this.selectedLabel.set(undefined);
         this.notesField.set('');
 

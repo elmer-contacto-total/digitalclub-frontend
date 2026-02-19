@@ -48,6 +48,19 @@
         </div>
       }
 
+      <!-- Not Found State -->
+      @if (viewState() === 'not-found') {
+        <div class="empty-state">
+          <div class="empty-content">
+            <div class="empty-icon">
+              <i class="ph ph-user-minus"></i>
+            </div>
+            <h3>Contacto no registrado</h3>
+            <p>El numero {{ displayPhone() }} no esta asociado a ningun cliente</p>
+          </div>
+        </div>
+      }
+
       <!-- Contact Info -->
       @if (viewState() === 'contact') {
         <div class="contact-info">
