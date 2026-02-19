@@ -83,8 +83,8 @@ export class LoginAsService {
    */
   loginAs(userId: number): Observable<LoginAsApiResponse> {
     // Store current user/token before switching
-    const currentToken = this.storage.getString('token');
-    const currentUserStr = this.storage.getString('user');
+    const currentToken = this.storage.getString('auth_token');
+    const currentUserStr = this.storage.getString('current_user');
 
     if (currentToken && currentUserStr) {
       this.storage.setString(ORIGINAL_TOKEN_KEY, currentToken);
@@ -113,8 +113,8 @@ export class LoginAsService {
           };
 
           // Update token and user
-          this.storage.setString('token', response.token);
-          this.storage.setString('user', JSON.stringify(currentUser));
+          this.storage.setString('auth_token', response.token);
+          this.storage.set('current_user', currentUser);
 
           console.log('[LoginAs] Impersonation successful, new user:', currentUser.email, 'role:', currentUser.role);
 
@@ -173,8 +173,8 @@ export class LoginAsService {
           };
 
           // Restore original token and user
-          this.storage.setString('token', response.token);
-          this.storage.setString('user', JSON.stringify(currentUser));
+          this.storage.setString('auth_token', response.token);
+          this.storage.set('current_user', currentUser);
 
           console.log('[LoginAs] Returned to original user:', currentUser.email);
 
@@ -209,7 +209,7 @@ export class LoginAsService {
    */
   private checkImpersonationState(): void {
     const originalUserStr = this.storage.getString(ORIGINAL_USER_KEY);
-    const currentUserStr = this.storage.getString('user');
+    const currentUserStr = this.storage.getString('current_user');
 
     if (originalUserStr && currentUserStr) {
       try {
