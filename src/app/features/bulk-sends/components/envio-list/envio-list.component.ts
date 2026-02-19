@@ -129,12 +129,12 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                         <i class="ph ph-pause"></i>
                       </button>
                     }
-                    @if (bs.status === 'PENDING' && electronService.isElectron && isAssignedToMe(bs)) {
+                    @if (bs.status === 'PENDING' && electronService.isElectron && isAssignedToMe(bs) && isAgent()) {
                       <button class="action-btn success" (click)="start(bs)" title="Iniciar">
                         <i class="ph ph-play"></i>
                       </button>
                     }
-                    @if (bs.status === 'PAUSED') {
+                    @if (bs.status === 'PAUSED' && isAgent()) {
                       <button class="action-btn success" (click)="resume(bs)" title="Reanudar">
                         <i class="ph ph-play"></i>
                       </button>
@@ -286,6 +286,11 @@ export class EnvioListComponent implements OnInit, OnDestroy {
     return role === UserRole.SUPER_ADMIN || role === UserRole.ADMIN ||
            role === UserRole.MANAGER_LEVEL_1 || role === UserRole.MANAGER_LEVEL_2 ||
            role === UserRole.MANAGER_LEVEL_3 || role === UserRole.MANAGER_LEVEL_4;
+  }
+
+  isAgent(): boolean {
+    const user = this.authService.currentUser();
+    return !!user && user.role === UserRole.AGENT;
   }
 
   canCreateSends(): boolean {

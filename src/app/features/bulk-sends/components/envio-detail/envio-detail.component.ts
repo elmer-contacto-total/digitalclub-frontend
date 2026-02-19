@@ -6,6 +6,7 @@ import { BulkSendService, BulkSendDetail, BulkSendRecipient } from '../../../../
 import { ElectronService } from '../../../../core/services/electron.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { WebSocketService } from '../../../../core/services/websocket.service';
+import { UserRole } from '../../../../core/models/user.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
@@ -79,12 +80,12 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                 <i class="ph ph-pause"></i> Pausar
               </button>
             }
-            @if (detail()!.status === 'PAUSED') {
+            @if (detail()!.status === 'PAUSED' && isAgent()) {
               <button class="btn btn-success" (click)="resume()">
                 <i class="ph ph-play"></i> Reanudar
               </button>
             }
-            @if (detail()!.status === 'PENDING' && electronService.isElectron && isAssignedAgent()) {
+            @if (detail()!.status === 'PENDING' && electronService.isElectron && isAssignedAgent() && isAgent()) {
               <button class="btn btn-primary" (click)="startSending()" [disabled]="isStarting()">
                 @if (isStarting()) {
                   <i class="ph ph-spinner ph-spin"></i> Iniciando...
@@ -300,6 +301,11 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
   isStarting = signal(false);
   detail = signal<BulkSendDetail | null>(null);
   recipientPage = signal(0);
+
+  isAgent(): boolean {
+    const user = this.authService.currentUser();
+    return !!user && user.role === UserRole.AGENT;
+  }
 
   isAssignedAgent(): boolean {
     const d = this.detail();
