@@ -332,7 +332,7 @@ export class WebSocketService implements OnDestroy {
   subscribeToBulkSendUpdates(clientId: number): () => void {
     this.pendingBulkSendClientId = clientId;
 
-    if (this.stompClient?.active) {
+    if (this.stompClient?.connected) {
       this.doSubscribeBulkSend(clientId);
     }
 
@@ -348,7 +348,7 @@ export class WebSocketService implements OnDestroy {
   }
 
   private doSubscribeBulkSend(clientId: number): void {
-    if (this.bulkSendStompSub || !this.stompClient?.active) return;
+    if (this.bulkSendStompSub || !this.stompClient?.connected) return;
 
     const sub = this.stompClient.subscribe(
       `/topic/client.${clientId}.bulk_sends`,
