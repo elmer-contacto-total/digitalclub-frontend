@@ -765,6 +765,7 @@ export class UserFormComponent implements OnInit {
       firstName: user.firstName || '',
       lastName: user.lastName || '',
       email: user.email || '',
+      phoneCountryCode: '51',
       phone: user.phone || '',
       importString: (user as any).importString || '',
       role: roleValue,
@@ -826,6 +827,13 @@ export class UserFormComponent implements OnInit {
     this.avatarPreview.set(null);
   }
 
+  private buildFullPhone(): string {
+    const code = (this.form.value.phoneCountryCode || '').replace(/[^0-9]/g, '');
+    const phone = (this.form.value.phone || '').replace(/[^0-9]/g, '');
+    if (!phone) return '';
+    return code ? `${code}${phone}` : phone;
+  }
+
   onSubmit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -847,7 +855,7 @@ export class UserFormComponent implements OnInit {
       email: this.form.value.email,
       firstName: this.form.value.firstName,
       lastName: this.form.value.lastName,
-      phone: this.form.value.phone || '',
+      phone: this.buildFullPhone(),
       password: this.form.value.password,
       role: parseInt(this.form.value.role, 10),
       managerId: this.form.value.managerId || undefined,
@@ -885,7 +893,7 @@ export class UserFormComponent implements OnInit {
     const request: UpdateUserRequest = {
       firstName: this.form.value.firstName,
       lastName: this.form.value.lastName,
-      phone: this.form.value.phone || '',
+      phone: this.buildFullPhone(),
       role: parseInt(this.form.value.role, 10),
       status: parseInt(this.form.value.status, 10),
       managerId: this.form.value.managerId || undefined,
