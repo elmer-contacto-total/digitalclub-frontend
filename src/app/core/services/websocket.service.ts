@@ -19,7 +19,7 @@ export type WebSocketStatus = 'disconnected' | 'connecting' | 'connected' | 'rec
  * Message received via WebSocket
  */
 export interface WsMessage {
-  type: 'NEW_MESSAGE' | 'MESSAGE_READ' | 'TYPING' | 'ONLINE_STATUS' | 'TICKET_UPDATE' | 'ALERT' | 'CAPTURED_MEDIA' | 'CAPTURED_MEDIA_DELETED';
+  type: 'NEW_MESSAGE' | 'MESSAGE_READ' | 'TYPING' | 'ONLINE_STATUS' | 'TICKET_UPDATE' | 'ALERT' | 'CAPTURED_MEDIA' | 'CAPTURED_MEDIA_DELETED' | 'BULK_SEND_UPDATE';
   payload: unknown;
 }
 
@@ -93,6 +93,18 @@ export interface WsCapturedMediaPayload {
   deletedAt?: string | null;
 }
 
+/**
+ * Bulk send update payload (from backend WebSocket broadcast)
+ */
+export interface WsBulkSendUpdatePayload {
+  bulk_send_id: number;
+  status: string;
+  sent_count: number;
+  failed_count: number;
+  total_recipients: number;
+  progress_percent: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -121,6 +133,7 @@ export class WebSocketService implements OnDestroy {
   private alertSubject = new Subject<WsAlertPayload>();
   private capturedMediaSubject = new Subject<WsCapturedMediaPayload>();
   private capturedMediaDeletedSubject = new Subject<WsCapturedMediaPayload>();
+  private bulkSendUpdateSubject = new Subject<WsBulkSendUpdatePayload>();
 
   // Public observables
   readonly messages$ = this.messageSubject.asObservable();
@@ -130,6 +143,7 @@ export class WebSocketService implements OnDestroy {
   readonly alerts$ = this.alertSubject.asObservable();
   readonly capturedMedia$ = this.capturedMediaSubject.asObservable();
   readonly capturedMediaDeleted$ = this.capturedMediaDeletedSubject.asObservable();
+  readonly bulkSendUpdates$ = this.bulkSendUpdateSubject.asObservable();
 
   /**
    * Connect to WebSocket server
@@ -310,6 +324,39 @@ export class WebSocketService implements OnDestroy {
   }
 
   /**
+   * Subscribe to bulk send updates for a client
+   * PARIDAD SPRING BOOT: /topic/client.{clientId}.bulk_sends
+   */
+  subscribeToBulkSendUpdates(clientId: number): () => void {
+    if (!this.stompClient?.active) {
+      console.warn('Cannot subscribe: WebSocket not connected');
+      return () => {};
+    }
+
+    const sub = this.stompClient.subscribe(
+      `/topic/client.${clientId}.bulk_sends`,
+      (message: IMessage) => {
+        try {
+          const data = JSON.parse(message.body);
+          const payload = (data.data || data) as WsBulkSendUpdatePayload;
+          this.bulkSendUpdateSubject.next(payload);
+        } catch (e) {
+          console.error('Failed to parse bulk send update:', e);
+        }
+      }
+    );
+    this.subscriptions.push(sub);
+
+    return () => {
+      sub.unsubscribe();
+      const index = this.subscriptions.indexOf(sub);
+      if (index > -1) {
+        this.subscriptions.splice(index, 1);
+      }
+    };
+  }
+
+  /**
    * Send a chat message via WebSocket
    * PARIDAD SPRING BOOT: @MessageMapping("/chat.send")
    */
@@ -467,6 +514,10 @@ export class WebSocketService implements OnDestroy {
           this.capturedMediaDeletedSubject.next(data.payload as WsCapturedMediaPayload);
           break;
 
+        case 'BULK_SEND_UPDATE':
+          this.bulkSendUpdateSubject.next(data.payload as WsBulkSendUpdatePayload);
+          break;
+
         default:
           // For messages without type wrapper (direct message payload)
           if ((data as any).message || (data as any).content) {
@@ -492,5 +543,6 @@ export class WebSocketService implements OnDestroy {
     this.alertSubject.complete();
     this.capturedMediaSubject.complete();
     this.capturedMediaDeletedSubject.complete();
+    this.bulkSendUpdateSubject.complete();
   }
 }

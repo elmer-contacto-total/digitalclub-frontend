@@ -5,6 +5,7 @@ import { Subject, interval, takeUntil, switchMap, filter } from 'rxjs';
 import { BulkSendService, BulkSendDetail, BulkSendRecipient } from '../../../../core/services/bulk-send.service';
 import { ElectronService } from '../../../../core/services/electron.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { WebSocketService } from '../../../../core/services/websocket.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
@@ -288,9 +289,11 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
   bulkSendService = inject(BulkSendService);
   electronService = inject(ElectronService);
   private authService = inject(AuthService);
+  private wsService = inject(WebSocketService);
   private toast = inject(ToastService);
   private route = inject(ActivatedRoute);
   private destroy$ = new Subject<void>();
+  private unsubBulkSendWs: (() => void) | null = null;
 
   bulkSendId = 0;
   isLoading = signal(false);
@@ -311,8 +314,26 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
     this.bulkSendId = Number(this.route.snapshot.paramMap.get('id'));
     this.loadDetail();
 
-    // Poll every 3s while processing
-    interval(3000).pipe(
+    // Subscribe to real-time bulk send updates via WebSocket
+    this.wsService.connect();
+    const clientId = this.authService.currentUser()?.clientId;
+    if (clientId) {
+      this.unsubBulkSendWs = this.wsService.subscribeToBulkSendUpdates(clientId);
+    }
+    this.wsService.bulkSendUpdates$.pipe(takeUntil(this.destroy$)).subscribe(update => {
+      if (update.bulk_send_id === this.bulkSendId) {
+        this.detail.update(d => d ? {
+          ...d,
+          sent_count: update.sent_count,
+          failed_count: update.failed_count,
+          progress_percent: update.progress_percent,
+          status: update.status
+        } : d);
+      }
+    });
+
+    // Fallback poll every 15s (in case of temporary WS disconnection)
+    interval(15000).pipe(
       takeUntil(this.destroy$),
       filter(() => {
         const d = this.detail();
@@ -325,6 +346,7 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.unsubBulkSendWs?.();
     this.destroy$.next();
     this.destroy$.complete();
   }

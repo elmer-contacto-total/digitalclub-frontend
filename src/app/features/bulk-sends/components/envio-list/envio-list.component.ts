@@ -5,6 +5,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { BulkSendService, BulkSend } from '../../../../core/services/bulk-send.service';
 import { ElectronService } from '../../../../core/services/electron.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { WebSocketService } from '../../../../core/services/websocket.service';
 import { UserRole } from '../../../../core/models/user.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
@@ -263,9 +264,11 @@ export class EnvioListComponent implements OnInit, OnDestroy {
   bulkSendService = inject(BulkSendService);
   electronService = inject(ElectronService);
   private authService = inject(AuthService);
+  private wsService = inject(WebSocketService);
   private toast = inject(ToastService);
   private router = inject(Router);
   private destroy$ = new Subject<void>();
+  private unsubBulkSendWs: (() => void) | null = null;
 
   isLoading = signal(false);
   loadError = signal('');
@@ -293,9 +296,25 @@ export class EnvioListComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadBulkSends();
+
+    // Subscribe to real-time bulk send updates via WebSocket
+    this.wsService.connect();
+    const clientId = this.authService.currentUser()?.clientId;
+    if (clientId) {
+      this.unsubBulkSendWs = this.wsService.subscribeToBulkSendUpdates(clientId);
+    }
+    this.wsService.bulkSendUpdates$.pipe(takeUntil(this.destroy$)).subscribe(update => {
+      this.bulkSends.update(list => list.map(bs => {
+        if (bs.id === update.bulk_send_id) {
+          return { ...bs, sent_count: update.sent_count, failed_count: update.failed_count, progress_percent: update.progress_percent, status: update.status };
+        }
+        return bs;
+      }));
+    });
   }
 
   ngOnDestroy(): void {
+    this.unsubBulkSendWs?.();
     this.destroy$.next();
     this.destroy$.complete();
   }
