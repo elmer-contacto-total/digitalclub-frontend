@@ -1104,6 +1104,7 @@ const MEDIA_CAPTURE_SCRIPT = `
     if (!contactPanel) {
       const allPanels = document.querySelectorAll('[data-testid*="drawer"], [data-testid*="panel"], [data-testid*="info"]');
       for (const panel of allPanels) {
+        if (panel.closest('#main')) continue; // Skip elements inside chat/message area
         const text = panel.textContent || '';
         if (/\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/.test(text)) {
           contactPanel = panel;
@@ -1119,6 +1120,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       let bestScore = 0;
 
       for (const div of allDivs) {
+        if (div.closest('#main')) continue; // Skip message area divs
         const rect = div.getBoundingClientRect();
         const text = div.textContent || '';
 
