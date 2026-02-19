@@ -203,6 +203,7 @@ export class BulkSendService {
     const labels: Record<string, string> = {
       'PENDING': 'Pendiente',
       'PROCESSING': 'En proceso',
+      'PERIODIC_PAUSE': 'Pausa periódica',
       'PAUSED': 'Pausado',
       'COMPLETED': 'Completado',
       'CANCELLED': 'Cancelado',
@@ -215,6 +216,7 @@ export class BulkSendService {
     const classes: Record<string, string> = {
       'PENDING': 'badge-warning',
       'PROCESSING': 'badge-info',
+      'PERIODIC_PAUSE': 'badge-warning',
       'PAUSED': 'badge-secondary',
       'COMPLETED': 'badge-success',
       'CANCELLED': 'badge-dark',

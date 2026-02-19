@@ -124,7 +124,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                     <a [routerLink]="['/app/bulk_sends', bs.id]" class="action-btn" title="Ver detalle">
                       <i class="ph ph-eye"></i>
                     </a>
-                    @if (bs.status === 'PROCESSING') {
+                    @if (bs.status === 'PROCESSING' || bs.status === 'PERIODIC_PAUSE') {
                       <button class="action-btn warn" (click)="pause(bs)" title="Pausar">
                         <i class="ph ph-pause"></i>
                       </button>
@@ -139,7 +139,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                         <i class="ph ph-play"></i>
                       </button>
                     }
-                    @if (bs.status === 'PROCESSING' || bs.status === 'PAUSED' || bs.status === 'PENDING') {
+                    @if (bs.status === 'PROCESSING' || bs.status === 'PERIODIC_PAUSE' || bs.status === 'PAUSED' || bs.status === 'PENDING') {
                       <button class="action-btn danger" (click)="cancel(bs)" title="Cancelar">
                         <i class="ph ph-x"></i>
                       </button>
@@ -304,12 +304,17 @@ export class EnvioListComponent implements OnInit, OnDestroy {
       this.unsubBulkSendWs = this.wsService.subscribeToBulkSendUpdates(clientId);
     }
     this.wsService.bulkSendUpdates$.pipe(takeUntil(this.destroy$)).subscribe(update => {
-      this.bulkSends.update(list => list.map(bs => {
-        if (bs.id === update.bulk_send_id) {
-          return { ...bs, sent_count: update.sent_count, failed_count: update.failed_count, progress_percent: update.progress_percent, status: update.status };
-        }
-        return bs;
-      }));
+      const exists = this.bulkSends().some(bs => bs.id === update.bulk_send_id);
+      if (exists) {
+        this.bulkSends.update(list => list.map(bs => {
+          if (bs.id === update.bulk_send_id) {
+            return { ...bs, sent_count: update.sent_count, failed_count: update.failed_count, progress_percent: update.progress_percent, status: update.status };
+          }
+          return bs;
+        }));
+      } else {
+        this.loadBulkSends();
+      }
     });
   }
 

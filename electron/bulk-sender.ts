@@ -548,6 +548,9 @@ export class BulkSender {
         let remainingSec = this.rules.pause_duration_minutes * 60;
         console.log(`[BulkSender] Periodic pause: ${this.rules.pause_duration_minutes} minutes`);
 
+        // Notify backend so status is visible to other users in real-time
+        await this.notifyBackend('periodic_pause');
+
         // Hide WhatsApp overlay — allow user interaction during pause
         await this.hideOverlay();
 
@@ -578,8 +581,9 @@ export class BulkSender {
         }
 
         // If interrupted by cancel/pause/session-loss, the main loop will detect it
-        // If finished naturally, restore overlay and emit end of periodic pause
+        // If finished naturally, restore overlay and notify backend
         if (!this.isPaused && !this.isCancelled && !sessionLostDuringPause) {
+          await this.notifyBackend('periodic_resume');
           await this.showOverlay();
           if (this.onOverlayUpdate) {
             this.onOverlayUpdate({
@@ -1563,7 +1567,7 @@ export class BulkSender {
     }
   }
 
-  private async notifyBackend(action: 'pause' | 'resume' | 'cancel'): Promise<void> {
+  private async notifyBackend(action: 'pause' | 'resume' | 'cancel' | 'periodic_pause' | 'periodic_resume'): Promise<void> {
     if (!this.bulkSendId) {
       console.warn(`[BulkSender] bulkSendId is null, skipping notifyBackend(${action})`);
       return;
