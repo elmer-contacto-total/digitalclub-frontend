@@ -6,7 +6,7 @@ import { ChatSelectedEvent, PhoneDetectedEvent } from '../models/crm-contact.mod
  * State of the bulk send process, pushed from Electron main process
  */
 export interface BulkSendState {
-  state: 'idle' | 'running' | 'paused' | 'completed' | 'cancelled' | 'error';
+  state: 'idle' | 'running' | 'pausing' | 'paused' | 'completed' | 'cancelled' | 'error';
   sentCount: number;
   failedCount: number;
   totalRecipients: number;

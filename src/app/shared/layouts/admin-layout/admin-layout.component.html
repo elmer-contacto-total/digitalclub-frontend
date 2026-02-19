@@ -55,6 +55,10 @@
           <div class="bulk-send-icon bulk-send-icon-cancel"><i class="ph ph-x-circle"></i></div>
           <h3>Envío cancelado</h3>
           <p class="bulk-send-phone">{{ bulkSendState().sentCount }} de {{ bulkSendState().totalRecipients }} enviados</p>
+        } @else if (bulkSendState().state === 'pausing') {
+          <div class="bulk-send-icon"><i class="ph ph-hourglass"></i></div>
+          <h3>Pausando envío...</h3>
+          <p class="bulk-send-phone">Esperando que termine el mensaje actual</p>
         } @else {
           <div class="bulk-send-icon"><i class="ph ph-paper-plane-tilt"></i></div>
           <h3>Envío masivo pausado</h3>
@@ -74,17 +78,11 @@
             <button class="bulk-send-btn bulk-send-btn-pause" (click)="pauseBulkSend()">
               <i class="ph ph-pause"></i> Pausar
             </button>
-            <button class="bulk-send-btn bulk-send-btn-cancel" (click)="cancelBulkSend()">
-              <i class="ph ph-x"></i> Cancelar
-            </button>
           </div>
         } @else if (bulkSendState().state === 'paused') {
           <div class="bulk-send-actions">
             <button class="bulk-send-btn bulk-send-btn-resume" (click)="dismissBulkSendOverlay()">
               <i class="ph ph-x-circle"></i> Cerrar
-            </button>
-            <button class="bulk-send-btn bulk-send-btn-cancel" (click)="cancelBulkSend()">
-              <i class="ph ph-x"></i> Cancelar
             </button>
           </div>
         }

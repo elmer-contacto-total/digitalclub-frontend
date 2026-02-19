@@ -20,7 +20,7 @@ export interface BulkSendRules {
 
 export interface BulkSenderStatus {
   bulkSendId: number | null;
-  state: 'idle' | 'running' | 'paused' | 'cancelled' | 'completed' | 'error';
+  state: 'idle' | 'running' | 'pausing' | 'paused' | 'cancelled' | 'completed' | 'error';
   sentCount: number;
   failedCount: number;
   totalRecipients: number;
@@ -55,7 +55,7 @@ export class BulkSender {
   private whatsappView: BrowserView | null = null;
   private onOverlayUpdate: OverlayUpdateCallback | null = null;
 
-  private _state: 'idle' | 'running' | 'paused' | 'cancelled' | 'completed' | 'error' = 'idle';
+  private _state: 'idle' | 'running' | 'pausing' | 'paused' | 'cancelled' | 'completed' | 'error' = 'idle';
   private sentCount = 0;
   private failedCount = 0;
   private totalRecipients = 0;
@@ -225,10 +225,9 @@ export class BulkSender {
   pause(): void {
     console.log(`[BulkSender] Pausing bulk send ${this.bulkSendId}`);
     this.isPaused = true;
-    this._state = 'paused';
-    this.notifyBackend('pause');
+    this._state = 'pausing';
     this.emitOverlayUpdate();
-    // Do NOT hide overlay — it stays visible with "Paused" state so user can resume
+    // Don't notify backend yet — wait until current send completes in processLoop
   }
 
   async resume(): Promise<{ success: boolean; error?: string }> {
@@ -312,6 +311,7 @@ export class BulkSender {
 
       if (this.isPaused) {
         this._state = 'paused';
+        this.notifyBackend('pause');
         this.emitOverlayUpdate();
         console.log(`[BulkSender] Bulk send ${this.bulkSendId} paused`);
         return;

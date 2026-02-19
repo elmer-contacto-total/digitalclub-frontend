@@ -87,7 +87,7 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
           }
 
           if ((state.state === 'completed' || state.state === 'cancelled')
-              && (prevState === 'running' || prevState === 'paused')) {
+              && (prevState === 'running' || prevState === 'pausing' || prevState === 'paused')) {
             // Keep overlay visible briefly to show completion
             this.bulkSendActive.set(true);
 
@@ -105,6 +105,8 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
             }, 3000);
           } else if (state.state === 'running') {
             this.bulkSendOverlayDismissed.set(false);
+            this.bulkSendActive.set(true);
+          } else if (state.state === 'pausing') {
             this.bulkSendActive.set(true);
           } else if (state.state === 'paused') {
             if (!this.bulkSendOverlayDismissed()) {
