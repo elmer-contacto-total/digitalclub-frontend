@@ -605,6 +605,9 @@ export class BulkSender {
     const headerStr = String(headerInfo);
     if (!headerStr) return { match: false, actual: 'no_header' };
     const headerDigits = headerStr.replace(/\D/g, '');
+    // If header has fewer than 8 digits, it's a saved contact name (e.g. "Juan Pérez")
+    // — can't verify by phone, trust the navigation
+    if (headerDigits.length < 8) return { match: true, actual: headerStr };
     return { match: headerDigits.includes(phoneSuffix), actual: headerStr };
   }
 
