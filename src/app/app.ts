@@ -1,5 +1,5 @@
 import { Component, inject, effect, OnInit } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet, NavigationError } from '@angular/router';
 import { ThemeService } from './core/services/theme.service';
 import { StorageService } from './core/services/storage.service';
 import { AuthService } from './core/services/auth.service';
@@ -12,6 +12,7 @@ import { AuthService } from './core/services/auth.service';
   styleUrl: './app.scss'
 })
 export class App implements OnInit {
+  private router = inject(Router);
   private themeService = inject(ThemeService);
   private storageService = inject(StorageService);
   private authService = inject(AuthService);
@@ -27,8 +28,28 @@ export class App implements OnInit {
   }
 
   ngOnInit(): void {
+    // Handle navigation errors (e.g., lazy-loaded chunk failures on reload)
+    this.handleNavigationErrors();
     // Validate authentication status on app initialization
     this.validateAuthentication();
+  }
+
+  /**
+   * Handle navigation errors (retry once on lazy-load chunk failures)
+   */
+  private handleNavigationErrors(): void {
+    let retried = false;
+    this.router.events.subscribe(event => {
+      if (event instanceof NavigationError) {
+        console.error('[App] Navigation error:', event.url, event.error);
+        // Retry navigation once to handle chunk loading failures on reload
+        if (!retried && event.url && event.url !== '/app/dashboard') {
+          retried = true;
+          console.log('[App] Retrying navigation to:', event.url);
+          setTimeout(() => this.router.navigateByUrl(event.url), 100);
+        }
+      }
+    });
   }
 
   /**
