@@ -293,12 +293,12 @@ interface SelectableUser {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 12px;
-      overflow: hidden;
     }
 
     .card-header {
       padding: 20px 24px;
       border-bottom: 1px solid var(--border-default);
+      border-radius: 12px 12px 0 0;
 
       h3 {
         margin: 0;
