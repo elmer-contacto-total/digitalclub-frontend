@@ -128,12 +128,21 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
 
               <div class="form-group">
                 <label for="phone">Teléfono</label>
-                <input
-                  id="phone"
-                  type="tel"
-                  formControlName="phone"
-                  placeholder="+51 999 999 999"
-                />
+                <div class="phone-input-row">
+                  <input
+                    id="phoneCountryCode"
+                    type="text"
+                    formControlName="phoneCountryCode"
+                    class="phone-code-input"
+                    placeholder="51"
+                  />
+                  <input
+                    id="phone"
+                    type="tel"
+                    formControlName="phone"
+                    placeholder="999 999 999"
+                  />
+                </div>
               </div>
             </div>
 
@@ -465,6 +474,16 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
       }
     }
 
+    .phone-input-row {
+      display: flex;
+      gap: 8px;
+
+      .phone-code-input {
+        width: 70px;
+        flex-shrink: 0;
+      }
+    }
+
     .password-input {
       position: relative;
 
@@ -681,6 +700,7 @@ export class UserFormComponent implements OnInit {
       firstName: ['', Validators.required],
       lastName: ['', Validators.required],
       email: ['', [Validators.required, Validators.pattern(EMAIL_REGEX)]],
+      phoneCountryCode: ['51'],
       phone: [''],
       importString: [''],
       role: [null, Validators.required],

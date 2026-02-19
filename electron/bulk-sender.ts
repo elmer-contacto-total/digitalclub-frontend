@@ -544,7 +544,7 @@ export class BulkSender {
       }
 
       // Periodic pause (anti-ban) — interruptible, emits countdown
-      if (messagesSinceLastPause >= this.rules.pause_after_count) {
+      if (messagesSinceLastPause >= this.rules.pause_after_count && (this.sentCount + this.failedCount) < this.totalRecipients) {
         let remainingSec = this.rules.pause_duration_minutes * 60;
         console.log(`[BulkSender] Periodic pause: ${this.rules.pause_duration_minutes} minutes`);
 
