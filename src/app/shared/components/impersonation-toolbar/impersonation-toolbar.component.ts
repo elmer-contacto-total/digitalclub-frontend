@@ -17,131 +17,77 @@ import { ToastService } from '../../../core/services/toast.service';
   template: `
     @if (loginAsService.isImpersonating()) {
       <div class="impersonation-toolbar">
-        <div class="toolbar-content">
-          <div class="toolbar-info">
-            <i class="ph ph-user-switch"></i>
-            <span class="toolbar-text">
-              <strong>Modo de suplantación:</strong>
-              Sesionado como <strong>{{ loginAsService.impersonationState().currentUserName }}</strong>
-            </span>
-          </div>
-          <div class="toolbar-actions">
-            <span class="toolbar-hint">
-              Haga clic para volver a su sesión original
-            </span>
-            <button
-              type="button"
-              class="btn-return"
-              (click)="returnToAdmin()"
-              [disabled]="isReturning()">
-              @if (isReturning()) {
-                <i class="ph ph-spinner spinning"></i>
-                Volviendo...
-              } @else {
-                <i class="ph ph-arrow-u-up-left"></i>
-                Volver
-              }
-            </button>
-          </div>
-        </div>
+        <i class="ph ph-user-switch"></i>
+        <span class="toolbar-text">
+          Sesionado como <strong>{{ loginAsService.impersonationState().currentUserName }}</strong>
+        </span>
+        <button
+          type="button"
+          class="btn-return"
+          (click)="returnToAdmin()"
+          [disabled]="isReturning()">
+          @if (isReturning()) {
+            <i class="ph ph-spinner spinning"></i>
+            Volviendo...
+          } @else {
+            <i class="ph ph-arrow-u-up-left"></i>
+            Volver
+          }
+        </button>
       </div>
     }
   `,
   styles: [`
-    /* PARIDAD: Rails custom.scss .login-as-toolbar */
     .impersonation-toolbar {
-      position: relative;
-      z-index: 1050;
-      background: linear-gradient(135deg, #E53935, #F74747);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 36px;
+      z-index: calc(var(--z-header, 1030) + 5);
+      background: linear-gradient(135deg, #d32f2f, #e53935);
       color: white;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    .toolbar-content {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 10px 24px;
-      max-width: 100%;
-
-      @media (max-width: 768px) {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-        padding: 12px 16px;
-      }
-    }
-
-    .toolbar-info {
-      display: flex;
-      align-items: center;
+      justify-content: center;
       gap: 10px;
-      flex-wrap: wrap;
+      font-size: var(--text-sm, 12px);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      padding: 0 16px;
 
       i {
-        font-size: 20px;
+        font-size: 16px;
         flex-shrink: 0;
       }
-
-      .toolbar-text {
-        font-size: 14px;
-
-        strong {
-          font-weight: 600;
-        }
-
-        @media (max-width: 768px) {
-          font-size: 13px;
-        }
-      }
     }
 
-    .toolbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex-shrink: 0;
+    .toolbar-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
 
-      @media (max-width: 768px) {
-        justify-content: space-between;
-      }
-    }
-
-    .toolbar-hint {
-      font-size: 13px;
-      opacity: 0.9;
-      font-style: italic;
-
-      @media (max-width: 480px) {
-        display: none;
+      strong {
+        font-weight: 600;
       }
     }
 
     .btn-return {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 8px 16px;
-      background: white;
-      color: #E53935;
-      border: none;
-      border-radius: 6px;
-      font-size: 14px;
+      gap: 6px;
+      padding: 4px 12px;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 4px;
+      font-size: var(--text-sm, 12px);
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background 0.15s;
       white-space: nowrap;
 
       &:hover:not(:disabled) {
-        background: #f5f5f5;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      }
-
-      &:active:not(:disabled) {
-        transform: translateY(0);
+        background: rgba(255, 255, 255, 0.3);
       }
 
       &:disabled {
@@ -150,11 +96,10 @@ import { ToastService } from '../../../core/services/toast.service';
       }
 
       i {
-        font-size: 16px;
+        font-size: 14px;
       }
     }
 
-    /* Animation */
     @keyframes spin {
       to { transform: rotate(360deg); }
     }

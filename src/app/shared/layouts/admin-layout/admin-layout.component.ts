@@ -8,6 +8,7 @@ import { ImpersonationToolbarComponent } from '../../components/impersonation-to
 import { UpdateBannerComponent } from '../../components/update-banner/update-banner.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { ElectronService, BulkSendState } from '../../../core/services/electron.service';
+import { LoginAsService } from '../../../core/services/login-as.service';
 
 @Component({
   selector: 'app-admin-layout',
@@ -19,6 +20,9 @@ import { ElectronService, BulkSendState } from '../../../core/services/electron.
 export class AdminLayoutComponent implements OnInit, OnDestroy {
   private toastService = inject(ToastService);
   private electronService = inject(ElectronService);
+  private loginAsService = inject(LoginAsService);
+
+  isImpersonating = this.loginAsService.isImpersonating;
   private destroy$ = new Subject<void>();
 
   // State

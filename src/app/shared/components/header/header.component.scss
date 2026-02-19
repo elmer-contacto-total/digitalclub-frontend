@@ -10,7 +10,7 @@
   background: var(--header-bg);
   border-bottom: 1px solid var(--border-default);
   position: fixed;
-  top: 0;
+  top: var(--impersonation-bar-height, 0px);
   left: var(--sidebar-width);
   right: 0;
   z-index: var(--z-header);

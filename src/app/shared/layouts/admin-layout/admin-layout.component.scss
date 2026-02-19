@@ -2,9 +2,14 @@
 // PARIDAD: Rails admin.html.erb layout
 
 .admin-layout {
+  --impersonation-bar-height: 0px;
   min-height: 100vh;
   display: flex;
   background: var(--bg-base);
+
+  &.impersonation-active {
+    --impersonation-bar-height: 36px;
+  }
 }
 
 .main-wrapper {
@@ -12,7 +17,7 @@
   display: flex;
   flex-direction: column;
   margin-left: var(--sidebar-width);
-  padding-top: var(--header-height); // Space for fixed header
+  padding-top: calc(var(--header-height) + var(--impersonation-bar-height, 0px)); // Space for fixed header + impersonation bar
   transition: margin-left var(--duration-normal);
   min-height: 100vh;
 

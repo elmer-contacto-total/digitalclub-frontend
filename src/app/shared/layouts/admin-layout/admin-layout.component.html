@@ -1,5 +1,5 @@
 <!-- Admin Layout - PARIDAD: Rails admin.html.erb -->
-<div class="admin-layout" [class.sidebar-collapsed]="sidebarCollapsed()" [class.whatsapp-visible]="whatsappVisible()">
+<div class="admin-layout" [class.sidebar-collapsed]="sidebarCollapsed()" [class.whatsapp-visible]="whatsappVisible()" [class.impersonation-active]="isImpersonating()">
   <!-- Update Banner - Shows when app update is available -->
   <app-update-banner />
 
