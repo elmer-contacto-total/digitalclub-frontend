@@ -86,7 +86,7 @@ export class LoginAsService {
     const currentToken = this.storage.getString('auth_token');
     const currentUserStr = this.storage.getString('current_user');
 
-    if (currentToken && currentUserStr) {
+    if (currentToken && currentUserStr && !this.storage.getString(ORIGINAL_TOKEN_KEY)) {
       this.storage.setString(ORIGINAL_TOKEN_KEY, currentToken);
       this.storage.setString(ORIGINAL_USER_KEY, currentUserStr);
     }
