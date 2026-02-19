@@ -61,47 +61,56 @@ interface SelectableUser {
                   <span>Cargando usuarios...</span>
                 </div>
               } @else {
-                <!-- Search Filter -->
+                <!-- Searchable User Dropdown -->
                 <div class="form-group">
-                  <label for="search">
-                    <i class="ph ph-magnifying-glass"></i>
-                    Buscar usuario
-                  </label>
-                  <div class="search-wrapper">
-                    <i class="ph ph-magnifying-glass search-icon"></i>
-                    <input
-                      type="text"
-                      id="search"
-                      class="search-input"
-                      placeholder="Filtrar por nombre, email o cliente..."
-                      [(ngModel)]="searchTerm"
-                      (input)="filterUsers()">
-                    @if (searchTerm) {
-                      <button class="clear-btn" (click)="clearSearch()">
-                        <i class="ph ph-x"></i>
-                      </button>
-                    }
-                  </div>
-                </div>
-
-                <!-- User Dropdown -->
-                <div class="form-group">
-                  <label for="user-select">
+                  <label>
                     <i class="ph ph-user"></i>
                     Usuario a suplantar
                   </label>
-                  <select
-                    id="user-select"
-                    class="form-select"
-                    [(ngModel)]="selectedUserId"
-                    [disabled]="isProcessing()">
-                    <option [ngValue]="null">-- Seleccione un usuario --</option>
-                    @for (user of filteredUsers(); track user.id) {
-                      <option [ngValue]="user.id">
-                        {{ user.displayName }} ({{ user.roleName }})
-                      </option>
+                  <div class="combo-wrapper" [class.open]="dropdownOpen">
+                    <div class="combo-input-wrapper">
+                      <i class="ph ph-magnifying-glass combo-search-icon"></i>
+                      <input
+                        type="text"
+                        class="combo-input"
+                        placeholder="Buscar por nombre, email o cliente..."
+                        [(ngModel)]="searchTerm"
+                        (input)="filterUsers()"
+                        (focus)="openDropdown()"
+                        (keydown)="onKeydown($event)"
+                        [disabled]="isProcessing()"
+                        autocomplete="off">
+                      @if (searchTerm || selectedUserId) {
+                        <button class="combo-clear" (click)="clearSelection($event)" tabindex="-1">
+                          <i class="ph ph-x"></i>
+                        </button>
+                      }
+                      <i class="ph ph-caret-down combo-arrow" [class.rotated]="dropdownOpen"></i>
+                    </div>
+                    @if (dropdownOpen) {
+                      <div class="combo-dropdown">
+                        @if (filteredUsers().length === 0) {
+                          <div class="combo-empty">
+                            <i class="ph ph-magnifying-glass"></i>
+                            Sin resultados
+                          </div>
+                        } @else {
+                          @for (user of filteredUsers(); track user.id) {
+                            <div
+                              class="combo-option"
+                              [class.selected]="user.id === selectedUserId"
+                              [class.highlighted]="user.id === highlightedId"
+                              (mousedown)="selectUser(user, $event)">
+                              <div class="combo-option-main">
+                                <span class="combo-option-name">{{ user.displayName }}</span>
+                                <span class="combo-option-role">{{ user.roleName }}</span>
+                              </div>
+                            </div>
+                          }
+                        }
+                      </div>
                     }
-                  </select>
+                  </div>
                   <span class="hint">{{ filteredUsers().length }} usuario(s) disponible(s)</span>
                 </div>
 
@@ -358,10 +367,15 @@ interface SelectableUser {
       }
     }
 
-    .search-wrapper {
+    /* Searchable Combo Dropdown */
+    .combo-wrapper {
+      position: relative;
+    }
+
+    .combo-input-wrapper {
       position: relative;
 
-      .search-icon {
+      .combo-search-icon {
         position: absolute;
         left: 14px;
         top: 50%;
@@ -371,9 +385,9 @@ interface SelectableUser {
         pointer-events: none;
       }
 
-      .search-input {
+      .combo-input {
         width: 100%;
-        padding: 12px 40px 12px 42px;
+        padding: 12px 68px 12px 42px;
         background: var(--input-bg);
         border: 1px solid var(--input-border);
         border-radius: 8px;
@@ -390,52 +404,116 @@ interface SelectableUser {
         &::placeholder {
           color: var(--fg-subtle);
         }
+
+        &:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
       }
 
-      .clear-btn {
+      .combo-clear {
         position: absolute;
-        right: 10px;
+        right: 36px;
         top: 50%;
         transform: translateY(-50%);
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 24px;
-        height: 24px;
+        width: 22px;
+        height: 22px;
         border: none;
         border-radius: 4px;
         background: var(--bg-subtle);
         color: var(--fg-muted);
         cursor: pointer;
+        padding: 0;
 
         &:hover {
           background: var(--bg-muted);
           color: var(--fg-default);
         }
       }
+
+      .combo-arrow {
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--fg-muted);
+        font-size: 14px;
+        pointer-events: none;
+        transition: transform 0.15s;
+
+        &.rotated {
+          transform: translateY(-50%) rotate(180deg);
+        }
+      }
     }
 
-    .form-select {
-      width: 100%;
-      padding: 12px 14px;
-      background: var(--input-bg);
-      border: 1px solid var(--input-border);
+    .combo-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 280px;
+      overflow-y: auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border-default);
       border-radius: 8px;
-      font-size: 14px;
-      color: var(--fg-default);
+      box-shadow: var(--shadow-lg, 0 4px 12px rgba(0,0,0,0.15));
+      z-index: 100;
+    }
+
+    .combo-option {
+      padding: 10px 14px;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: background 0.1s;
 
-      &:focus {
-        outline: none;
-        border-color: var(--accent-default);
-        box-shadow: 0 0 0 3px var(--accent-subtle);
+      &:hover, &.highlighted {
+        background: var(--bg-subtle);
       }
 
-      &:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
+      &.selected {
+        background: var(--accent-subtle);
       }
+    }
+
+    .combo-option-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .combo-option-name {
+      font-size: 13px;
+      color: var(--fg-default);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .combo-option-role {
+      font-size: 11px;
+      color: var(--fg-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+      padding: 2px 8px;
+      background: var(--bg-subtle);
+      border-radius: 4px;
+    }
+
+    .combo-empty {
+      padding: 20px;
+      text-align: center;
+      color: var(--fg-muted);
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+
+      i { font-size: 20px; }
     }
 
     /* Selected User Preview */
@@ -705,6 +783,9 @@ export class LoginAsComponent implements OnInit, OnDestroy {
   // Form
   selectedUserId: number | null = null;
   searchTerm = '';
+  dropdownOpen = false;
+  highlightedId: number | null = null;
+  private clickOutsideHandler = (e: MouseEvent) => this.onClickOutside(e);
 
   // Computed
   selectedUser = computed(() => {
@@ -724,6 +805,7 @@ export class LoginAsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    document.removeEventListener('mousedown', this.clickOutsideHandler);
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -789,7 +871,82 @@ export class LoginAsComponent implements OnInit, OnDestroy {
     return `${clientName} | ${name}`;
   }
 
+  openDropdown(): void {
+    this.dropdownOpen = true;
+    document.addEventListener('mousedown', this.clickOutsideHandler);
+  }
+
+  closeDropdown(): void {
+    this.dropdownOpen = false;
+    this.highlightedId = null;
+    document.removeEventListener('mousedown', this.clickOutsideHandler);
+  }
+
+  private onClickOutside(e: MouseEvent): void {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.combo-wrapper')) {
+      this.closeDropdown();
+    }
+  }
+
+  selectUser(user: SelectableUser, event: MouseEvent): void {
+    event.preventDefault();
+    this.selectedUserId = user.id;
+    this.searchTerm = user.displayName;
+    this.closeDropdown();
+  }
+
+  clearSelection(event: MouseEvent): void {
+    event.stopPropagation();
+    this.selectedUserId = null;
+    this.searchTerm = '';
+    this.filteredUsers.set(this.allUsers());
+  }
+
+  onKeydown(event: KeyboardEvent): void {
+    const users = this.filteredUsers();
+    if (!users.length) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (!this.dropdownOpen) { this.openDropdown(); return; }
+      const idx = users.findIndex(u => u.id === this.highlightedId);
+      this.highlightedId = users[Math.min(idx + 1, users.length - 1)].id;
+      this.scrollToHighlighted();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const idx = users.findIndex(u => u.id === this.highlightedId);
+      this.highlightedId = users[Math.max(idx - 1, 0)].id;
+      this.scrollToHighlighted();
+    } else if (event.key === 'Enter' && this.highlightedId != null) {
+      event.preventDefault();
+      const user = users.find(u => u.id === this.highlightedId);
+      if (user) {
+        this.selectedUserId = user.id;
+        this.searchTerm = user.displayName;
+        this.closeDropdown();
+      }
+    } else if (event.key === 'Escape') {
+      this.closeDropdown();
+    }
+  }
+
+  private scrollToHighlighted(): void {
+    setTimeout(() => {
+      const el = document.querySelector('.combo-option.highlighted');
+      el?.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
   filterUsers(): void {
+    // When user types, clear selection since they're searching
+    if (this.selectedUserId) {
+      const selected = this.allUsers().find(u => u.id === this.selectedUserId);
+      if (selected && this.searchTerm !== selected.displayName) {
+        this.selectedUserId = null;
+      }
+    }
+
     if (!this.searchTerm.trim()) {
       this.filteredUsers.set(this.allUsers());
       return;
@@ -802,11 +959,8 @@ export class LoginAsComponent implements OnInit, OnDestroy {
         u.roleName.toLowerCase().includes(term)
       )
     );
-  }
 
-  clearSearch(): void {
-    this.searchTerm = '';
-    this.filteredUsers.set(this.allUsers());
+    if (!this.dropdownOpen) this.openDropdown();
   }
 
   loginAs(): void {
