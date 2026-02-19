@@ -115,6 +115,8 @@ export class WebSocketService implements OnDestroy {
   private subscriptions: StompSubscription[] = [];
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 10;
+  private pendingBulkSendClientId: number | null = null;
+  private bulkSendStompSub: StompSubscription | null = null;
 
   // State signals
   private _status = signal<WebSocketStatus>('disconnected');
@@ -324,14 +326,29 @@ export class WebSocketService implements OnDestroy {
   }
 
   /**
-   * Subscribe to bulk send updates for a client
-   * PARIDAD SPRING BOOT: /topic/client.{clientId}.bulk_sends
+   * Subscribe to bulk send updates for a client.
+   * Deferred: if not yet connected, stores the intent and subscribes in onConnect().
    */
   subscribeToBulkSendUpdates(clientId: number): () => void {
-    if (!this.stompClient?.active) {
-      console.warn('Cannot subscribe: WebSocket not connected');
-      return () => {};
+    this.pendingBulkSendClientId = clientId;
+
+    if (this.stompClient?.active) {
+      this.doSubscribeBulkSend(clientId);
     }
+
+    return () => {
+      this.pendingBulkSendClientId = null;
+      if (this.bulkSendStompSub) {
+        this.bulkSendStompSub.unsubscribe();
+        const index = this.subscriptions.indexOf(this.bulkSendStompSub);
+        if (index > -1) this.subscriptions.splice(index, 1);
+        this.bulkSendStompSub = null;
+      }
+    };
+  }
+
+  private doSubscribeBulkSend(clientId: number): void {
+    if (this.bulkSendStompSub || !this.stompClient?.active) return;
 
     const sub = this.stompClient.subscribe(
       `/topic/client.${clientId}.bulk_sends`,
@@ -346,14 +363,7 @@ export class WebSocketService implements OnDestroy {
       }
     );
     this.subscriptions.push(sub);
-
-    return () => {
-      sub.unsubscribe();
-      const index = this.subscriptions.indexOf(sub);
-      if (index > -1) {
-        this.subscriptions.splice(index, 1);
-      }
-    };
+    this.bulkSendStompSub = sub;
   }
 
   /**
@@ -432,6 +442,12 @@ export class WebSocketService implements OnDestroy {
 
       // Send online presence
       this.sendPresenceUpdate(true);
+    }
+
+    // Resubscribe to bulk send updates if requested before connection was ready
+    this.bulkSendStompSub = null;
+    if (this.pendingBulkSendClientId) {
+      this.doSubscribeBulkSend(this.pendingBulkSendClientId);
     }
 
     console.log('[WebSocket] Connected to STOMP server');
