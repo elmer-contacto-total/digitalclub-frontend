@@ -9,6 +9,7 @@ import { UpdateBannerComponent } from '../../components/update-banner/update-ban
 import { ToastService } from '../../../core/services/toast.service';
 import { ElectronService, BulkSendState } from '../../../core/services/electron.service';
 import { LoginAsService } from '../../../core/services/login-as.service';
+import { WebSocketService } from '../../../core/services/websocket.service';
 
 @Component({
   selector: 'app-admin-layout',
@@ -21,6 +22,7 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
   private toastService = inject(ToastService);
   private electronService = inject(ElectronService);
   private loginAsService = inject(LoginAsService);
+  private webSocketService = inject(WebSocketService);
 
   isImpersonating = this.loginAsService.isImpersonating;
   private destroy$ = new Subject<void>();
@@ -47,6 +49,9 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Connect WebSocket for real-time notifications
+    this.webSocketService.connect();
+
     // Listen for WhatsApp visibility changes from Electron
     if (this.electronService.isElectron) {
       this.electronService.whatsappVisible$
@@ -131,6 +136,7 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     clearTimeout(this.completionTimeout);
+    this.webSocketService.disconnect();
     this.destroy$.next();
     this.destroy$.complete();
   }

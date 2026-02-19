@@ -117,8 +117,8 @@
         aria-label="Notificaciones"
       >
         <i class="ph ph-bell"></i>
-        @if (notificationsCount() > 0) {
-          <span class="notification-badge">{{ notificationsCount() }}</span>
+        @if (unreadCount() > 0) {
+          <span class="notification-badge">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</span>
         }
       </button>
 
@@ -126,28 +126,35 @@
         <div class="dropdown-menu dropdown-notifications">
           <div class="dropdown-header">
             <span>Notificaciones</span>
-            <a routerLink="/app/alerts" class="dropdown-link" (click)="closeAllMenus()">Mostrar Todas</a>
+            <div class="dropdown-header-actions">
+              @if (unreadCount() > 0) {
+                <button type="button" class="dropdown-link" (click)="onMarkAllRead()">Marcar leídas</button>
+                <span class="dropdown-divider-inline">|</span>
+              }
+              <a routerLink="/app/alerts" class="dropdown-link" (click)="closeAllMenus()">Ver todas</a>
+            </div>
           </div>
           <div class="dropdown-body">
-            <!-- Sample notifications -->
-            <a class="notification-item" routerLink="/app/alerts" (click)="closeAllMenus()">
-              <div class="notification-icon bg-info">
-                <i class="ph ph-info"></i>
+            @if (recentAlerts().length === 0) {
+              <div class="notification-empty">
+                <i class="ph ph-bell-slash"></i>
+                <span>No hay notificaciones</span>
               </div>
-              <div class="notification-content">
-                <p class="notification-text">Nueva alerta del sistema</p>
-                <span class="notification-time">Hace 5 minutos</span>
-              </div>
-            </a>
-            <a class="notification-item" routerLink="/app/alerts" (click)="closeAllMenus()">
-              <div class="notification-icon bg-success">
-                <i class="ph ph-check"></i>
-              </div>
-              <div class="notification-content">
-                <p class="notification-text">Importación completada</p>
-                <span class="notification-time">Hace 1 hora</span>
-              </div>
-            </a>
+            } @else {
+              @for (alert of recentAlerts(); track alert.id) {
+                <a class="notification-item" [class.unread]="!alert.acknowledged"
+                   [routerLink]="alert.ticket_id ? '/app/tickets/' + alert.ticket_id : '/app/alerts'"
+                   (click)="closeAllMenus()">
+                  <div class="notification-icon" [ngClass]="getAlertIconBg(alert)">
+                    <i class="ph" [ngClass]="getAlertIcon(alert)"></i>
+                  </div>
+                  <div class="notification-content">
+                    <p class="notification-text">{{ alert.title }}</p>
+                    <span class="notification-time">{{ getTimeAgo(alert.created_at) }}</span>
+                  </div>
+                </a>
+              }
+            }
           </div>
         </div>
       }

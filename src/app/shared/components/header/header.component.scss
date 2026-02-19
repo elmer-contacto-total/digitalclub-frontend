@@ -480,7 +480,37 @@
 
 // Notifications dropdown
 .dropdown-notifications {
-  width: 320px;
+  width: 340px;
+}
+
+.dropdown-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dropdown-divider-inline {
+  color: var(--border-default);
+  font-size: 0.75rem;
+}
+
+.notification-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  color: var(--fg-muted);
+  text-align: center;
+
+  i {
+    font-size: 2rem;
+    opacity: 0.5;
+  }
+
+  span {
+    font-size: 0.875rem;
+  }
 }
 
 .notification-item {
@@ -494,6 +524,12 @@
 
   &:hover {
     background: var(--bg-subtle);
+  }
+
+  &.unread {
+    background: var(--accent-subtle);
+    border-left: 3px solid var(--accent-default);
+    padding-left: calc(var(--space-4) - 3px);
   }
 }
 

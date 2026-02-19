@@ -1,4 +1,4 @@
-import { Component, inject, signal, output, computed, HostListener, ElementRef, OnDestroy } from '@angular/core';
+import { Component, inject, signal, output, computed, HostListener, ElementRef, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { Subject, Subscription, debounceTime, distinctUntilChanged, switchMap, of, tap } from 'rxjs';
@@ -6,7 +6,10 @@ import { AuthService } from '../../../core/services/auth.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ElectronService } from '../../../core/services/electron.service';
 import { SearchService } from '../../../core/services/search.service';
+import { AlertService } from '../../../core/services/alert.service';
+import { WebSocketService } from '../../../core/services/websocket.service';
 import { getInitials } from '../../../core/models/user.model';
+import { Alert } from '../../../core/models/alert.model';
 import { GlobalSearchResult, SearchResultItem, SearchResultGroup } from '../../../core/models/search.model';
 
 @Component({
@@ -16,11 +19,13 @@ import { GlobalSearchResult, SearchResultItem, SearchResultGroup } from '../../.
   templateUrl: './header.component.html',
   styleUrl: './header.component.scss'
 })
-export class HeaderComponent implements OnDestroy {
+export class HeaderComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
   private themeService = inject(ThemeService);
   private electronService = inject(ElectronService);
   private searchService = inject(SearchService);
+  private alertService = inject(AlertService);
+  private webSocketService = inject(WebSocketService);
   private router = inject(Router);
   private elementRef = inject(ElementRef);
 
@@ -61,8 +66,10 @@ export class HeaderComponent implements OnDestroy {
     return getInitials({ firstName: user.firstName, lastName: user.lastName });
   });
 
-  // Mock notifications count (replace with real data)
-  notificationsCount = signal(3);
+  // Notifications state
+  unreadCount = signal(0);
+  recentAlerts = signal<Alert[]>([]);
+  private alertSubscription?: Subscription;
 
   constructor() {
     this.searchSubscription = this.searchSubject.pipe(
@@ -89,8 +96,14 @@ export class HeaderComponent implements OnDestroy {
     });
   }
 
+  ngOnInit(): void {
+    this.loadInitialAlerts();
+    this.subscribeToRealTimeAlerts();
+  }
+
   ngOnDestroy(): void {
     this.searchSubscription.unsubscribe();
+    this.alertSubscription?.unsubscribe();
   }
 
   onToggleSidebar(): void {
@@ -205,6 +218,97 @@ export class HeaderComponent implements OnDestroy {
     const results = this.searchResults();
     if (!results) return [];
     return results.groups.reduce<SearchResultItem[]>((acc, g) => [...acc, ...g.items], []);
+  }
+
+  // --- Notification methods ---
+
+  private loadInitialAlerts(): void {
+    this.alertService.getUnacknowledgedCount().subscribe({
+      next: (res) => this.unreadCount.set(res.count),
+      error: () => this.unreadCount.set(0)
+    });
+    this.alertService.getAlerts({ acknowledged: false, size: 5 }).subscribe({
+      next: (res) => this.recentAlerts.set(res.alerts),
+      error: () => this.recentAlerts.set([])
+    });
+  }
+
+  private subscribeToRealTimeAlerts(): void {
+    this.alertSubscription = this.webSocketService.alerts$.subscribe(payload => {
+      const alert: Alert = {
+        id: payload.id,
+        type: payload.alertType as any,
+        severity: payload.severity as any,
+        title: payload.title,
+        message: payload.body,
+        acknowledged: false,
+        created_at: new Date().toISOString(),
+        user_id: 0
+      };
+      this.unreadCount.update(c => c + 1);
+      this.recentAlerts.update(list => [alert, ...list].slice(0, 5));
+      this.playNotificationSound();
+    });
+  }
+
+  onMarkAllRead(): void {
+    const ids = this.recentAlerts().filter(a => !a.acknowledged).map(a => a.id);
+    if (ids.length === 0) return;
+    this.alertService.acknowledgeAlerts(ids).subscribe({
+      next: () => {
+        this.recentAlerts.update(list => list.map(a => ({ ...a, acknowledged: true })));
+        this.unreadCount.set(0);
+      }
+    });
+  }
+
+  getAlertIcon(alert: Alert): string {
+    switch (alert.type) {
+      case 'conversation_response_overdue': return 'ph-clock';
+      case 'require_response': return 'ph-chat-circle';
+      case 'escalation': return 'ph-warning';
+      default: return 'ph-bell';
+    }
+  }
+
+  getAlertIconBg(alert: Alert): string {
+    switch (alert.severity) {
+      case 'success': return 'bg-success';
+      case 'priority':
+      case 'high': return 'bg-danger';
+      case 'warning': return 'bg-warning';
+      case 'info':
+      default: return 'bg-info';
+    }
+  }
+
+  getTimeAgo(dateStr: string): string {
+    const now = Date.now();
+    const then = new Date(dateStr).getTime();
+    const diffMs = now - then;
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1) return 'Ahora';
+    if (minutes < 60) return `Hace ${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Hace ${hours}h`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `Hace ${days}d`;
+    return new Date(dateStr).toLocaleDateString('es');
+  }
+
+  private playNotificationSound(): void {
+    try {
+      const ctx = new AudioContext();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.frequency.value = 800;
+      gain.gain.value = 0.1;
+      oscillator.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      oscillator.stop(ctx.currentTime + 0.3);
+    } catch {}
   }
 
   // --- Menus ---
