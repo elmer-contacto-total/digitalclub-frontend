@@ -432,25 +432,58 @@ export class BulkSender {
         const typingDelay = 500 + Math.random() * 1000;
         await this.sleep(typingDelay);
 
-        // Send message (with or without attachment)
+        // Verify we're still in the correct chat; re-navigate until confirmed
+        let chatVerified = false;
+        let verifyAttempt = 0;
+        while (!chatVerified) {
+          const chatCheck = await this.verifyCurrentChat(next.phone);
+          if (chatCheck.match) {
+            chatVerified = true;
+            break;
+          }
+          verifyAttempt++;
+          console.warn(`[BulkSender] Chat changed (attempt ${verifyAttempt})! Expected ${next.phone}, found "${chatCheck.actual}" — re-navigating`);
+          const reNav = await this.navigateToChat(next.phone);
+          if (!reNav.success) {
+            throw new Error(`Re-navegación falló: ${reNav.error}`);
+          }
+          await this.sleep(300);
+        }
+
+        // Send message (with or without attachment) — retry on CHAT_CHANGED
         if (hasAttachment) {
           // Download attachment from backend to local temp (server path is not accessible on Windows)
           const localAttachmentPath = await this.downloadAttachment(
             this.bulkSendId!,
             next.attachment_original_name || path.basename(next.attachment_path)
           );
-          const sendResult = await this.sendMediaWithCaption(
-            localAttachmentPath,
-            content,
-            next.attachment_type || 'document'
-          );
-          if (!sendResult.success) {
-            throw new Error(`Failed to send media: ${sendResult.error}`);
+          let mediaSendResult: { success: boolean; error?: string };
+          while (true) {
+            mediaSendResult = await this.sendMediaWithCaption(
+              localAttachmentPath,
+              content,
+              next.attachment_type || 'document',
+              next.phone
+            );
+            if (mediaSendResult.success || mediaSendResult.error !== 'CHAT_CHANGED') break;
+            console.warn('[BulkSender] Chat changed inside sendMediaWithCaption — re-navigating');
+            await this.navigateToChat(next.phone);
+            await this.sleep(300);
+          }
+          if (!mediaSendResult.success) {
+            throw new Error(`Failed to send media: ${mediaSendResult.error}`);
           }
         } else {
-          const sendResult = await this.sendAndSubmit(content);
-          if (!sendResult.success) {
-            throw new Error(`Failed to send message: ${sendResult.error}`);
+          let textSendResult: { success: boolean; error?: string };
+          while (true) {
+            textSendResult = await this.sendAndSubmit(content, next.phone);
+            if (textSendResult.success || textSendResult.error !== 'CHAT_CHANGED') break;
+            console.warn('[BulkSender] Chat changed inside sendAndSubmit — re-navigating');
+            await this.navigateToChat(next.phone);
+            await this.sleep(300);
+          }
+          if (!textSendResult.success) {
+            throw new Error(`Failed to send message: ${textSendResult.error}`);
           }
         }
 
@@ -551,6 +584,28 @@ export class BulkSender {
       console.log(`[BulkSender] Waiting ${Math.round(delay / 1000)}s before next...`);
       await this.sleep(delay);
     }
+  }
+
+  // --- Chat Verification ---
+
+  /**
+   * Verify that the currently active WhatsApp chat matches the expected phone.
+   * Compares the last 8 digits of the expected phone against the chat header text.
+   */
+  private async verifyCurrentChat(expectedPhone: string): Promise<{ match: boolean; actual: string }> {
+    if (!this.whatsappView) return { match: false, actual: 'no_view' };
+    const phoneSuffix = expectedPhone.replace(/\D/g, '').slice(-8);
+    const headerInfo = await this.whatsappView.webContents.executeJavaScript(`
+      (function() {
+        var header = document.querySelector('#main header span[title]');
+        if (!header) return '';
+        return header.getAttribute('title') || header.textContent || '';
+      })()
+    `, true);
+    const headerStr = String(headerInfo);
+    if (!headerStr) return { match: false, actual: 'no_header' };
+    const headerDigits = headerStr.replace(/\D/g, '');
+    return { match: headerDigits.includes(phoneSuffix), actual: headerStr };
   }
 
   // --- WhatsApp Interaction ---
@@ -866,7 +921,7 @@ export class BulkSender {
     }
   }
 
-  private async sendAndSubmit(text: string): Promise<{ success: boolean; error?: string }> {
+  private async sendAndSubmit(text: string, expectedPhone?: string): Promise<{ success: boolean; error?: string }> {
     if (!this.whatsappView) {
       return { success: false, error: 'Vista de WhatsApp no disponible' };
     }
@@ -918,6 +973,16 @@ export class BulkSender {
 
       // Step 3: Typing simulation delay
       await this.sleep(500 + Math.random() * 1000);
+
+      // Step 3.5: Final chat verification before sending
+      if (expectedPhone) {
+        const finalCheck = await this.verifyCurrentChat(expectedPhone);
+        if (!finalCheck.match) {
+          console.warn(`[BulkSender] Chat changed right before Enter! Expected ${expectedPhone}, found "${finalCheck.actual}" — aborting send`);
+          await this.cdpClear();
+          return { success: false, error: 'CHAT_CHANGED' };
+        }
+      }
 
       // Step 4: Send via Enter key (CDP — focus-independent)
       await this.cdpKey('Enter', 'Enter', 13);
@@ -979,7 +1044,8 @@ export class BulkSender {
   private async sendMediaWithCaption(
     filePath: string,
     caption: string,
-    mediaType: string
+    mediaType: string,
+    expectedPhone?: string
   ): Promise<{ success: boolean; error?: string }> {
     if (!this.whatsappView) {
       return { success: false, error: 'Vista de WhatsApp no disponible' };
@@ -992,9 +1058,9 @@ export class BulkSender {
     const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext);
 
     if (isImage) {
-      return this.sendImageViaClipboard(filePath, caption);
+      return this.sendImageViaClipboard(filePath, caption, expectedPhone);
     } else {
-      return this.sendFileViaDragDrop(filePath, caption);
+      return this.sendFileViaDragDrop(filePath, caption, expectedPhone);
     }
   }
 
@@ -1005,7 +1071,8 @@ export class BulkSender {
    */
   private async sendImageViaClipboard(
     filePath: string,
-    caption: string
+    caption: string,
+    expectedPhone?: string
   ): Promise<{ success: boolean; error?: string }> {
     // Helper to log in RENDERER (WhatsApp DevTools) instead of main process
     const rlog = (msg: string) => {
@@ -1086,6 +1153,18 @@ export class BulkSender {
       rlog('Step 6 OK: media preview detected');
 
       await this.sleep(500);
+
+      // 6.5. Final chat verification before sending media
+      if (expectedPhone) {
+        const finalCheck = await this.verifyCurrentChat(expectedPhone);
+        if (!finalCheck.match) {
+          console.warn(`[BulkSender] Chat changed before media send! Expected ${expectedPhone}, found "${finalCheck.actual}" — aborting`);
+          // Press Escape to dismiss media preview without sending
+          await this.cdpKey('Escape', 'Escape', 27);
+          await this.sleep(300);
+          return { success: false, error: 'CHAT_CHANGED' };
+        }
+      }
 
       // 7. Hide blocker + click send button
       const sendResult = await this.whatsappView!.webContents.executeJavaScript(`
@@ -1208,9 +1287,19 @@ export class BulkSender {
    */
   private async sendFileViaDragDrop(
     filePath: string,
-    caption: string
+    caption: string,
+    expectedPhone?: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
+      // Verify chat before starting drag-drop (can't check mid-JS)
+      if (expectedPhone) {
+        const finalCheck = await this.verifyCurrentChat(expectedPhone);
+        if (!finalCheck.match) {
+          console.warn(`[BulkSender] Chat changed before file send! Expected ${expectedPhone}, found "${finalCheck.actual}" — aborting`);
+          return { success: false, error: 'CHAT_CHANGED' };
+        }
+      }
+
       const fileBuffer = fs.readFileSync(filePath);
       const base64Data = fileBuffer.toString('base64');
       const mimeType = this.getMimeType(filePath);
