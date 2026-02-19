@@ -1335,10 +1335,10 @@ const MEDIA_CAPTURE_SCRIPT = `
         }
       }
 
-      // Método 2: URL hash
-      const hash = window.location.hash;
-      console.log('[MWS Debug] M2: hash URL:', hash);
-      const hashPhoneMatch = hash.match(/@([0-9]+)/);
+      // Método 2: URL path (con fallback a hash)
+      const pathname = window.location.pathname + window.location.hash;
+      console.log('[MWS Debug] M2: URL path:', pathname);
+      const hashPhoneMatch = pathname.match(/@([0-9]+)/);
       if (hashPhoneMatch) {
         lastKnownChatPhone = hashPhoneMatch[1];
         console.log('[MWS Debug] M2: teléfono extraído:', hashPhoneMatch[1]);
