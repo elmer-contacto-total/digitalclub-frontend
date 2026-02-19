@@ -14,6 +14,22 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
 
+const ERROR_TRANSLATIONS: Record<string, string> = {
+  'Email already exists': 'El email ya está registrado',
+  'Phone already exists': 'El teléfono ya está registrado',
+  'Email is required': 'El email es requerido',
+  'Invalid email format': 'Formato de email inválido',
+  'Email must not exceed 255 characters': 'El email no debe exceder 255 caracteres',
+  'First name is required': 'El nombre es requerido',
+  'First name must be between 1 and 100 characters': 'El nombre debe tener entre 1 y 100 caracteres',
+  'Last name is required': 'El apellido es requerido',
+  'Last name must be between 1 and 100 characters': 'El apellido debe tener entre 1 y 100 caracteres',
+  'Phone is required': 'El teléfono es requerido',
+  'Invalid phone format': 'Formato de teléfono inválido',
+  'Phone must not exceed 20 characters': 'El teléfono no debe exceder 20 caracteres',
+  'Role is required': 'El rol es requerido',
+};
+
 @Component({
   selector: 'app-user-form',
   standalone: true,
@@ -883,7 +899,8 @@ export class UserFormComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error creating user:', err);
-        this.errorMessage.set(err.error?.message || 'Error al crear el usuario');
+        const msg = err.error?.message || '';
+        this.errorMessage.set(ERROR_TRANSLATIONS[msg] || msg || 'Error al crear el usuario');
         this.isSaving.set(false);
       }
     });
@@ -921,7 +938,8 @@ export class UserFormComponent implements OnInit {
       },
       error: (err) => {
         console.error('Error updating user:', err);
-        this.errorMessage.set(err.error?.message || 'Error al actualizar el usuario');
+        const msg = err.error?.message || '';
+        this.errorMessage.set(ERROR_TRANSLATIONS[msg] || msg || 'Error al actualizar el usuario');
         this.isSaving.set(false);
       }
     });
