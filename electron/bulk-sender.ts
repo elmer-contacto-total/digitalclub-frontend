@@ -432,7 +432,8 @@ export class BulkSender {
         const typingDelay = 500 + Math.random() * 1000;
         await this.sleep(typingDelay);
 
-        // Verify we're still in the correct chat; re-navigate until confirmed
+        // Verify we're still in the correct chat; re-navigate up to MAX_VERIFY_ATTEMPTS times
+        const MAX_VERIFY_ATTEMPTS = 5;
         let chatVerified = false;
         let verifyAttempt = 0;
         while (!chatVerified) {
@@ -442,7 +443,10 @@ export class BulkSender {
             break;
           }
           verifyAttempt++;
-          console.warn(`[BulkSender] Chat changed (attempt ${verifyAttempt})! Expected ${next.phone}, found "${chatCheck.actual}" — re-navigating`);
+          if (verifyAttempt > MAX_VERIFY_ATTEMPTS) {
+            throw new Error(`Chat incorrecto tras ${MAX_VERIFY_ATTEMPTS} intentos de verificación (esperado: ${next.phone}, actual: "${chatCheck.actual}")`);
+          }
+          console.warn(`[BulkSender] Chat changed (attempt ${verifyAttempt}/${MAX_VERIFY_ATTEMPTS})! Expected ${next.phone}, found "${chatCheck.actual}" — re-navigating`);
           const reNav = await this.navigateToChat(next.phone);
           if (!reNav.success) {
             throw new Error(`Re-navegación falló: ${reNav.error}`);
@@ -450,7 +454,8 @@ export class BulkSender {
           await this.sleep(300);
         }
 
-        // Send message (with or without attachment) — retry on CHAT_CHANGED
+        // Send message (with or without attachment) — retry on CHAT_CHANGED (max 3 retries)
+        const MAX_SEND_RETRIES = 3;
         if (hasAttachment) {
           // Download attachment from backend to local temp (server path is not accessible on Windows)
           const localAttachmentPath = await this.downloadAttachment(
@@ -458,6 +463,7 @@ export class BulkSender {
             next.attachment_original_name || path.basename(next.attachment_path)
           );
           let mediaSendResult: { success: boolean; error?: string };
+          let mediaSendAttempt = 0;
           while (true) {
             mediaSendResult = await this.sendMediaWithCaption(
               localAttachmentPath,
@@ -466,7 +472,12 @@ export class BulkSender {
               next.phone
             );
             if (mediaSendResult.success || mediaSendResult.error !== 'CHAT_CHANGED') break;
-            console.warn('[BulkSender] Chat changed inside sendMediaWithCaption — re-navigating');
+            mediaSendAttempt++;
+            if (mediaSendAttempt >= MAX_SEND_RETRIES) {
+              mediaSendResult = { success: false, error: `Chat cambió ${MAX_SEND_RETRIES} veces durante envío de media` };
+              break;
+            }
+            console.warn(`[BulkSender] Chat changed inside sendMediaWithCaption (retry ${mediaSendAttempt}/${MAX_SEND_RETRIES}) — re-navigating`);
             await this.navigateToChat(next.phone);
             await this.sleep(300);
           }
@@ -475,10 +486,16 @@ export class BulkSender {
           }
         } else {
           let textSendResult: { success: boolean; error?: string };
+          let textSendAttempt = 0;
           while (true) {
             textSendResult = await this.sendAndSubmit(content, next.phone);
             if (textSendResult.success || textSendResult.error !== 'CHAT_CHANGED') break;
-            console.warn('[BulkSender] Chat changed inside sendAndSubmit — re-navigating');
+            textSendAttempt++;
+            if (textSendAttempt >= MAX_SEND_RETRIES) {
+              textSendResult = { success: false, error: `Chat cambió ${MAX_SEND_RETRIES} veces durante envío de texto` };
+              break;
+            }
+            console.warn(`[BulkSender] Chat changed inside sendAndSubmit (retry ${textSendAttempt}/${MAX_SEND_RETRIES}) — re-navigating`);
             await this.navigateToChat(next.phone);
             await this.sleep(300);
           }
