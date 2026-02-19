@@ -33,206 +33,270 @@ declare global {
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="container-fluid py-4">
-      <!-- Page Header -->
-      <div class="page-header mb-4">
-        <div class="row">
-          <div class="col">
-            <!-- PARIDAD: Rails "Estado de Alta Whatsapp" -->
-            <h1 class="h3 mb-0">Estado de Alta WhatsApp</h1>
+    <!-- Page Header -->
+    <div class="page-header">
+      <div>
+        <!-- PARIDAD: Rails "Estado de Alta Whatsapp" -->
+        <h1 class="page-title">Estado de Alta WhatsApp</h1>
+        <p class="page-subtitle">Gestión de integración con WhatsApp Business</p>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    @if (isLoading()) {
+      <div class="loading-state">
+        <div class="spinner spinner-lg"></div>
+        <p>Verificando estado de conexión...</p>
+      </div>
+    }
+
+    <!-- Not Connected State - PARIDAD: Rails new.html.erb -->
+    @if (!isLoading() && !isConnected()) {
+      <div class="card not-connected">
+        <div class="status-icon">
+          <i class="ph ph-whatsapp-logo"></i>
+        </div>
+        <!-- PARIDAD: Rails "Haga clic en el botón para iniciar el proceso de alta de Whatsapp Business" -->
+        <p class="status-text">
+          Haga clic en el botón para iniciar el proceso de alta de WhatsApp Business
+        </p>
+
+        <!-- Facebook Login Button - PARIDAD: Rails styling -->
+        <button
+          type="button"
+          class="btn btn-facebook btn-lg"
+          (click)="initiateLogin()"
+          [disabled]="isProcessing()">
+          @if (isProcessing()) {
+            <div class="spinner spinner-sm"></div>
+            Procesando...
+          } @else {
+            <i class="ph ph-meta-logo"></i>
+            Iniciar Sesión con Facebook
+          }
+        </button>
+
+        @if (errorMessage()) {
+          <div class="alert alert-error error-alert">
+            <i class="ph ph-warning"></i>
+            {{ errorMessage() }}
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Connected State - PARIDAD: Rails show.html.erb -->
+    @if (!isLoading() && isConnected()) {
+      <div class="card">
+        <!-- Status Message -->
+        <div class="alert" [ngClass]="getStatusAlertClass()">
+          <i [ngClass]="getStatusIconClass()"></i>
+          {{ getStatusMessage() }}
+        </div>
+
+        <!-- WhatsApp Business Details - PARIDAD: Rails DL structure -->
+        <h3 class="section-title">Datos de la cuenta WhatsApp Business</h3>
+        <div class="detail-grid">
+          <!-- PARIDAD: "Nombre en Whatsapp Business" -->
+          <span class="detail-label">Nombre en WhatsApp Business</span>
+          <span class="detail-value">{{ whatsappData()?.verified_name || '-' }}</span>
+
+          <!-- PARIDAD: "Id del Negocio en Whatsapp Business" -->
+          <span class="detail-label">ID del Negocio en WhatsApp Business</span>
+          <span class="detail-value"><code>{{ whatsappData()?.waba_id || '-' }}</code></span>
+
+          <!-- PARIDAD: "Estado de Revisión de Cuenta Whatsapp" -->
+          <span class="detail-label">Estado de Revisión de Cuenta</span>
+          <span class="detail-value">
+            <span class="badge" [ngClass]="getStatusBadgeClass()">
+              {{ getStatusLabel() }}
+            </span>
+          </span>
+
+          <!-- PARIDAD: "Número de Whatsapp Business" -->
+          <span class="detail-label">Número de WhatsApp Business</span>
+          <span class="detail-value">{{ whatsappData()?.phone_number || '-' }}</span>
+
+          <!-- Quality Rating (if available) -->
+          @if (whatsappData()?.quality_rating) {
+            <span class="detail-label">Calificación de Calidad</span>
+            <span class="detail-value">
+              <span class="badge" [ngClass]="getQualityBadgeClass()">
+                {{ whatsappData()?.quality_rating }}
+              </span>
+            </span>
+          }
+        </div>
+
+        <!-- Actions -->
+        <div class="actions-bar">
+          <!-- Refresh Button -->
+          <button
+            type="button"
+            class="btn btn-secondary"
+            (click)="refreshData()"
+            [disabled]="isProcessing()">
+            @if (isProcessing()) {
+              <div class="spinner spinner-sm"></div>
+            }
+            <i class="ph ph-arrows-clockwise"></i>
+            Actualizar datos
+          </button>
+
+          <!-- Disconnect Button - PARIDAD: Rails "Desconectar de Whatsapp" -->
+          <button
+            type="button"
+            class="btn btn-danger"
+            (click)="confirmDisconnect()"
+            [disabled]="isProcessing()">
+            <i class="ph ph-x-circle"></i>
+            Desconectar de WhatsApp
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Disconnect Confirmation Modal -->
+    @if (showDisconnectModal()) {
+      <div class="modal-backdrop" (click)="cancelDisconnect()">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <span class="modal-title">Confirmar desconexión</span>
+            <button type="button" class="btn btn-ghost btn-icon" (click)="cancelDisconnect()">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p>¿Está seguro que desea desconectar la integración de WhatsApp Business?</p>
+            <p class="modal-hint">
+              Esta acción eliminará la configuración actual y deberá volver a conectar su cuenta.
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" (click)="cancelDisconnect()">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="btn btn-danger-solid"
+              (click)="disconnect()"
+              [disabled]="isProcessing()">
+              @if (isProcessing()) {
+                <div class="spinner spinner-sm"></div>
+              }
+              Desconectar
+            </button>
           </div>
         </div>
       </div>
-
-      <!-- Loading -->
-      @if (isLoading()) {
-        <div class="text-center py-5">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Cargando...</span>
-          </div>
-          <p class="text-muted mt-3">Verificando estado de conexión...</p>
-        </div>
-      }
-
-      <!-- Not Connected State - PARIDAD: Rails new.html.erb -->
-      @if (!isLoading() && !isConnected()) {
-        <div class="card">
-          <div class="card-body text-center py-5">
-            <div class="mb-4">
-              <i class="bi bi-whatsapp text-success" style="font-size: 4rem;"></i>
-            </div>
-            <!-- PARIDAD: Rails "Haga clic en el botón para iniciar el proceso de alta de Whatsapp Business" -->
-            <p class="text-muted mb-4">
-              Haga clic en el botón para iniciar el proceso de alta de WhatsApp Business
-            </p>
-
-            <!-- Facebook Login Button - PARIDAD: Rails styling -->
-            <button
-              type="button"
-              class="btn btn-facebook"
-              (click)="initiateLogin()"
-              [disabled]="isProcessing()">
-              @if (isProcessing()) {
-                <span class="spinner-border spinner-border-sm me-2"></span>
-                Procesando...
-              } @else {
-                <i class="bi bi-facebook me-2"></i>
-                Iniciar Sesión con Facebook
-              }
-            </button>
-
-            @if (errorMessage()) {
-              <div class="alert alert-danger mt-4 text-start">
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                {{ errorMessage() }}
-              </div>
-            }
-          </div>
-        </div>
-      }
-
-      <!-- Connected State - PARIDAD: Rails show.html.erb -->
-      @if (!isLoading() && isConnected()) {
-        <div class="card">
-          <div class="card-body">
-            <!-- Status Message -->
-            <div class="alert" [ngClass]="getStatusAlertClass()">
-              <i class="bi" [ngClass]="getStatusIconClass()"></i>
-              {{ getStatusMessage() }}
-            </div>
-
-            <!-- WhatsApp Business Details - PARIDAD: Rails DL structure -->
-            <h5 class="mb-3">Datos de la cuenta WhatsApp Business</h5>
-            <dl class="row">
-              <!-- PARIDAD: "Nombre en Whatsapp Business" -->
-              <dt class="col-sm-4">Nombre en WhatsApp Business</dt>
-              <dd class="col-sm-8">{{ whatsappData()?.verified_name || '-' }}</dd>
-
-              <!-- PARIDAD: "Id del Negocio en Whatsapp Business" -->
-              <dt class="col-sm-4">ID del Negocio en WhatsApp Business</dt>
-              <dd class="col-sm-8">
-                <code>{{ whatsappData()?.waba_id || '-' }}</code>
-              </dd>
-
-              <!-- PARIDAD: "Estado de Revisión de Cuenta Whatsapp" -->
-              <dt class="col-sm-4">Estado de Revisión de Cuenta</dt>
-              <dd class="col-sm-8">
-                <span class="badge" [ngClass]="getStatusBadgeClass()">
-                  {{ getStatusLabel() }}
-                </span>
-              </dd>
-
-              <!-- PARIDAD: "Número de Whatsapp Business" -->
-              <dt class="col-sm-4">Número de WhatsApp Business</dt>
-              <dd class="col-sm-8">{{ whatsappData()?.phone_number || '-' }}</dd>
-
-              <!-- Quality Rating (if available) -->
-              @if (whatsappData()?.quality_rating) {
-                <dt class="col-sm-4">Calificación de Calidad</dt>
-                <dd class="col-sm-8">
-                  <span class="badge" [ngClass]="getQualityBadgeClass()">
-                    {{ whatsappData()?.quality_rating }}
-                  </span>
-                </dd>
-              }
-            </dl>
-
-            <!-- Actions -->
-            <hr class="my-4">
-            <div class="d-flex gap-2">
-              <!-- Refresh Button -->
-              <button
-                type="button"
-                class="btn btn-outline-primary"
-                (click)="refreshData()"
-                [disabled]="isProcessing()">
-                @if (isProcessing()) {
-                  <span class="spinner-border spinner-border-sm me-1"></span>
-                }
-                <i class="bi bi-arrow-clockwise me-1"></i>
-                Actualizar datos
-              </button>
-
-              <!-- Disconnect Button - PARIDAD: Rails "Desconectar de Whatsapp" -->
-              <button
-                type="button"
-                class="btn btn-outline-danger"
-                (click)="confirmDisconnect()"
-                [disabled]="isProcessing()">
-                <i class="bi bi-x-circle me-1"></i>
-                Desconectar de WhatsApp
-              </button>
-            </div>
-          </div>
-        </div>
-      }
-
-      <!-- Disconnect Confirmation Modal -->
-      @if (showDisconnectModal()) {
-        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-          <div class="modal-dialog">
-            <div class="modal-content">
-              <div class="modal-header">
-                <h5 class="modal-title">Confirmar desconexión</h5>
-                <button type="button" class="btn-close" (click)="cancelDisconnect()"></button>
-              </div>
-              <div class="modal-body">
-                <p>¿Está seguro que desea desconectar la integración de WhatsApp Business?</p>
-                <p class="text-muted small">
-                  Esta acción eliminará la configuración actual y deberá volver a conectar su cuenta.
-                </p>
-              </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" (click)="cancelDisconnect()">
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-danger"
-                  (click)="disconnect()"
-                  [disabled]="isProcessing()">
-                  @if (isProcessing()) {
-                    <span class="spinner-border spinner-border-sm me-1"></span>
-                  }
-                  Desconectar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      }
-    </div>
+    }
   `,
   styles: [`
-    /* Facebook Login Button - PARIDAD: Rails styling */
+    :host {
+      display: block;
+      padding: var(--space-6);
+      max-width: 800px;
+    }
+
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-4);
+      padding: var(--space-8);
+      color: var(--fg-muted);
+    }
+
+    .not-connected {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: var(--space-8);
+    }
+
+    .status-icon {
+      font-size: 64px;
+      color: var(--success-default);
+      margin-bottom: var(--space-4);
+    }
+
+    .status-text {
+      color: var(--fg-muted);
+      margin-bottom: var(--space-5);
+    }
+
+    .error-alert {
+      margin-top: var(--space-5);
+      text-align: left;
+      width: 100%;
+    }
+
     .btn-facebook {
       background-color: #1877f2;
-      border-color: #1877f2;
       color: white;
-      font-family: Helvetica, Arial, sans-serif;
-      font-weight: 600;
-      padding: 10px 24px;
-      border-radius: 4px;
+      font-weight: var(--font-semibold);
+      border: none;
     }
 
-    .btn-facebook:hover {
+    .btn-facebook:hover:not(:disabled) {
       background-color: #166fe5;
-      border-color: #166fe5;
+    }
+
+    .section-title {
+      font-size: var(--text-lg);
+      font-weight: var(--font-semibold);
+      color: var(--fg-default);
+      margin-bottom: var(--space-4);
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: var(--space-3) var(--space-4);
+      align-items: baseline;
+    }
+
+    .detail-label {
+      font-size: var(--text-sm);
+      font-weight: var(--font-medium);
+      color: var(--fg-muted);
+    }
+
+    .detail-value {
+      font-size: var(--text-base);
+      color: var(--fg-default);
+    }
+
+    .detail-value code {
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      background: var(--bg-subtle);
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+    }
+
+    .actions-bar {
+      display: flex;
+      gap: var(--space-3);
+      margin-top: var(--space-5);
+      padding-top: var(--space-5);
+      border-top: 1px solid var(--border-muted);
+    }
+
+    .modal-hint {
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+
+    .btn-danger-solid {
+      background-color: var(--error-default);
       color: white;
+      border: none;
     }
 
-    .btn-facebook:disabled {
-      background-color: #1877f2;
-      border-color: #1877f2;
-      opacity: 0.65;
-    }
-
-    dl.row dt {
-      font-weight: 500;
-    }
-
-    dl.row dd {
-      margin-bottom: 0.75rem;
+    .btn-danger-solid:hover:not(:disabled) {
+      opacity: 0.9;
     }
   `]
 })
@@ -505,7 +569,7 @@ export class WhatsAppOnboardingComponent implements OnInit, OnDestroy {
       case 'PENDING':
         return 'alert-warning';
       case 'REJECTED':
-        return 'alert-danger';
+        return 'alert-error';
       default:
         return 'alert-info';
     }
@@ -515,13 +579,13 @@ export class WhatsAppOnboardingComponent implements OnInit, OnDestroy {
     const status = this.whatsappData()?.account_review_status?.toUpperCase();
     switch (status) {
       case 'APPROVED':
-        return 'bi-check-circle-fill me-2';
+        return 'ph-fill ph-check-circle';
       case 'PENDING':
-        return 'bi-clock-fill me-2';
+        return 'ph-fill ph-clock';
       case 'REJECTED':
-        return 'bi-x-circle-fill me-2';
+        return 'ph-fill ph-x-circle';
       default:
-        return 'bi-info-circle-fill me-2';
+        return 'ph-fill ph-info';
     }
   }
 }

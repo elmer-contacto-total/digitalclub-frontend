@@ -87,13 +87,13 @@ export class WhatsAppOnboardingService {
   getStatusBadgeClass(status: string): string {
     switch (status?.toUpperCase()) {
       case AccountReviewStatus.APPROVED:
-        return 'bg-success';
+        return 'badge-success';
       case AccountReviewStatus.PENDING:
-        return 'bg-warning text-dark';
+        return 'badge-warning';
       case AccountReviewStatus.REJECTED:
-        return 'bg-danger';
+        return 'badge-error';
       default:
-        return 'bg-secondary';
+        return 'badge-default';
     }
   }
 
@@ -120,13 +120,13 @@ export class WhatsAppOnboardingService {
   getQualityBadgeClass(rating: string): string {
     switch (rating?.toUpperCase()) {
       case 'GREEN':
-        return 'bg-success';
+        return 'badge-success';
       case 'YELLOW':
-        return 'bg-warning text-dark';
+        return 'badge-warning';
       case 'RED':
-        return 'bg-danger';
+        return 'badge-error';
       default:
-        return 'bg-secondary';
+        return 'badge-default';
     }
   }
 }
