@@ -16,6 +16,7 @@ export interface BulkSendRules {
   send_hour_start: number;
   send_hour_end: number;
   max_daily_messages: number;
+  enabled: boolean;
 }
 
 export interface BulkSenderStatus {
@@ -44,7 +45,8 @@ const DEFAULT_RULES: BulkSendRules = {
   pause_duration_minutes: 5,
   send_hour_start: 8,
   send_hour_end: 20,
-  max_daily_messages: 200
+  max_daily_messages: 200,
+  enabled: true
 };
 
 export class BulkSender {
@@ -68,6 +70,7 @@ export class BulkSender {
   private stateFile: string | null = null;
   private cdpAttached = false;
   private processLoopPromise: Promise<void> | null = null;
+  private rateLimitResumeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(apiBaseUrl: string) {
     this.apiBaseUrl = apiBaseUrl;
@@ -118,6 +121,25 @@ export class BulkSender {
         console.log(`[BulkSender] Cleaned up temp attachment dir: ${tempDir}`);
       }
     } catch { /* ignore */ }
+  }
+
+  private scheduleRateLimitResume(cooldownMs: number): void {
+    this.clearRateLimitTimer();
+    console.log(`[BulkSender] Auto-resume scheduled in ${Math.round(cooldownMs / 1000)}s`);
+    this.rateLimitResumeTimer = setTimeout(() => {
+      this.rateLimitResumeTimer = null;
+      if (this._state === 'paused' && !this.isCancelled) {
+        console.log('[BulkSender] Rate limit cooldown expired — auto-resuming');
+        this.resume();
+      }
+    }, cooldownMs);
+  }
+
+  private clearRateLimitTimer(): void {
+    if (this.rateLimitResumeTimer) {
+      clearTimeout(this.rateLimitResumeTimer);
+      this.rateLimitResumeTimer = null;
+    }
   }
 
   setOverlayCallback(cb: OverlayUpdateCallback): void {
@@ -226,6 +248,7 @@ export class BulkSender {
     console.log(`[BulkSender] Pausing bulk send ${this.bulkSendId}`);
     this.isPaused = true;
     this._state = 'pausing';
+    this.clearRateLimitTimer();
     this.emitOverlayUpdate();
     // Don't notify backend yet — wait until current send completes in processLoop
   }
@@ -288,6 +311,7 @@ export class BulkSender {
     console.log(`[BulkSender] Cancelling bulk send ${this.bulkSendId}`);
     this.isCancelled = true;
     this._state = 'cancelled';
+    this.clearRateLimitTimer();
     this.notifyBackend('cancel');
     this.emitOverlayUpdate();
     this.clearPersistedState();
@@ -349,7 +373,34 @@ export class BulkSender {
 
       // Fetch next recipient
       const next = await this.fetchNextRecipient();
-      if (!next || !next.has_next) {
+
+      // Network/HTTP error — NOT completion, treat as transient failure
+      if (next === null) {
+        this.consecutiveFailures++;
+        console.warn(`[BulkSender] Failed to fetch next recipient (attempt ${this.consecutiveFailures})`);
+        if (this.consecutiveFailures >= 5) {
+          this.isPaused = true;
+          this._state = 'paused';
+          this.lastError = 'Error de conexión con el servidor. Verifique su red y reanude.';
+          await this.notifyBackend('pause');
+          this.emitOverlayUpdate();
+          return;
+        }
+        await this.sleep(5000);
+        continue;
+      }
+
+      if (!next.has_next) {
+        // Check if backend stopped us due to limits (NOT actual completion)
+        if (next.daily_limit_reached || next.rate_limited) {
+          this.isPaused = true;
+          this._state = 'paused';
+          this.lastError = next.message || 'Límite alcanzado. Se reanudará automáticamente en ~15 minutos.';
+          await this.notifyBackend('pause');
+          this.scheduleRateLimitResume(15 * 60 * 1000);
+          this.emitOverlayUpdate();
+          return;
+        }
         this._state = 'completed';
         this.emitOverlayUpdate();
         this.clearPersistedState();
@@ -489,7 +540,8 @@ export class BulkSender {
           let textSendAttempt = 0;
           while (true) {
             textSendResult = await this.sendAndSubmit(content, next.phone);
-            if (textSendResult.success || textSendResult.error !== 'CHAT_CHANGED') break;
+            if (textSendResult.success || (textSendResult.error !== 'CHAT_CHANGED' && textSendResult.error !== 'RATE_LIMITED')) break;
+            if (textSendResult.error === 'RATE_LIMITED') break;
             textSendAttempt++;
             if (textSendAttempt >= MAX_SEND_RETRIES) {
               textSendResult = { success: false, error: `Chat cambió ${MAX_SEND_RETRIES} veces durante envío de texto` };
@@ -498,6 +550,24 @@ export class BulkSender {
             console.warn(`[BulkSender] Chat changed inside sendAndSubmit (retry ${textSendAttempt}/${MAX_SEND_RETRIES}) — re-navigating`);
             await this.navigateToChat(next.phone);
             await this.sleep(300);
+          }
+          if (textSendResult.error === 'RATE_LIMITED') {
+            await this.reportResult(recipientId, false, 'Rate limit de WhatsApp detectado');
+            this.failedCount++;
+            this.isPaused = true;
+            this._state = 'paused';
+            this.lastError = 'WhatsApp ha limitado el envío. Se reanudará automáticamente en ~15 minutos.';
+            // Notify backend so other Electron instances also stop
+            try {
+              await fetch(`${this.apiBaseUrl}/app/bulk_sends/report-rate-limit?cooldownMinutes=15`, {
+                method: 'POST',
+                headers: this.getHeaders()
+              });
+            } catch (e) { /* ignore */ }
+            await this.notifyBackend('pause');
+            this.scheduleRateLimitResume(15 * 60 * 1000);
+            this.emitOverlayUpdate();
+            return;
           }
           if (!textSendResult.success) {
             throw new Error(`Failed to send message: ${textSendResult.error}`);
@@ -523,6 +593,26 @@ export class BulkSender {
         this.consecutiveFailures++;
         this.lastError = errorMsg;
         this.emitOverlayUpdate();
+
+        // Check if WhatsApp is rate-limiting us
+        const rateLimited = await this.detectWhatsAppRateLimit();
+        if (rateLimited) {
+          console.warn('[BulkSender] WhatsApp rate limit detected - auto-pausing');
+          this.isPaused = true;
+          this._state = 'paused';
+          this.lastError = 'WhatsApp ha limitado el envío. Se reanudará automáticamente en ~15 minutos.';
+          // Notify backend so other Electron instances also stop
+          try {
+            await fetch(`${this.apiBaseUrl}/app/bulk_sends/report-rate-limit?cooldownMinutes=15`, {
+              method: 'POST',
+              headers: this.getHeaders()
+            });
+          } catch (e) { /* ignore */ }
+          await this.notifyBackend('pause');
+          this.scheduleRateLimitResume(15 * 60 * 1000);
+          this.emitOverlayUpdate();
+          return;
+        }
 
         // Backoff on consecutive failures
         if (this.consecutiveFailures >= 5) {
@@ -1026,6 +1116,10 @@ export class BulkSender {
       `, 5000, 300);
 
       if (!sentOk) {
+        const rateLimited = await this.detectWhatsAppRateLimit();
+        if (rateLimited) {
+          return { success: false, error: 'RATE_LIMITED' };
+        }
         return { success: false, error: 'Mensaje no enviado: el cuadro de texto aún tiene contenido' };
       }
 
@@ -1509,16 +1603,32 @@ export class BulkSender {
       if (response.ok) {
         const data = await response.json();
         if (data.rules) {
-          this.rules = {
-            min_delay_seconds: data.rules.min_delay_seconds ?? DEFAULT_RULES.min_delay_seconds,
-            max_delay_seconds: data.rules.max_delay_seconds ?? DEFAULT_RULES.max_delay_seconds,
-            pause_after_count: data.rules.pause_after_count ?? DEFAULT_RULES.pause_after_count,
-            pause_duration_minutes: data.rules.pause_duration_minutes ?? DEFAULT_RULES.pause_duration_minutes,
-            send_hour_start: data.rules.send_hour_start ?? DEFAULT_RULES.send_hour_start,
-            send_hour_end: data.rules.send_hour_end ?? DEFAULT_RULES.send_hour_end,
-            max_daily_messages: data.rules.max_daily_messages ?? DEFAULT_RULES.max_daily_messages
-          };
-          console.log(`[BulkSender] Reglas cargadas del servidor:`, JSON.stringify(this.rules));
+          const enabled = data.rules.enabled !== false;
+          if (enabled) {
+            this.rules = {
+              min_delay_seconds: data.rules.min_delay_seconds ?? DEFAULT_RULES.min_delay_seconds,
+              max_delay_seconds: data.rules.max_delay_seconds ?? DEFAULT_RULES.max_delay_seconds,
+              pause_after_count: data.rules.pause_after_count ?? DEFAULT_RULES.pause_after_count,
+              pause_duration_minutes: data.rules.pause_duration_minutes ?? DEFAULT_RULES.pause_duration_minutes,
+              send_hour_start: data.rules.send_hour_start ?? DEFAULT_RULES.send_hour_start,
+              send_hour_end: data.rules.send_hour_end ?? DEFAULT_RULES.send_hour_end,
+              max_daily_messages: data.rules.max_daily_messages ?? DEFAULT_RULES.max_daily_messages,
+              enabled: true
+            };
+          } else {
+            // Rules disabled — use permissive values (minimal delays to avoid WhatsApp ban)
+            this.rules = {
+              min_delay_seconds: 5,
+              max_delay_seconds: 10,
+              pause_after_count: Number.MAX_SAFE_INTEGER,
+              pause_duration_minutes: 0,
+              send_hour_start: 0,
+              send_hour_end: 24,
+              max_daily_messages: Number.MAX_SAFE_INTEGER,
+              enabled: false
+            };
+          }
+          console.log(`[BulkSender] Reglas cargadas del servidor (enabled=${enabled}):`, JSON.stringify(this.rules));
         }
       } else {
         console.error(`[BulkSender] Error al obtener reglas (HTTP ${response.status}) — usando valores por defecto`);
@@ -1640,6 +1750,31 @@ export class BulkSender {
           return !qr && !!chatList;
         })()
       `, true);
+    } catch {
+      return false;
+    }
+  }
+
+  // --- Rate Limit Detection ---
+
+  private async detectWhatsAppRateLimit(): Promise<boolean> {
+    try {
+      const result = await this.whatsappView?.webContents.executeJavaScript(`
+        (() => {
+          const popups = document.querySelectorAll('[data-testid="popup-overlay"], [role="dialog"], [data-testid="drawer"]');
+          for (const popup of popups) {
+            const text = (popup.textContent || '').toLowerCase();
+            if (text.includes('too many') || text.includes('demasiados') ||
+                text.includes('wait') || text.includes('espera') ||
+                text.includes('try again later') || text.includes('intenta más tarde') ||
+                text.includes('temporarily blocked') || text.includes('bloqueado temporalmente')) {
+              return true;
+            }
+          }
+          return false;
+        })()
+      `);
+      return result === true;
     } catch {
       return false;
     }

@@ -111,7 +111,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                     </div>
                     <span class="progress-text">{{ bs.sent_count }}/{{ bs.total_recipients }}</span>
                     @if (bs.failed_count > 0) {
-                      <span class="failed-text">({{ bs.failed_count }} fallidos)</span>
+                      <span class="failed-text">({{ bs.failed_count }} no enviados)</span>
                     }
                   </td>
                   <td>

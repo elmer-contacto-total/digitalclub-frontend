@@ -63,7 +63,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
             </div>
             <div class="stat danger">
               <span class="stat-value">{{ detail()!.failed_count }}</span>
-              <span class="stat-label">Fallidos</span>
+              <span class="stat-label">No enviados</span>
             </div>
             <div class="stat">
               <span class="stat-value">{{ detail()!.total_recipients - detail()!.sent_count - detail()!.failed_count }}</span>
@@ -250,6 +250,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       display: inline-flex; align-items: center; height: 22px; padding: 0 var(--space-2); border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: var(--font-medium);
     }
     .rb-pending { background: var(--warning-subtle); color: var(--warning-text); }
+    .rb-inprogress { background: var(--accent-subtle); color: var(--accent-emphasis); }
     .rb-sent { background: var(--success-subtle); color: var(--success-text); }
     .rb-failed { background: var(--error-subtle); color: var(--error-text); }
     .rb-skipped { background: var(--bg-muted); color: var(--fg-muted); }
@@ -374,7 +375,7 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
 
   getRecipientClass(status: string): string {
     const map: Record<string, string> = {
-      'PENDING': 'rb-pending', 'SENT': 'rb-sent', 'FAILED': 'rb-failed', 'SKIPPED': 'rb-skipped'
+      'PENDING': 'rb-pending', 'IN_PROGRESS': 'rb-inprogress', 'SENT': 'rb-sent', 'FAILED': 'rb-failed', 'SKIPPED': 'rb-skipped'
     };
     return map[status] || 'rb-pending';
   }

@@ -97,6 +97,9 @@ export interface NextRecipientResponse {
   attachment_type?: string;
   attachment_original_name?: string;
   message?: string;
+  total_recipients?: number;
+  daily_limit_reached?: boolean;
+  rate_limited?: boolean;
 }
 
 @Injectable({
@@ -228,6 +231,7 @@ export class BulkSendService {
   getRecipientStatusLabel(status: string): string {
     const labels: Record<string, string> = {
       'PENDING': 'Pendiente',
+      'IN_PROGRESS': 'En proceso',
       'SENT': 'Enviado',
       'FAILED': 'Fallido',
       'SKIPPED': 'Omitido'
