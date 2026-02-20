@@ -384,6 +384,11 @@ interface FieldOption {
         background: rgba(167, 139, 250, 0.15);
         color: #c4b5fd;
       }
+
+      :host-context([data-theme="dark"]) & option {
+        background: var(--bg-subtle);
+        color: var(--fg-default);
+      }
     }
 
     /* Required Status */
