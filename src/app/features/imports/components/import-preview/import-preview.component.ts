@@ -52,10 +52,6 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
           <div>
             <strong>Archivo válido</strong>
             <p>Se encontraron <strong>{{ validCount() }}</strong> registros listos para importar.</p>
-            <label class="checkbox-label">
-              <input type="checkbox" [(ngModel)]="sendInvitationEmail" />
-              <span>Enviar correo de invitación a los usuarios nuevos</span>
-            </label>
           </div>
         </div>
       } @else if (importData()?.status === 'status_valid' && invalidCount() > 0) {
@@ -64,10 +60,6 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
           <div>
             <strong>{{ validCount() }} registros válidos, {{ invalidCount() }} con errores</strong>
             <p>Resuelva los errores editando o eliminando los registros antes de procesar.</p>
-            <label class="checkbox-label">
-              <input type="checkbox" [(ngModel)]="sendInvitationEmail" />
-              <span>Enviar correo de invitación a los usuarios nuevos</span>
-            </label>
           </div>
         </div>
       } @else if (importData()?.status === 'status_error') {
@@ -872,9 +864,6 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
   isProcessing = signal(false);
   isAcceptingColumns = signal(false);
 
-  // Options
-  sendInvitationEmail = false;
-
   // Computed
   startRecord = computed(() => {
     if (this.totalElements() === 0) return 0;
@@ -1212,7 +1201,7 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
 
     this.isProcessing.set(true);
 
-    this.importService.confirmImport(this.importId, this.sendInvitationEmail).pipe(
+    this.importService.confirmImport(this.importId, false).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {
