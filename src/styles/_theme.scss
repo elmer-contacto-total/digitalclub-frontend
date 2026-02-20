@@ -5,6 +5,8 @@
 
 // ===== LIGHT THEME (Default) =====
 :root {
+  color-scheme: light;
+
   // Backgrounds
   --bg-base: #f8f8f8;
   --bg-base-rgb: 248, 248, 248;
@@ -95,6 +97,8 @@
 
 // ===== DARK THEME =====
 [data-theme="dark"] {
+  color-scheme: dark;
+
   // Backgrounds
   --bg-base: #09090b;
   --bg-base-rgb: 9, 9, 11;
