@@ -182,12 +182,16 @@ export class ImportService {
    */
   getProgress(id: number): Observable<{
     progress: number;
+    progressPercent: number;
+    totRecords: number;
     message: string;
     errors: string;
     status: ImportStatus;
   }> {
     return this.http.get<{
       progress: number;
+      progressPercent: number;
+      totRecords: number;
       message: string;
       errors: string;
       status: ImportStatus;

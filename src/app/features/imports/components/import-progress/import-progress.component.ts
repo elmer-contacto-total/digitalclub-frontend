@@ -423,7 +423,7 @@ export class ImportProgressComponent implements OnInit, OnDestroy {
       takeWhile(progress => progress.status !== 'status_completed' && progress.status !== 'status_error', true)
     ).subscribe({
       next: (progress) => {
-        this.progressPercent.set(progress.progress);
+        this.progressPercent.set(progress.progressPercent);
         this.progressMessage.set(progress.message || 'Procesando...');
 
         if (progress.errors) {
