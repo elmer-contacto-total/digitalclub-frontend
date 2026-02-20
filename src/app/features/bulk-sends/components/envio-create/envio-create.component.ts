@@ -758,9 +758,6 @@ export class EnvioCreateComponent implements OnDestroy {
     ).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res: any) => {
         this.toast.success('Envío masivo creado');
-        if (res.overlap_warning) {
-          this.toast.warning(res.overlap_warning);
-        }
         this.isSending.set(false);
         this.attachmentPreview.set(null);
         this.router.navigate(['/app/bulk_sends']);
