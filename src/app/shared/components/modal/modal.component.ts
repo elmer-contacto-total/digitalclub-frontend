@@ -6,7 +6,8 @@ import {
   effect,
   ElementRef,
   inject,
-  HostListener
+  HostListener,
+  OnDestroy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
@@ -19,7 +20,7 @@ export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
   templateUrl: './modal.component.html',
   styleUrl: './modal.component.scss'
 })
-export class ModalComponent {
+export class ModalComponent implements OnDestroy {
   private elementRef = inject(ElementRef);
 
   // Inputs
@@ -49,6 +50,12 @@ export class ModalComponent {
         this.close();
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    if (this.isVisible()) {
+      document.body.style.overflow = '';
+    }
   }
 
   @HostListener('document:keydown.escape')
