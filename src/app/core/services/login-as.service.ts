@@ -145,7 +145,18 @@ export class LoginAsService {
       throw new Error('No original user ID found');
     }
 
-    const params = new HttpParams().set('originalUserId', originalUserId.toString());
+    let params = new HttpParams().set('originalUserId', originalUserId.toString());
+
+    // Preserve active client for Super Admin
+    const activeClientStr = this.storage.getString('active_client');
+    if (activeClientStr) {
+      try {
+        const ac = JSON.parse(activeClientStr);
+        if (ac?.id) {
+          params = params.set('clientId', ac.id.toString());
+        }
+      } catch { /* ignore parse errors */ }
+    }
 
     return this.http.post<LoginAsApiResponse>(
       `${this.baseUrl}/return_from_impersonation`,
