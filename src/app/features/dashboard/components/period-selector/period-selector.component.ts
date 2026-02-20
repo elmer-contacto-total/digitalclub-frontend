@@ -161,6 +161,10 @@ import { PeriodType, PERIODS_CONFIG, DateRange } from '../../../../core/models/d
         width: 100%;
       }
     }
+
+    :host-context([data-theme="dark"]) .date-input {
+      color-scheme: dark;
+    }
   `]
 })
 export class PeriodSelectorComponent {
