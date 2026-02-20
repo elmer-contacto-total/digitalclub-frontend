@@ -247,10 +247,16 @@ export class BulkSender {
   pause(): void {
     console.log(`[BulkSender] Pausing bulk send ${this.bulkSendId}`);
     this.isPaused = true;
-    this._state = 'pausing';
     this.clearRateLimitTimer();
+    if (this.processLoopPromise) {
+      // processLoop is active — it will check isPaused and transition to 'paused'
+      this._state = 'pausing';
+    } else {
+      // processLoop already finished (auto-paused, completed, etc.) — go directly to 'paused'
+      this._state = 'paused';
+      this.notifyBackend('pause');
+    }
     this.emitOverlayUpdate();
-    // Don't notify backend yet — wait until current send completes in processLoop
   }
 
   async resume(): Promise<{ success: boolean; error?: string }> {
@@ -708,13 +714,17 @@ export class BulkSender {
     const phoneSuffix = expectedPhone.replace(/\D/g, '').slice(-8);
     const headerInfo = await this.whatsappView.webContents.executeJavaScript(`
       (function() {
-        var header = document.querySelector('#main header span[title]');
+        var header = document.querySelector('#main header span[title]') ||
+                     document.querySelector('#main header [data-testid*="conversation-info-header"]') ||
+                     document.querySelector('#main header span[dir="auto"]');
         if (!header) return '';
         return header.getAttribute('title') || header.textContent || '';
       })()
     `, true);
     const headerStr = String(headerInfo);
-    if (!headerStr) return { match: false, actual: 'no_header' };
+    // If no header element found at all (e.g. WhatsApp Business different DOM),
+    // trust the navigation — it already verified via search + compose box
+    if (!headerStr) return { match: true, actual: 'no_header_element' };
     const headerDigits = headerStr.replace(/\D/g, '');
     // If header has fewer than 8 digits, it's a saved contact name (e.g. "Juan Pérez")
     // — can't verify by phone, trust the navigation
@@ -1019,7 +1029,9 @@ export class BulkSender {
       // Verify header contains phone suffix (soft check — warning only)
       const headerCheck = await this.whatsappView.webContents.executeJavaScript(`
         (function() {
-          var header = document.querySelector('#main header span[title]');
+          var header = document.querySelector('#main header span[title]') ||
+                       document.querySelector('#main header [data-testid*="conversation-info-header"]') ||
+                       document.querySelector('#main header span[dir="auto"]');
           if (!header) return 'no_header';
           return header.getAttribute('title') || header.textContent || '';
         })()

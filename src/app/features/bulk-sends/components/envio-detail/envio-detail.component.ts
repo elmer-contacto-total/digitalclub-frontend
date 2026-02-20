@@ -383,14 +383,20 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
   pause(): void {
     if (this.electronService.isElectron) {
       this.electronService.pauseBulkSend();
-      this.toast.success('Envío pausado');
-      this.loadDetail();
-    } else {
-      this.bulkSendService.pauseBulkSend(this.bulkSendId).pipe(takeUntil(this.destroy$)).subscribe({
-        next: () => { this.toast.success('Envío pausado'); this.loadDetail(); },
-        error: (err) => this.toast.error(err.error?.message || 'Error al pausar')
-      });
     }
+    // Always call backend to ensure DB status is updated (idempotent)
+    this.bulkSendService.pauseBulkSend(this.bulkSendId).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => { this.toast.success('Envío pausado'); this.loadDetail(); },
+      error: (err) => {
+        if (this.electronService.isElectron) {
+          // Electron already paused locally — just refresh
+          this.toast.success('Envío pausado');
+          this.loadDetail();
+        } else {
+          this.toast.error(err.error?.message || 'Error al pausar');
+        }
+      }
+    });
   }
 
   resume(): void {
