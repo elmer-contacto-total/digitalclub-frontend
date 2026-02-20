@@ -210,11 +210,15 @@ export class ImportService {
    * PARIDAD: Rails Admin::ImportsController#validated_import_user
    * Phase D: Includes unmatchedColumns in response
    */
-  getValidatedUsers(id: number, page: number = 0, size: number = 50, filter: string = 'all'): Observable<ValidatedUsersResponse> {
-    const params = new HttpParams()
+  getValidatedUsers(id: number, page: number = 0, size: number = 50, filter: string = 'all', search: string = ''): Observable<ValidatedUsersResponse> {
+    let params = new HttpParams()
       .set('page', page.toString())
       .set('size', size.toString())
       .set('filter', filter);
+
+    if (search.trim()) {
+      params = params.set('search', search.trim());
+    }
 
     return this.http.get<ValidatedUsersResponse>(`${this.baseUrl}/${id}/validated_users`, { params });
   }

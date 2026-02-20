@@ -8,7 +8,7 @@ import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { Subject, takeUntil, interval, switchMap, takeWhile } from 'rxjs';
+import { Subject, takeUntil, interval, switchMap, takeWhile, debounceTime, distinctUntilChanged } from 'rxjs';
 import { ImportService, Import, ImportStatus, TempImportUser, UnmatchedColumn } from '../../../../core/services/import.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
@@ -120,22 +120,37 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       }
 
       <!-- Filter Tabs + Table -->
-      @if (!isLoading() && (tempUsers().length > 0 || errorFilter() !== 'all')) {
-        <!-- Filter Tabs -->
-        <div class="filter-tabs">
-          <button class="filter-tab" [class.active]="errorFilter() === 'all'" (click)="setFilter('all')">
-            Todos ({{ validCount() + invalidCount() }})
-          </button>
-          <button class="filter-tab" [class.active]="errorFilter() === 'valid'" (click)="setFilter('valid')">
-            Válidos ({{ validCount() }})
-          </button>
-          <button class="filter-tab" [class.active]="errorFilter() === 'errors'" (click)="setFilter('errors')">
-            @if (invalidCount() > 0) {
-              <span class="error-chip">Errores ({{ invalidCount() }})</span>
-            } @else {
-              Errores (0)
+      @if (!isLoading() && (tempUsers().length > 0 || errorFilter() !== 'all' || searchQuery())) {
+        <!-- Filter Tabs + Search -->
+        <div class="toolbar">
+          <div class="filter-tabs">
+            <button class="filter-tab" [class.active]="errorFilter() === 'all'" (click)="setFilter('all')">
+              Todos ({{ validCount() + invalidCount() }})
+            </button>
+            <button class="filter-tab" [class.active]="errorFilter() === 'valid'" (click)="setFilter('valid')">
+              Válidos ({{ validCount() }})
+            </button>
+            <button class="filter-tab" [class.active]="errorFilter() === 'errors'" (click)="setFilter('errors')">
+              @if (invalidCount() > 0) {
+                <span class="error-chip">Errores ({{ invalidCount() }})</span>
+              } @else {
+                Errores (0)
+              }
+            </button>
+          </div>
+          <div class="search-box">
+            <i class="ph ph-magnifying-glass search-icon"></i>
+            <input type="text"
+              class="search-input"
+              placeholder="Buscar por nombre, teléfono, email..."
+              [ngModel]="searchQuery()"
+              (ngModelChange)="onSearchInput($event)" />
+            @if (searchQuery()) {
+              <button class="search-clear" (click)="clearSearch()">
+                <i class="ph ph-x"></i>
+              </button>
             }
-          </button>
+          </div>
         </div>
 
         <div class="table-card">
@@ -464,11 +479,19 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       &:disabled { opacity: 0.5; cursor: not-allowed; }
     }
 
+    /* Toolbar: tabs + search */
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: var(--space-4);
+      margin-bottom: var(--space-3);
+    }
+
     /* Filter Tabs */
     .filter-tabs {
       display: flex;
       gap: var(--space-1);
-      margin-bottom: var(--space-3);
       border-bottom: 2px solid var(--border-default);
     }
 
@@ -490,6 +513,60 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
         color: var(--accent-default);
         border-bottom-color: var(--accent-default);
       }
+    }
+
+    /* Search Box */
+    .search-box {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--fg-subtle);
+      font-size: 16px;
+      pointer-events: none;
+    }
+
+    .search-input {
+      padding: var(--space-2) var(--space-3) var(--space-2) 32px;
+      width: 280px;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      background: var(--input-bg);
+      color: var(--fg-default);
+      transition: border-color var(--duration-fast);
+
+      &::placeholder { color: var(--fg-subtle); }
+      &:focus {
+        outline: none;
+        border-color: var(--accent-default);
+        box-shadow: 0 0 0 2px var(--accent-subtle, rgba(59, 130, 246, 0.15));
+      }
+    }
+
+    .search-clear {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--fg-muted);
+      cursor: pointer;
+
+      &:hover { background: var(--bg-muted); color: var(--fg-default); }
+      i { font-size: 14px; }
     }
 
     .error-chip {
@@ -734,7 +811,9 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       .imports-page { padding: var(--space-4); }
       .table-card { overflow-x: auto; }
       .data-table { min-width: 1100px; }
+      .toolbar { flex-direction: column; align-items: stretch; }
       .filter-tabs { overflow-x: auto; }
+      .search-input { width: 100%; }
     }
   `]
 })
@@ -764,6 +843,10 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
 
   // Filter
   errorFilter = signal<'all' | 'errors' | 'valid'>('all');
+
+  // Search
+  searchQuery = signal('');
+  private searchSubject$ = new Subject<string>();
 
   // Inline editing
   editingUserId = signal<number | null>(null);
@@ -805,6 +888,18 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     ).subscribe(params => {
       this.importId = +params['id'];
       this.loadImportData();
+    });
+
+    // Debounced search: wait 400ms after last keystroke, then reload
+    this.searchSubject$.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(query => {
+      this.searchQuery.set(query);
+      this.currentPage.set(1);
+      this.cancelEdit();
+      this.loadTempUsers();
     });
   }
 
@@ -851,8 +946,9 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     const page = this.currentPage() - 1; // Backend is 0-indexed
     const size = this.pageSize();
     const filter = this.errorFilter();
+    const search = this.searchQuery();
 
-    this.importService.getValidatedUsers(this.importId, page, size, filter).pipe(
+    this.importService.getValidatedUsers(this.importId, page, size, filter, search).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (result) => {
@@ -927,6 +1023,19 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     this.errorFilter.set(filter);
     this.currentPage.set(1);
     this.cancelEdit();
+    this.loadTempUsers();
+  }
+
+  // ===== Search =====
+
+  onSearchInput(value: string): void {
+    this.searchSubject$.next(value);
+  }
+
+  clearSearch(): void {
+    this.searchQuery.set('');
+    this.searchSubject$.next('');
+    this.currentPage.set(1);
     this.loadTempUsers();
   }
 
