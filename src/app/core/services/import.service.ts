@@ -246,6 +246,19 @@ export class ImportService {
   }
 
   /**
+   * Re-validar solo los TempImportUsers afectados tras editar/eliminar.
+   * Mucho más rápido que revalidateImport — O(k) en vez de O(n).
+   */
+  revalidateAffected(importId: number, params: {
+    tempUserId?: number;
+    deletedPhone?: string;
+    deletedEmail?: string;
+  }): Observable<{ validCount: number; invalidCount: number }> {
+    return this.http.post<{ validCount: number; invalidCount: number }>(
+      `${this.baseUrl}/${importId}/revalidate_affected`, params);
+  }
+
+  /**
    * Aceptar columnas desconocidas como campos CRM
    * Phase D: Interactive column selection
    */

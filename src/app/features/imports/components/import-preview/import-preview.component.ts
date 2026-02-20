@@ -1067,11 +1067,24 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {
-        this.editingUserId.set(null);
-        this.editForm = { codigo: '', firstName: '', lastName: '', phone: '', phoneCode: '', email: '', role: '', managerEmail: '' };
+        // 1. Optimistic UI: update the record locally immediately
+        this.tempUsers.update(users => users.map(u =>
+          u.id === userId ? { ...u, ...this.editForm, errorMessage: null } : u
+        ));
+        this.cancelEdit();
         this.isSavingEdit.set(false);
-        // Revalidate entire import to resolve cross-record errors
-        this.revalidateAndReload();
+
+        // 2. Partial revalidation in background
+        this.importService.revalidateAffected(this.importId, { tempUserId: userId }).pipe(
+          takeUntil(this.destroy$)
+        ).subscribe({
+          next: (result) => {
+            this.validCount.set(result.validCount);
+            this.invalidCount.set(result.invalidCount);
+            this.loadTempUsers();
+          },
+          error: () => this.loadTempUsers()
+        });
       },
       error: (err) => {
         console.error('Error updating temp user:', err);
@@ -1093,40 +1106,43 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
 
     this.isDeletingUser.set(true);
 
+    // Capture phone/email before deletion for partial revalidation
+    const deletedUser = this.tempUsers().find(u => u.id === userId);
+
     this.importService.deleteTempUser(this.importId, userId).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {
+        // 1. Optimistic UI: remove from array + adjust counts immediately
+        this.tempUsers.update(users => users.filter(u => u.id !== userId));
+        this.totalElements.update(n => Math.max(0, n - 1));
+        if (deletedUser?.errorMessage) {
+          this.invalidCount.update(n => Math.max(0, n - 1));
+        } else {
+          this.validCount.update(n => Math.max(0, n - 1));
+        }
         this.userToDelete.set(null);
         this.isDeletingUser.set(false);
         this.toast.success('Registro eliminado');
-        // Revalidate to resolve cross-record errors
-        this.revalidateAndReload();
+
+        // 2. Partial revalidation in background (using phone/email of the deleted record)
+        this.importService.revalidateAffected(this.importId, {
+          deletedPhone: deletedUser?.phone,
+          deletedEmail: deletedUser?.email
+        }).pipe(takeUntil(this.destroy$)).subscribe({
+          next: (result) => {
+            this.validCount.set(result.validCount);
+            this.invalidCount.set(result.invalidCount);
+            this.loadTempUsers();
+          },
+          error: () => this.loadTempUsers()
+        });
       },
       error: (err) => {
         console.error('Error deleting temp user:', err);
         this.toast.error('Error al eliminar registro');
         this.isDeletingUser.set(false);
         this.userToDelete.set(null);
-      }
-    });
-  }
-
-  // ===== Revalidation =====
-
-  private revalidateAndReload(): void {
-    this.importService.revalidateImport(this.importId).pipe(
-      takeUntil(this.destroy$)
-    ).subscribe({
-      next: (result) => {
-        this.validCount.set(result.validCount);
-        this.invalidCount.set(result.invalidCount);
-        this.loadTempUsers();
-      },
-      error: (err) => {
-        console.error('Error revalidating import:', err);
-        // Still reload the table even if revalidation fails
-        this.loadTempUsers();
       }
     });
   }
