@@ -2,8 +2,9 @@
  * Import Preview Component
  * PARIDAD: Rails admin/imports/validated_import_user.html.erb
  * Paso 2: Resultados de validación del CSV
+ * Features: Paginación real, filtro por error, chip de errores, edición/eliminación inline
  */
-import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -11,6 +12,8 @@ import { Subject, takeUntil, interval, switchMap, takeWhile } from 'rxjs';
 import { ImportService, Import, ImportStatus, TempImportUser, UnmatchedColumn } from '../../../../core/services/import.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
+import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
+import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
 
 @Component({
   selector: 'app-import-preview',
@@ -19,7 +22,9 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     CommonModule,
     RouterLink,
     FormsModule,
-    LoadingSpinnerComponent
+    LoadingSpinnerComponent,
+    PaginationComponent,
+    ConfirmDialogComponent
   ],
   template: `
     <div class="imports-page">
@@ -41,12 +46,24 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
             <p>Por favor, espere mientras se procesan los registros.</p>
           </div>
         </div>
-      } @else if (importData()?.status === 'status_valid') {
+      } @else if (importData()?.status === 'status_valid' && invalidCount() === 0) {
         <div class="status-banner status-banner-success">
           <i class="ph ph-check-circle"></i>
           <div>
             <strong>Archivo válido</strong>
-            <p>Se encontraron <strong>{{ importData()?.totRecords }}</strong> registros listos para importar.</p>
+            <p>Se encontraron <strong>{{ validCount() }}</strong> registros listos para importar.</p>
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="sendInvitationEmail" />
+              <span>Enviar correo de invitación a los usuarios nuevos</span>
+            </label>
+          </div>
+        </div>
+      } @else if (importData()?.status === 'status_valid' && invalidCount() > 0) {
+        <div class="status-banner status-banner-warning">
+          <i class="ph ph-warning"></i>
+          <div>
+            <strong>{{ validCount() }} registros válidos, {{ invalidCount() }} con errores</strong>
+            <p>Resuelva los errores editando o eliminando los registros antes de procesar.</p>
             <label class="checkbox-label">
               <input type="checkbox" [(ngModel)]="sendInvitationEmail" />
               <span>Enviar correo de invitación a los usuarios nuevos</span>
@@ -102,8 +119,25 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         </div>
       }
 
-      <!-- Table -->
-      @if (!isLoading() && tempUsers().length > 0) {
+      <!-- Filter Tabs + Table -->
+      @if (!isLoading() && (tempUsers().length > 0 || errorFilter() !== 'all')) {
+        <!-- Filter Tabs -->
+        <div class="filter-tabs">
+          <button class="filter-tab" [class.active]="errorFilter() === 'all'" (click)="setFilter('all')">
+            Todos ({{ validCount() + invalidCount() }})
+          </button>
+          <button class="filter-tab" [class.active]="errorFilter() === 'valid'" (click)="setFilter('valid')">
+            Válidos ({{ validCount() }})
+          </button>
+          <button class="filter-tab" [class.active]="errorFilter() === 'errors'" (click)="setFilter('errors')">
+            @if (invalidCount() > 0) {
+              <span class="error-chip">Errores ({{ invalidCount() }})</span>
+            } @else {
+              Errores (0)
+            }
+          </button>
+        </div>
+
         <div class="table-card">
           <table class="data-table">
             <thead>
@@ -117,26 +151,131 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                 <th>Rol</th>
                 <th>Ejecutivo</th>
                 <th>CRM</th>
-                <th>Error</th>
+                <th>
+                  @if (invalidCount() > 0) {
+                    <span class="error-count-chip">ERROR ({{ invalidCount() }})</span>
+                  } @else {
+                    Error
+                  }
+                </th>
+                <th class="col-actions">Acciones</th>
               </tr>
             </thead>
             <tbody>
               @for (user of tempUsers(); track user.id) {
-                <tr [class.row-error]="user.errorMessage">
-                  <td>{{ user.codigo }}</td>
-                  <td>{{ user.lastName }}</td>
-                  <td>{{ user.firstName }}</td>
-                  <td>{{ user.phone }}</td>
-                  <td>{{ user.phoneCode }}</td>
-                  <td>{{ user.email }}</td>
-                  <td>{{ user.role }}</td>
-                  <td>{{ user.managerEmail }}</td>
+                <tr [class.row-error]="user.errorMessage" [class.row-editing]="editingUserId() === user.id">
+                  <!-- Codigo -->
+                  <td>
+                    @if (editingUserId() === user.id) {
+                      <input class="inline-input" [(ngModel)]="editForm.codigo" />
+                    } @else {
+                      {{ user.codigo }}
+                    }
+                  </td>
+                  <!-- Apellido -->
+                  <td>
+                    @if (editingUserId() === user.id) {
+                      <input class="inline-input" [(ngModel)]="editForm.lastName" />
+                    } @else {
+                      {{ user.lastName }}
+                    }
+                  </td>
+                  <!-- Nombres -->
+                  <td>
+                    @if (editingUserId() === user.id) {
+                      <input class="inline-input" [(ngModel)]="editForm.firstName" />
+                    } @else {
+                      {{ user.firstName }}
+                    }
+                  </td>
+                  <!-- Teléfono -->
+                  <td>
+                    @if (editingUserId() === user.id) {
+                      <input class="inline-input" [(ngModel)]="editForm.phone" />
+                    } @else {
+                      {{ user.phone }}
+                    }
+                  </td>
+                  <!-- Cód. País -->
+                  <td>
+                    @if (editingUserId() === user.id) {
+                      <input class="inline-input inline-input-sm" [(ngModel)]="editForm.phoneCode" />
+                    } @else {
+                      {{ user.phoneCode }}
+                    }
+                  </td>
+                  <!-- Email -->
+                  <td>
+                    @if (editingUserId() === user.id) {
+                      <input class="inline-input" [(ngModel)]="editForm.email" />
+                    } @else {
+                      {{ user.email }}
+                    }
+                  </td>
+                  <!-- Rol -->
+                  <td>
+                    @if (editingUserId() === user.id) {
+                      <input class="inline-input inline-input-sm" [(ngModel)]="editForm.role" />
+                    } @else {
+                      {{ user.role }}
+                    }
+                  </td>
+                  <!-- Ejecutivo -->
+                  <td>
+                    @if (editingUserId() === user.id) {
+                      <input class="inline-input" [(ngModel)]="editForm.managerEmail" />
+                    } @else {
+                      {{ user.managerEmail }}
+                    }
+                  </td>
+                  <!-- CRM -->
                   <td class="text-subtle">{{ formatCrmFields(user.crmFields) }}</td>
+                  <!-- Error -->
                   <td class="error-cell">{{ user.errorMessage }}</td>
+                  <!-- Actions -->
+                  <td class="col-actions">
+                    @if (editingUserId() === user.id) {
+                      <div class="row-actions">
+                        <button class="action-btn action-btn-success" (click)="saveEdit(user.id)" title="Guardar"
+                          [disabled]="isSavingEdit()">
+                          <i class="ph ph-check"></i>
+                        </button>
+                        <button class="action-btn" (click)="cancelEdit()" title="Cancelar">
+                          <i class="ph ph-x"></i>
+                        </button>
+                      </div>
+                    } @else if (user.errorMessage) {
+                      <div class="row-actions">
+                        <button class="action-btn" (click)="startEdit(user)" title="Editar">
+                          <i class="ph ph-pencil-simple"></i>
+                        </button>
+                        <button class="action-btn action-btn-danger" (click)="confirmDeleteUser(user.id)" title="Eliminar">
+                          <i class="ph ph-trash"></i>
+                        </button>
+                      </div>
+                    }
+                  </td>
                 </tr>
               }
             </tbody>
           </table>
+
+          <!-- Pagination Footer -->
+          @if (totalElements() > 0) {
+            <div class="table-footer">
+              <span class="records-info">
+                Mostrando {{ startRecord() }}-{{ endRecord() }} de {{ totalElements() }}
+              </span>
+              <app-pagination
+                [currentPage]="currentPage()"
+                [totalItems]="totalElements()"
+                [pageSize]="pageSize()"
+                [pageSizeOptions]="[25, 50, 100]"
+                (pageChange)="onPageChange($event)"
+                (pageSizeChange)="onPageSizeChange($event)"
+              />
+            </div>
+          }
         </div>
       }
 
@@ -145,7 +284,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         @if (importData()?.status === 'status_valid') {
           <a routerLink="/app/imports/new" [queryParams]="{import_type: 'users'}" class="btn-ghost">Cancelar</a>
           <button type="button" class="btn-primary" (click)="confirmImport()"
-            [disabled]="isProcessing() || unmatchedColumns().length > 0">
+            [disabled]="isProcessing() || unmatchedColumns().length > 0 || invalidCount() > 0">
             @if (isProcessing()) {
               <span class="spinner spinner-sm"></span>
               Procesando...
@@ -165,12 +304,26 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       @if (isLoading()) {
         <app-loading-spinner [overlay]="true" message="Cargando datos..." />
       }
+
+      <!-- Delete Confirmation Dialog -->
+      @if (userToDelete() !== null) {
+        <app-confirm-dialog
+          [isOpen]="true"
+          title="Eliminar Registro"
+          message="¿Está seguro de eliminar este registro? Esta acción no se puede deshacer."
+          type="danger"
+          confirmLabel="Eliminar"
+          [isLoading]="isDeletingUser()"
+          (confirmed)="deleteUser()"
+          (cancelled)="userToDelete.set(null)"
+        />
+      }
     </div>
   `,
   styles: [`
     .imports-page {
       padding: var(--space-6);
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
     }
 
@@ -263,9 +416,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     }
 
     /* Unmatched columns section */
-    .unmatched-section {
-      flex: 1;
-    }
+    .unmatched-section { flex: 1; }
 
     .unmatched-list {
       display: flex;
@@ -313,6 +464,52 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       &:disabled { opacity: 0.5; cursor: not-allowed; }
     }
 
+    /* Filter Tabs */
+    .filter-tabs {
+      display: flex;
+      gap: var(--space-1);
+      margin-bottom: var(--space-3);
+      border-bottom: 2px solid var(--border-default);
+    }
+
+    .filter-tab {
+      padding: var(--space-2) var(--space-4);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      font-size: var(--text-sm);
+      font-weight: var(--font-medium);
+      color: var(--fg-muted);
+      cursor: pointer;
+      transition: all var(--duration-fast);
+
+      &:hover { color: var(--fg-default); }
+
+      &.active {
+        color: var(--accent-default);
+        border-bottom-color: var(--accent-default);
+      }
+    }
+
+    .error-chip {
+      background: var(--error-default);
+      color: #fff;
+      padding: 1px 8px;
+      border-radius: 12px;
+      font-size: var(--text-xs);
+      font-weight: var(--font-semibold);
+    }
+
+    .error-count-chip {
+      background: var(--error-default);
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: var(--text-xs);
+      font-weight: var(--font-semibold);
+    }
+
     /* Table */
     .table-card {
       background: var(--card-bg);
@@ -358,13 +555,101 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       background: var(--error-subtle) !important;
     }
 
+    .row-editing {
+      background: var(--info-subtle) !important;
+    }
+
     .error-cell {
       color: var(--error-text);
       font-weight: var(--font-medium);
       font-size: var(--text-xs);
+      max-width: 250px;
     }
 
     .text-subtle { color: var(--fg-subtle); }
+
+    .col-actions {
+      width: 90px;
+      text-align: center;
+    }
+
+    /* Inline Edit Inputs */
+    .inline-input {
+      width: 100%;
+      min-width: 80px;
+      padding: var(--space-1) var(--space-2);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      background: var(--input-bg);
+      color: var(--fg-default);
+
+      &:focus {
+        outline: none;
+        border-color: var(--accent-default);
+        box-shadow: 0 0 0 2px var(--accent-subtle, rgba(59, 130, 246, 0.15));
+      }
+    }
+
+    .inline-input-sm {
+      min-width: 50px;
+      max-width: 80px;
+    }
+
+    /* Row Actions */
+    .row-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-1);
+    }
+
+    .action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--fg-muted);
+      cursor: pointer;
+      transition: all var(--duration-fast);
+
+      &:hover:not(:disabled) {
+        background: var(--bg-muted);
+        color: var(--fg-default);
+      }
+
+      &:disabled { opacity: 0.5; cursor: not-allowed; }
+
+      i { font-size: 16px; }
+    }
+
+    .action-btn-danger:hover:not(:disabled) {
+      background: var(--error-subtle);
+      color: var(--error-default);
+    }
+
+    .action-btn-success:hover:not(:disabled) {
+      background: var(--success-subtle);
+      color: var(--success-default);
+    }
+
+    /* Table Footer */
+    .table-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-3) var(--space-4);
+      border-top: 1px solid var(--table-border);
+    }
+
+    .records-info {
+      font-size: var(--text-sm);
+      color: var(--fg-subtle);
+    }
 
     /* Buttons */
     .btn-primary {
@@ -448,7 +733,8 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     @media (max-width: 768px) {
       .imports-page { padding: var(--space-4); }
       .table-card { overflow-x: auto; }
-      .data-table { min-width: 900px; }
+      .data-table { min-width: 1100px; }
+      .filter-tabs { overflow-x: auto; }
     }
   `]
 })
@@ -466,6 +752,37 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
   unmatchedColumns = signal<UnmatchedColumn[]>([]);
   selectedColumns = signal<Set<string>>(new Set());
 
+  // Pagination
+  currentPage = signal(1);
+  pageSize = signal(50);
+  totalElements = signal(0);
+  totalPages = signal(0);
+
+  // Counts
+  validCount = signal(0);
+  invalidCount = signal(0);
+
+  // Filter
+  errorFilter = signal<'all' | 'errors' | 'valid'>('all');
+
+  // Inline editing
+  editingUserId = signal<number | null>(null);
+  editForm = {
+    codigo: '',
+    firstName: '',
+    lastName: '',
+    phone: '',
+    phoneCode: '',
+    email: '',
+    role: '',
+    managerEmail: ''
+  };
+  isSavingEdit = signal(false);
+
+  // Delete
+  userToDelete = signal<number | null>(null);
+  isDeletingUser = signal(false);
+
   // State
   isLoading = signal(true);
   isValidating = signal(false);
@@ -474,6 +791,13 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
 
   // Options
   sendInvitationEmail = false;
+
+  // Computed
+  startRecord = computed(() => {
+    if (this.totalElements() === 0) return 0;
+    return (this.currentPage() - 1) * this.pageSize() + 1;
+  });
+  endRecord = computed(() => Math.min(this.currentPage() * this.pageSize(), this.totalElements()));
 
   ngOnInit(): void {
     this.route.params.pipe(
@@ -507,21 +831,7 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
 
         // Load temp users for preview when validation is complete
         if (data.status === 'status_valid' || data.status === 'status_error') {
-          this.importService.getValidatedUsers(this.importId).pipe(
-            takeUntil(this.destroy$)
-          ).subscribe({
-            next: (result) => {
-              this.tempUsers.set(result.tempUsers || []);
-              this.unmatchedColumns.set(result.unmatchedColumns || []);
-              // Pre-select all unmatched columns by default
-              if (result.unmatchedColumns && result.unmatchedColumns.length > 0) {
-                this.selectedColumns.set(new Set(result.unmatchedColumns.map(c => c.name)));
-              }
-            },
-            error: (err) => {
-              console.error('Error loading temp users:', err);
-            }
-          });
+          this.loadTempUsers();
         }
       },
       error: (err) => {
@@ -533,15 +843,43 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Load temp users with current pagination and filter settings.
+   * Separated from loadImportData() to allow independent reloads.
+   */
+  loadTempUsers(): void {
+    const page = this.currentPage() - 1; // Backend is 0-indexed
+    const size = this.pageSize();
+    const filter = this.errorFilter();
+
+    this.importService.getValidatedUsers(this.importId, page, size, filter).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (result) => {
+        this.tempUsers.set(result.tempUsers || []);
+        this.validCount.set(result.validCount ?? 0);
+        this.invalidCount.set(result.invalidCount ?? 0);
+        this.totalElements.set(result.totalElements ?? 0);
+        this.totalPages.set(result.totalPages ?? 0);
+        this.unmatchedColumns.set(result.unmatchedColumns || []);
+        // Pre-select all unmatched columns by default
+        if (result.unmatchedColumns && result.unmatchedColumns.length > 0) {
+          this.selectedColumns.set(new Set(result.unmatchedColumns.map(c => c.name)));
+        }
+      },
+      error: (err) => {
+        console.error('Error loading temp users:', err);
+      }
+    });
+  }
+
   pollStatus(): void {
-    // Poll every 2 seconds until validation is complete
     interval(2000).pipe(
       takeUntil(this.destroy$),
       switchMap(() => this.importService.getStatus(this.importId)),
       takeWhile(status => !this.importService.isComplete(status.status) && status.status !== 'status_valid', true)
     ).subscribe({
       next: (status) => {
-        // Update import data with new status
         this.importData.update(data => {
           if (data) {
             return {
@@ -555,10 +893,8 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
           return data;
         });
 
-        // Check if validation is complete
         if (status.status === 'status_valid' || status.status === 'status_error' || status.status === 'status_completed') {
           this.isValidating.set(false);
-          // Reload full data to get temp users
           this.loadImportData();
         }
       },
@@ -569,10 +905,125 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Format CRM fields from object to readable string
-   * Phase F2: Converts {key: value} to "key: value, ..."
-   */
+  // ===== Pagination =====
+
+  onPageChange(page: number): void {
+    this.currentPage.set(page);
+    this.cancelEdit();
+    this.loadTempUsers();
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.currentPage.set(1);
+    this.cancelEdit();
+    this.loadTempUsers();
+  }
+
+  // ===== Filter =====
+
+  setFilter(filter: 'all' | 'errors' | 'valid'): void {
+    if (this.errorFilter() === filter) return;
+    this.errorFilter.set(filter);
+    this.currentPage.set(1);
+    this.cancelEdit();
+    this.loadTempUsers();
+  }
+
+  // ===== Inline Edit =====
+
+  startEdit(user: TempImportUser): void {
+    this.editingUserId.set(user.id);
+    this.editForm = {
+      codigo: user.codigo || '',
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      phone: user.phone || '',
+      phoneCode: user.phoneCode || '',
+      email: user.email || '',
+      role: user.role || '',
+      managerEmail: user.managerEmail || ''
+    };
+  }
+
+  cancelEdit(): void {
+    this.editingUserId.set(null);
+    this.editForm = { codigo: '', firstName: '', lastName: '', phone: '', phoneCode: '', email: '', role: '', managerEmail: '' };
+  }
+
+  saveEdit(userId: number): void {
+    this.isSavingEdit.set(true);
+
+    this.importService.updateTempUser(this.importId, userId, this.editForm).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: () => {
+        this.editingUserId.set(null);
+        this.editForm = { codigo: '', firstName: '', lastName: '', phone: '', phoneCode: '', email: '', role: '', managerEmail: '' };
+        this.isSavingEdit.set(false);
+        // Revalidate entire import to resolve cross-record errors
+        this.revalidateAndReload();
+      },
+      error: (err) => {
+        console.error('Error updating temp user:', err);
+        this.toast.error('Error al guardar cambios');
+        this.isSavingEdit.set(false);
+      }
+    });
+  }
+
+  // ===== Delete =====
+
+  confirmDeleteUser(userId: number): void {
+    this.userToDelete.set(userId);
+  }
+
+  deleteUser(): void {
+    const userId = this.userToDelete();
+    if (userId === null) return;
+
+    this.isDeletingUser.set(true);
+
+    this.importService.deleteTempUser(this.importId, userId).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: () => {
+        this.userToDelete.set(null);
+        this.isDeletingUser.set(false);
+        this.toast.success('Registro eliminado');
+        // Revalidate to resolve cross-record errors
+        this.revalidateAndReload();
+      },
+      error: (err) => {
+        console.error('Error deleting temp user:', err);
+        this.toast.error('Error al eliminar registro');
+        this.isDeletingUser.set(false);
+        this.userToDelete.set(null);
+      }
+    });
+  }
+
+  // ===== Revalidation =====
+
+  private revalidateAndReload(): void {
+    this.importService.revalidateImport(this.importId).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (result) => {
+        this.validCount.set(result.validCount);
+        this.invalidCount.set(result.invalidCount);
+        this.loadTempUsers();
+      },
+      error: (err) => {
+        console.error('Error revalidating import:', err);
+        // Still reload the table even if revalidation fails
+        this.loadTempUsers();
+      }
+    });
+  }
+
+  // ===== CRM / Columns =====
+
   formatCrmFields(crmFields: Record<string, string> | null): string {
     if (!crmFields || typeof crmFields !== 'object') return '';
     return Object.entries(crmFields)
@@ -580,7 +1031,6 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
       .join(', ');
   }
 
-  /** Phase D: Toggle individual column selection */
   toggleColumn(name: string): void {
     this.selectedColumns.update(set => {
       const newSet = new Set(set);
@@ -593,23 +1043,19 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Phase D: Select all unmatched columns */
   selectAllColumns(): void {
     this.selectedColumns.set(new Set(this.unmatchedColumns().map(c => c.name)));
   }
 
-  /** Phase D: Deselect all unmatched columns */
   selectNoColumns(): void {
     this.selectedColumns.set(new Set());
   }
 
-  /** Phase D: Confirm column selection and send to backend */
   confirmColumnSelection(): void {
     const selected = Array.from(this.selectedColumns());
     this.isAcceptingColumns.set(true);
 
     if (selected.length === 0) {
-      // No columns selected — just dismiss the banner
       this.unmatchedColumns.set([]);
       this.isAcceptingColumns.set(false);
       this.toast.success('Columnas descartadas');
@@ -623,8 +1069,7 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
         this.isAcceptingColumns.set(false);
         this.unmatchedColumns.set([]);
         this.toast.success(`${selected.length} columna(s) agregadas como campos CRM`);
-        // Reload data to reflect changes
-        this.loadImportData();
+        this.loadTempUsers();
       },
       error: (err) => {
         console.error('Error accepting columns:', err);
@@ -634,20 +1079,19 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ===== Process =====
+
   confirmImport(): void {
-    if (this.importData()?.status !== 'status_valid') {
-      return;
-    }
+    if (this.importData()?.status !== 'status_valid') return;
+    if (this.invalidCount() > 0) return;
 
     this.isProcessing.set(true);
 
-    // Phase F3: Send sendInvitationEmail parameter
     this.importService.confirmImport(this.importId, this.sendInvitationEmail).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {
         this.toast.success('Importación iniciada correctamente');
-        // Navigate to progress view
         this.router.navigate(['/app/imports', this.importId, 'progress']);
       },
       error: (err) => {

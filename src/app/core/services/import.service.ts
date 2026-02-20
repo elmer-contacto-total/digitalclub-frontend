@@ -91,6 +91,9 @@ export interface ValidatedUsersResponse {
   invalidCount: number;
   status: ImportStatus;
   tempUsers: TempImportUser[];
+  totalElements: number;
+  totalPages: number;
+  currentPage: number;
   unmatchedColumns?: UnmatchedColumn[];
 }
 
@@ -207,12 +210,35 @@ export class ImportService {
    * PARIDAD: Rails Admin::ImportsController#validated_import_user
    * Phase D: Includes unmatchedColumns in response
    */
-  getValidatedUsers(id: number, page: number = 0, size: number = 20): Observable<ValidatedUsersResponse> {
+  getValidatedUsers(id: number, page: number = 0, size: number = 50, filter: string = 'all'): Observable<ValidatedUsersResponse> {
     const params = new HttpParams()
       .set('page', page.toString())
-      .set('size', size.toString());
+      .set('size', size.toString())
+      .set('filter', filter);
 
     return this.http.get<ValidatedUsersResponse>(`${this.baseUrl}/${id}/validated_users`, { params });
+  }
+
+  /**
+   * Actualizar campos de un TempImportUser (edición inline)
+   */
+  updateTempUser(importId: number, tempUserId: number, fields: Record<string, string>): Observable<TempImportUser> {
+    return this.http.patch<TempImportUser>(`${this.baseUrl}/${importId}/temp_users/${tempUserId}`, fields);
+  }
+
+  /**
+   * Eliminar un TempImportUser
+   */
+  deleteTempUser(importId: number, tempUserId: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${importId}/temp_users/${tempUserId}`);
+  }
+
+  /**
+   * Re-validar todos los TempImportUsers de un import.
+   * Resuelve errores cruzados (duplicados) después de editar/eliminar.
+   */
+  revalidateImport(importId: number): Observable<{ validCount: number; invalidCount: number }> {
+    return this.http.post<{ validCount: number; invalidCount: number }>(`${this.baseUrl}/${importId}/revalidate`, {});
   }
 
   /**
