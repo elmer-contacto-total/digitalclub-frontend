@@ -144,7 +144,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       </form>
 
       @if (isSubmitting()) {
-        <app-loading-spinner [overlay]="true" message="Validando archivo..." />
+        <app-loading-spinner [fullscreen]="true" message="Validando archivo..." />
       }
     </div>
   `,

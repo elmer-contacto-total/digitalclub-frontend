@@ -183,7 +183,7 @@ interface FieldOption {
       }
 
       @if (isConfirming()) {
-        <app-loading-spinner [overlay]="true" message="Validando con el mapeo seleccionado..." />
+        <app-loading-spinner [fullscreen]="true" message="Validando con el mapeo seleccionado..." />
       }
     </div>
   `,

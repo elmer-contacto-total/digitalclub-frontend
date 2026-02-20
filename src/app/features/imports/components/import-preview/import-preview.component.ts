@@ -317,7 +317,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       </div>
 
       @if (isLoading()) {
-        <app-loading-spinner [overlay]="true" message="Cargando datos..." />
+        <app-loading-spinner [fullscreen]="true" message="Cargando datos..." />
       }
 
       <!-- Delete Confirmation Dialog -->

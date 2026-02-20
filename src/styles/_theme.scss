@@ -7,6 +7,7 @@
 :root {
   // Backgrounds
   --bg-base: #f8f8f8;
+  --bg-base-rgb: 248, 248, 248;
   --bg-subtle: #f0f0f1;
   --bg-muted: #e8e8e9;
   --bg-emphasis: #dcdcde;
@@ -96,6 +97,7 @@
 [data-theme="dark"] {
   // Backgrounds
   --bg-base: #09090b;
+  --bg-base-rgb: 9, 9, 11;
   --bg-subtle: #18181b;
   --bg-muted: #27272a;
   --bg-emphasis: #3f3f46;

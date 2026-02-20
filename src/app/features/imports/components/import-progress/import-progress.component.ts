@@ -122,7 +122,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       </div>
 
       @if (isLoading()) {
-        <app-loading-spinner [overlay]="true" message="Cargando..." />
+        <app-loading-spinner [fullscreen]="true" message="Cargando..." />
       }
     </div>
   `,
