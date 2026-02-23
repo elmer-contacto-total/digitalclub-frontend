@@ -150,6 +150,9 @@
                   </div>
                   <div class="notification-content">
                     <p class="notification-text">{{ alert.title }}</p>
+                    @if (alert.message) {
+                      <p class="notification-body">{{ alert.message }}</p>
+                    }
                     <span class="notification-time">{{ getTimeAgo(alert.created_at) }}</span>
                   </div>
                 </a>
@@ -198,11 +201,11 @@
             <i class="ph ph-user"></i>
             <span>Mi Perfil</span>
           </a>
-          <a routerLink="/app/settings" class="dropdown-item" (click)="closeAllMenus()">
+          <a class="dropdown-item disabled" (click)="closeAllMenus()">
             <i class="ph ph-gear"></i>
             <span>Ajustes</span>
           </a>
-          <a routerLink="/app/help" class="dropdown-item" (click)="closeAllMenus()">
+          <a class="dropdown-item disabled" (click)="closeAllMenus()">
             <i class="ph ph-question"></i>
             <span>Ayuda</span>
           </a>
