@@ -9,6 +9,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Subject, takeUntil, debounceTime, distinctUntilChanged } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 
 // Message item for list display
 interface MessageListItem {
@@ -36,7 +37,7 @@ type MessageDirection = 'incoming' | 'outgoing';
 @Component({
   selector: 'app-messages-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PaginationComponent],
   template: `
     <div class="messages-list-container">
       <!-- Page Header (PARIDAD RAILS: "Lista de Mensajes") -->
@@ -114,11 +115,24 @@ type MessageDirection = 'incoming' | 'outgoing';
             <table class="data-table">
               <thead>
                 <tr>
-                  <th class="col-person">
-                    {{ activeTab() === 'incoming' ? 'Enviado por' : 'Enviado por' }}
+                  <th class="col-person sortable" (click)="toggleSort('sender.firstName')">
+                    <span class="th-content">
+                      {{ activeTab() === 'incoming' ? 'Enviado por' : 'Enviado por' }}
+                      <i class="sort-icon" [ngClass]="getSortIcon('sender.firstName')"></i>
+                    </span>
                   </th>
-                  <th class="col-message">Mensaje</th>
-                  <th class="col-date">Fecha</th>
+                  <th class="col-message sortable" (click)="toggleSort('content')">
+                    <span class="th-content">
+                      Mensaje
+                      <i class="sort-icon" [ngClass]="getSortIcon('content')"></i>
+                    </span>
+                  </th>
+                  <th class="col-date sortable" (click)="toggleSort('sentAt')">
+                    <span class="th-content">
+                      Fecha
+                      <i class="sort-icon" [ngClass]="getSortIcon('sentAt')"></i>
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -153,46 +167,15 @@ type MessageDirection = 'incoming' | 'outgoing';
 
           <!-- Pagination Footer -->
           <div class="table-footer">
-            <div class="pagination-info">
-              Mostrando <strong>{{ getShowingStart() }}</strong> - <strong>{{ getShowingEnd() }}</strong> de <strong>{{ totalRecords }}</strong> registros
-            </div>
-            <div class="pagination-controls">
-              <button
-                class="pagination-btn"
-                [disabled]="currentPage === 0 || isLoading()"
-                (click)="goToPage(0)"
-                title="Primera página"
-              >
-                <i class="ph ph-caret-double-left"></i>
-              </button>
-              <button
-                class="pagination-btn"
-                [disabled]="currentPage === 0 || isLoading()"
-                (click)="goToPage(currentPage - 1)"
-                title="Página anterior"
-              >
-                <i class="ph ph-caret-left"></i>
-              </button>
-              <span class="page-indicator">
-                {{ currentPage + 1 }} / {{ getTotalPages() }}
-              </span>
-              <button
-                class="pagination-btn"
-                [disabled]="!hasMore() || isLoading()"
-                (click)="goToPage(currentPage + 1)"
-                title="Página siguiente"
-              >
-                <i class="ph ph-caret-right"></i>
-              </button>
-              <button
-                class="pagination-btn"
-                [disabled]="!hasMore() || isLoading()"
-                (click)="goToPage(getTotalPages() - 1)"
-                title="Última página"
-              >
-                <i class="ph ph-caret-double-right"></i>
-              </button>
-            </div>
+            <app-pagination
+              [currentPage]="currentPage"
+              [totalItems]="totalRecords"
+              [pageSize]="pageSize"
+              [pageSizeOptions]="[10, 25, 50, 100]"
+              [showPageSize]="true"
+              (pageChange)="onPageChange($event)"
+              (pageSizeChange)="onPageSizeChange($event)"
+            />
           </div>
         }
       </div>
@@ -209,12 +192,15 @@ export class MessagesListComponent implements OnInit, OnDestroy {
   activeTab = signal<MessageDirection>('incoming');
   messages = signal<MessageListItem[]>([]);
   isLoading = signal(false);
-  hasMore = signal(true);
   searchTerm = '';
 
-  // Pagination
-  currentPage = 0;
-  private pageSize = 25;
+  // Sorting
+  sortBy = 'sentAt';
+  sortDir: 'asc' | 'desc' = 'desc';
+
+  // Pagination (1-based for PaginationComponent)
+  currentPage = 1;
+  pageSize = 25;
   totalRecords = 0;
 
   ngOnInit(): void {
@@ -252,25 +238,35 @@ export class MessagesListComponent implements OnInit, OnDestroy {
     this.resetAndLoad();
   }
 
-  // Pagination methods
-  goToPage(page: number): void {
-    if (page < 0 || page >= this.getTotalPages()) return;
+  // Sorting
+  toggleSort(column: string): void {
+    if (this.sortBy === column) {
+      this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortBy = column;
+      this.sortDir = 'desc';
+    }
+    this.currentPage = 1;
+    this.loadMessages();
+  }
+
+  getSortIcon(column: string): string {
+    if (this.sortBy !== column) {
+      return 'ph ph-arrows-down-up';
+    }
+    return this.sortDir === 'asc' ? 'ph ph-arrow-up' : 'ph ph-arrow-down';
+  }
+
+  // Pagination handlers
+  onPageChange(page: number): void {
     this.currentPage = page;
     this.loadMessages();
   }
 
-  getTotalPages(): number {
-    return Math.ceil(this.totalRecords / this.pageSize) || 1;
-  }
-
-  getShowingStart(): number {
-    if (this.totalRecords === 0) return 0;
-    return this.currentPage * this.pageSize + 1;
-  }
-
-  getShowingEnd(): number {
-    const end = (this.currentPage + 1) * this.pageSize;
-    return Math.min(end, this.totalRecords);
+  onPageSizeChange(size: number): void {
+    this.pageSize = size;
+    this.currentPage = 1;
+    this.loadMessages();
   }
 
   truncateMessage(content: string): string {
@@ -300,19 +296,21 @@ export class MessagesListComponent implements OnInit, OnDestroy {
   }
 
   private resetAndLoad(): void {
-    this.currentPage = 0;
+    this.currentPage = 1;
     this.messages.set([]);
-    this.hasMore.set(true);
     this.loadMessages();
   }
 
   private loadMessages(): void {
     this.isLoading.set(true);
 
+    // Convert 1-based currentPage to 0-based for API
     let params = new HttpParams()
       .set('direction', this.activeTab())
-      .set('page', this.currentPage.toString())
-      .set('pageSize', this.pageSize.toString());
+      .set('page', (this.currentPage - 1).toString())
+      .set('pageSize', this.pageSize.toString())
+      .set('sortBy', this.sortBy)
+      .set('sortDir', this.sortDir);
 
     if (this.searchTerm) {
       params = params.set('search', this.searchTerm);
@@ -325,10 +323,6 @@ export class MessagesListComponent implements OnInit, OnDestroy {
           // Handle backend response format: { data: [...], meta: { totalItems, totalPages, ... } }
           this.totalRecords = response.meta?.totalItems || 0;
           this.messages.set(this.mapMessages(response.data || []));
-
-          const totalPages = response.meta?.totalPages || 1;
-          this.hasMore.set(this.currentPage < totalPages - 1);
-
           this.isLoading.set(false);
         },
         error: (err) => {
