@@ -300,7 +300,23 @@ export class ImportService {
    * PARIDAD: Rails Admin::ImportsController#sample_csv
    */
   downloadSampleCsv(importType: string = 'user'): void {
-    window.open(`${this.baseUrl}/sample_csv?importType=${importType}`, '_blank');
+    this.http.get(`${this.baseUrl}/sample_csv`, {
+      params: { importType },
+      responseType: 'blob',
+      observe: 'response'
+    }).subscribe({
+      next: (response) => {
+        const blob = response.body;
+        if (!blob) return;
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'usuarios_muestra.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+      },
+      error: (err) => console.error('Error downloading sample CSV:', err)
+    });
   }
 
   /**
