@@ -36,6 +36,11 @@ export class ApiService {
   post<T>(endpoint: string, body?: unknown, options?: ApiOptions): Observable<T> {
     const url = this.buildUrl(endpoint);
     const httpOptions = this.buildHttpOptions(options);
+
+    if (options?.responseType === 'blob') {
+      return this.http.post(url, body, { ...httpOptions, responseType: 'blob' }) as Observable<T>;
+    }
+
     return this.http.post<T>(url, body, httpOptions);
   }
 
