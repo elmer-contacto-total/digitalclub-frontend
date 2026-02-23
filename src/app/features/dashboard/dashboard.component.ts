@@ -117,13 +117,11 @@ export class DashboardComponent implements OnInit {
 
   // Note: showCloseTypeKpis is determined by client settings from backend, not a toggle
 
-  // Check if user can export (only Admin and Manager_Level_4, NOT Super_Admin or other managers)
+  // Check if user can export (Rails: admin? includes super_admin, plus manager_level_4)
   canExport = computed(() => {
     const role = this.currentUser()?.role;
     if (role === undefined) return false;
-    // Super_Admin cannot export, only Admin and Manager_Level_4
-    if (RoleUtils.isSuperAdmin(role)) return false;
-    return RoleUtils.isAdmin(role) || RoleUtils.isManagerLevel4(role);
+    return RoleUtils.isSuperAdmin(role) || RoleUtils.isAdmin(role) || RoleUtils.isManagerLevel4(role);
   });
 
   ngOnInit(): void {
