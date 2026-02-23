@@ -496,6 +496,39 @@
   }
 }
 
+// ===== NOT ASSIGNED BANNER =====
+.not-assigned-banner {
+  .not-assigned-content {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: var(--warning-subtle);
+    border: 1px solid var(--warning-default);
+    border-radius: var(--radius-md);
+    color: var(--fg-default);
+
+    > i {
+      font-size: 20px;
+      color: var(--warning-default);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    strong {
+      display: block;
+      font-size: var(--text-sm);
+      margin-bottom: var(--space-1);
+    }
+
+    p {
+      margin: 0;
+      font-size: var(--text-xs);
+      color: var(--fg-muted);
+    }
+  }
+}
+
 .action-buttons {
   display: flex;
   gap: var(--space-2);

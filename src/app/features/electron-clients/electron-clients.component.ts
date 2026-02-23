@@ -12,6 +12,7 @@ import { Subject, takeUntil, switchMap, of } from 'rxjs';
 import { ElectronService } from '../../core/services/electron.service';
 import { ElectronContactsService } from './services/electron-contacts.service';
 import { WebSocketService, WsNewMessagePayload } from '../../core/services/websocket.service';
+import { AuthService } from '../../core/services/auth.service';
 import { MessageDirection } from '../../core/models/message.model';
 import {
   CrmContact,
@@ -41,6 +42,7 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   private contactsService = inject(ElectronContactsService);
   private cannedMessageService = inject(CannedMessageService);
   private wsService = inject(WebSocketService);
+  private authService = inject(AuthService);
   private destroy$ = new Subject<void>();
 
   // State
@@ -90,6 +92,11 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   // Computed
   isRegistered = computed(() => this.contact()?.type === 'registered');
   isLocal = computed(() => this.contact()?.type === 'local');
+  isAssignedToMe = computed(() => {
+    const managerId = this.contact()?.registered?.managerId;
+    if (managerId == null) return true; // no manager assigned → accessible
+    return managerId === this.authService.currentUser()?.id;
+  });
   displayName = computed(() => {
     const c = this.contact();
     if (c) return c.name;

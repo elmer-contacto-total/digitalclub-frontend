@@ -26,6 +26,14 @@ import { BulkSender } from './bulk-sender';
 // When building with electron-builder, this reflects the version in package.json
 const APP_VERSION = app.getVersion();
 
+// Multi-instance profile support: --profile=
+// 2, --profile=3, etc.
+// Each profile gets its own userData directory (separate WhatsApp session, fingerprint, etc.)
+const profileArg = process.argv.find(a => a.startsWith('--profile='));
+const PROFILE_ID = profileArg ? profileArg.split('=')[1] : '';
+const userDataName = PROFILE_ID ? `MWS Desktop - Perfil ${PROFILE_ID}` : 'MWS Desktop';
+app.setPath('userData', path.join(app.getPath('appData'), userDataName));
+
 // Stored update info (so renderer can pull it if it missed the push)
 let pendingUpdateInfo: any = null;
 
@@ -525,6 +533,7 @@ function createWindow(): void {
     height: 900,
     minWidth: 1400,
     minHeight: 700,
+    title: PROFILE_ID ? `MWS Desktop - Perfil ${PROFILE_ID}` : 'MWS Desktop',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: false,  // Deshabilitado para permitir módulos ES6 de Angular
@@ -1498,13 +1507,7 @@ async function showPhoneNeededInWhatsApp(): Promise<void> {
     // Ignorar errores
   }
 
-  // Timeout más largo para este caso (30 segundos) ya que requiere acción del usuario
-  chatBlockState.timeoutHandle = setTimeout(() => {
-    if (chatBlockState.isBlocked) {
-      console.log('[MWS] ⚠️ TIMEOUT largo - desbloqueando (usuario no reveló número)');
-      forceUnblockWhatsAppChat();
-    }
-  }, 30000);
+  // Sin timeout - el blocker permanece hasta que el CRM cargue la info del cliente
 }
 
 /**
@@ -2635,9 +2638,6 @@ app.commandLine.appendSwitch('disable-software-rasterizer');
 // Ignorar errores de certificado SSL
 app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('allow-insecure-localhost');
-
-// Configurar path de datos persistente
-app.setPath('userData', path.join(app.getPath('appData'), 'MWS Desktop'));
 
 // Ignorar errores de certificado SSL (para servidores con certificados auto-firmados)
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
