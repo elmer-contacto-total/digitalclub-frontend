@@ -243,6 +243,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
         message: payload.body,
         acknowledged: false,
         created_at: new Date().toISOString(),
+        sender_id: payload.senderId,
         user_id: 0
       };
       this.unreadCount.update(c => c + 1);

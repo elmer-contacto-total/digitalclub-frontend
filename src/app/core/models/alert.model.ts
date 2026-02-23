@@ -27,6 +27,7 @@ export interface Alert {
   acknowledged_at?: string;
   created_at: string;
   ticket_id?: number;
+  sender_id?: number;
   user_id: number;
   user_name?: string;
 }

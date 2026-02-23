@@ -69,6 +69,7 @@ export interface WsAlertPayload {
   title: string;
   body: string;
   severity: string;
+  senderId?: number;
 }
 
 /**
