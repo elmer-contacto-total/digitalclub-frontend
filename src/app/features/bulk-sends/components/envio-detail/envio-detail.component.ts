@@ -9,11 +9,12 @@ import { WebSocketService } from '../../../../core/services/websocket.service';
 import { UserRole } from '../../../../core/models/user.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
+import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-envio-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, LoadingSpinnerComponent, DatePipe],
+  imports: [CommonModule, RouterLink, LoadingSpinnerComponent, DatePipe, PaginationComponent],
   template: `
     <div class="envio-detail-container">
       <div class="page-header">
@@ -153,16 +154,14 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
           </div>
 
           @if (detail()!.recipients_total_pages > 1) {
-            <div class="pagination">
-              <button class="btn btn-sm" [disabled]="recipientPage() === 0" (click)="loadRecipientPage(recipientPage() - 1)">
-                <i class="ph ph-caret-left"></i>
-              </button>
-              <span>Página {{ recipientPage() + 1 }} de {{ detail()!.recipients_total_pages }}</span>
-              <button class="btn btn-sm" [disabled]="recipientPage() >= detail()!.recipients_total_pages - 1"
-                      (click)="loadRecipientPage(recipientPage() + 1)">
-                <i class="ph ph-caret-right"></i>
-              </button>
-            </div>
+            <app-pagination
+              [currentPage]="recipientPage() + 1"
+              [totalItems]="detail()!.recipients_total"
+              [pageSize]="recipientSize()"
+              [pageSizeOptions]="[20, 50, 100]"
+              (pageChange)="onRecipientPageChange($event)"
+              (pageSizeChange)="onRecipientSizeChange($event)"
+            />
           }
         </div>
       }
@@ -266,10 +265,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
     .badge-dark { background: var(--bg-emphasis); color: var(--fg-muted); }
     .badge-danger { background: var(--error-subtle); color: var(--error-text); }
 
-    .pagination {
-      display: flex; justify-content: center; align-items: center; gap: var(--space-3); padding: var(--space-3);
-      span { font-size: var(--text-base); color: var(--fg-muted); }
-    }
+    app-pagination { padding: 0 var(--space-4); }
 
     .btn {
       display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px;
@@ -302,6 +298,7 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
   isStarting = signal(false);
   detail = signal<BulkSendDetail | null>(null);
   recipientPage = signal(0);
+  recipientSize = signal(50);
 
   isAgent(): boolean {
     const user = this.authService.currentUser();
@@ -346,7 +343,7 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
         const d = this.detail();
         return d !== null && d.status !== 'COMPLETED' && d.status !== 'CANCELLED' && d.status !== 'FAILED';
       }),
-      switchMap(() => this.bulkSendService.getBulkSend(this.bulkSendId, this.recipientPage()))
+      switchMap(() => this.bulkSendService.getBulkSend(this.bulkSendId, this.recipientPage(), this.recipientSize()))
     ).subscribe({
       next: (d) => this.detail.set(d)
     });
@@ -360,7 +357,7 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
 
   private loadDetail(): void {
     this.isLoading.set(true);
-    this.bulkSendService.getBulkSend(this.bulkSendId, this.recipientPage()).pipe(
+    this.bulkSendService.getBulkSend(this.bulkSendId, this.recipientPage(), this.recipientSize()).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (d) => { this.detail.set(d); this.isLoading.set(false); },
@@ -370,6 +367,16 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
 
   loadRecipientPage(page: number): void {
     this.recipientPage.set(page);
+    this.loadDetail();
+  }
+
+  onRecipientPageChange(page: number): void {
+    this.loadRecipientPage(page - 1);
+  }
+
+  onRecipientSizeChange(size: number): void {
+    this.recipientSize.set(size);
+    this.recipientPage.set(0);
     this.loadDetail();
   }
 
