@@ -1,4 +1,4 @@
-import { Component, input, computed } from '@angular/core';
+import { Component, input, computed, signal, effect, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
   IndividualKpiRow,
@@ -6,11 +6,12 @@ import {
   INDIVIDUAL_KPI_COLUMNS,
   calculateTableTotals
 } from '../../../../core/models/dashboard.model';
+import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-kpi-table',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, PaginationComponent],
   template: `
     <div class="kpi-table-container">
       <div class="kpi-table-header">
@@ -45,7 +46,7 @@ import {
               </tr>
             </thead>
             <tbody>
-              @for (row of rows(); track row.userId) {
+              @for (row of paginatedRows(); track row.userId) {
                 <tr>
                   <td>{{ row.userName }}</td>
                   <td>{{ row.kpis.client_responded_rate }}%</td>
@@ -81,6 +82,18 @@ import {
           </table>
         }
       </div>
+
+      @if (totalItems() > pageSize) {
+        <div class="kpi-table-footer">
+          <app-pagination
+            [currentPage]="currentPage()"
+            [totalItems]="totalItems()"
+            [pageSize]="pageSize"
+            [showPageSize]="false"
+            (pageChange)="currentPage.set($event)"
+          />
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -181,11 +194,19 @@ import {
       margin: 0;
       font-size: var(--text-sm);
     }
+
+    .kpi-table-footer {
+      padding: var(--space-3) var(--space-4);
+      border-top: 1px solid var(--border-muted);
+    }
   `]
 })
 export class KpiTableComponent {
   rows = input<IndividualKpiRow[]>([]);
   showCloseTypeKpis = input<boolean>(false);
+
+  currentPage = signal(1);
+  readonly pageSize = 10;
 
   allColumns = INDIVIDUAL_KPI_COLUMNS;
 
@@ -200,7 +221,21 @@ export class KpiTableComponent {
     return cols;
   });
 
+  totalItems = computed(() => this.rows().length);
+
+  paginatedRows = computed(() => {
+    const start = (this.currentPage() - 1) * this.pageSize;
+    return this.rows().slice(start, start + this.pageSize);
+  });
+
   showTotals = computed(() => this.rows().length > 1);
 
   totals = computed(() => calculateTableTotals(this.rows()));
+
+  constructor() {
+    effect(() => {
+      this.rows(); // track
+      untracked(() => this.currentPage.set(1));
+    });
+  }
 }
