@@ -38,7 +38,7 @@ app.setPath('userData', path.join(app.getPath('appData'), userDataName));
 let pendingUpdateInfo: any = null;
 
 // Bulk sender for mass messaging
-const BACKEND_BASE_URL = process.env.BACKEND_URL || 'http://digitalclub.contactototal.com.pe';
+const BACKEND_BASE_URL = process.env.BACKEND_URL || 'https://cobranza.innovag.com.pe';
 const bulkSender = new BulkSender(BACKEND_BASE_URL);
 const BULK_SEND_STATE_FILE = path.join(app.getPath('userData'), 'bulk-send-state.json');
 bulkSender.setStateFile(BULK_SEND_STATE_FILE);
@@ -90,7 +90,7 @@ const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 56;
 
 // URL del backend para medios y auditoría
-const MEDIA_API_URL = process.env.MEDIA_API_URL || 'http://digitalclub.contactototal.com.pe/api/v1/media';
+const MEDIA_API_URL = process.env.MEDIA_API_URL || 'https://cobranza.innovag.com.pe/api/v1/media';
 
 // Estado dinámico del layout
 let sidebarCollapsed = false;
@@ -545,7 +545,7 @@ function createWindow(): void {
   });
 
   // Cargar la UI de Angular desde URL (producción por defecto)
-  const ANGULAR_URL = process.env.ANGULAR_URL || 'http://digitalclub.contactototal.com.pe/';
+  const ANGULAR_URL = process.env.ANGULAR_URL || 'https://cobranza.innovag.com.pe/';
 
   // Flag para evitar mostrar overlays duplicados
   let appLoadedSuccessfully = false;
@@ -2642,7 +2642,7 @@ app.commandLine.appendSwitch('allow-insecure-localhost');
 // Ignorar errores de certificado SSL (para servidores con certificados auto-firmados)
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
   // Permitir conexiones a nuestro servidor de producción
-  if (url.includes('digitalclub.contactototal.com.pe')) {
+  if (url.includes('cobranza.innovag.com.pe')) {
     event.preventDefault();
     callback(true);
   } else {
@@ -2705,7 +2705,7 @@ app.on('before-quit', (event) => {
 // Seguridad: Prevenir navegación a URLs externas en la ventana principal
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
-    const ANGULAR_URL = process.env.ANGULAR_URL || 'http://digitalclub.contactototal.com.pe/';
+    const ANGULAR_URL = process.env.ANGULAR_URL || 'https://cobranza.innovag.com.pe/';
     // Permitir WhatsApp Web, Angular URL y file://
     const isAllowed = url.includes('web.whatsapp.com') ||
                       url.startsWith(ANGULAR_URL) ||
