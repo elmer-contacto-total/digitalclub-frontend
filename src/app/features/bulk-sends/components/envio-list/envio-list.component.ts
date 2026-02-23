@@ -124,7 +124,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                     <a [routerLink]="['/app/bulk_sends', bs.id]" class="action-btn" title="Ver detalle">
                       <i class="ph ph-eye"></i>
                     </a>
-                    @if (bs.status === 'PROCESSING' || bs.status === 'PERIODIC_PAUSE') {
+                    @if (isAgent() && (bs.status === 'PROCESSING' || bs.status === 'PERIODIC_PAUSE')) {
                       <button class="action-btn warn" (click)="pause(bs)" title="Pausar">
                         <i class="ph ph-pause"></i>
                       </button>

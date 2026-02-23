@@ -75,7 +75,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         <!-- Actions -->
         @if (detail()!.status === 'PROCESSING' || detail()!.status === 'PERIODIC_PAUSE' || detail()!.status === 'PAUSED' || detail()!.status === 'PENDING') {
           <div class="action-bar">
-            @if (detail()!.status === 'PROCESSING' || detail()!.status === 'PERIODIC_PAUSE') {
+            @if (isAgent() && (detail()!.status === 'PROCESSING' || detail()!.status === 'PERIODIC_PAUSE')) {
               <button class="btn btn-warning" (click)="pause()">
                 <i class="ph ph-pause"></i> Pausar
               </button>
