@@ -341,6 +341,14 @@
       background: var(--bg-subtle);
     }
   }
+
+  &.nav-link-disabled {
+    cursor: default;
+    opacity: 0.6;
+    &:hover {
+      background: none;
+    }
+  }
 }
 
 .nav-icon {

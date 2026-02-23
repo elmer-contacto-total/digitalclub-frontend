@@ -73,24 +73,42 @@
             <ul class="nav-list">
               @for (item of section.items; track item.id) {
                 <li class="nav-item" [attr.data-tooltip]="collapsed() ? item.label : null">
-                  <a
-                    class="nav-link"
-                    [routerLink]="item.route"
-                    routerLinkActive="active"
-                    [routerLinkActiveOptions]="{ exact: item.route === '/app/dashboard' }"
-                    (click)="onNavItemClick()"
-                    [title]="collapsed() ? item.label : ''"
-                  >
-                    <i class="nav-icon ph {{ item.icon }}"></i>
-                    @if (!collapsed()) {
-                      <span class="nav-label">{{ item.label }}</span>
-                      @if (item.badge) {
-                        <span class="nav-badge" [ngClass]="item.badgeClass || 'badge-primary'">
-                          {{ item.badge }}
-                        </span>
+                  @if (item.route) {
+                    <a
+                      class="nav-link"
+                      [routerLink]="item.route"
+                      [queryParams]="item.queryParams"
+                      routerLinkActive="active"
+                      [routerLinkActiveOptions]="{ exact: item.route === '/app/dashboard' }"
+                      (click)="onNavItemClick()"
+                      [title]="collapsed() ? item.label : ''"
+                    >
+                      <i class="nav-icon ph {{ item.icon }}"></i>
+                      @if (!collapsed()) {
+                        <span class="nav-label">{{ item.label }}</span>
+                        @if (item.badge) {
+                          <span class="nav-badge" [ngClass]="item.badgeClass || 'badge-primary'">
+                            {{ item.badge }}
+                          </span>
+                        }
                       }
-                    }
-                  </a>
+                    </a>
+                  } @else {
+                    <span
+                      class="nav-link nav-link-disabled"
+                      [title]="collapsed() ? item.label : ''"
+                    >
+                      <i class="nav-icon ph {{ item.icon }}"></i>
+                      @if (!collapsed()) {
+                        <span class="nav-label">{{ item.label }}</span>
+                        @if (item.badge) {
+                          <span class="nav-badge" [ngClass]="item.badgeClass || 'badge-primary'">
+                            {{ item.badge }}
+                          </span>
+                        }
+                      }
+                    </span>
+                  }
                 </li>
               }
             </ul>

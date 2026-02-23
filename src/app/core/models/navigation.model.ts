@@ -117,7 +117,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLERO',
       items: [
         { id: 'dashboard', label: 'Tablero', icon: 'ph-house', route: '/app/dashboard' },
-        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', route: '/app/analytics', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
+        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
       ]
     },
     {
@@ -163,7 +163,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLERO',
       items: [
         { id: 'dashboard', label: 'Tablero', icon: 'ph-house', route: '/app/dashboard' },
-        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', route: '/app/analytics', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
+        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
       ]
     },
     {
@@ -197,7 +197,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'AJUSTES',
       items: [
         { id: 'profile', label: 'Mi Perfil', icon: 'ph-user-circle', route: '/app/profile' },
-        { id: 'settings', label: 'Ajustes', icon: 'ph-gear', route: '/app/settings' },
+        { id: 'settings', label: 'Ajustes', icon: 'ph-gear', badge: 'Muy Pronto', badgeClass: 'badge-primary' },
         { id: 'login-as', label: 'Iniciar sesión como', icon: 'ph-sign-in', route: '/app/login_as' }
       ]
     }
@@ -211,7 +211,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLERO',
       items: [
         { id: 'dashboard', label: 'Tablero', icon: 'ph-house', route: '/app/dashboard' },
-        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', route: '/app/analytics', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
+        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
       ]
     },
     {
@@ -262,7 +262,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLERO',
       items: [
         { id: 'dashboard', label: 'Tablero', icon: 'ph-house', route: '/app/dashboard' },
-        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', route: '/app/analytics', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
+        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
       ]
     },
     {
@@ -348,7 +348,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLERO',
       items: [
         { id: 'dashboard', label: 'Tablero', icon: 'ph-house', route: '/app/dashboard' },
-        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', route: '/app/analytics', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
+        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
       ]
     },
     {
@@ -397,7 +397,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLERO',
       items: [
         { id: 'dashboard', label: 'Tablero', icon: 'ph-house', route: '/app/dashboard' },
-        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', route: '/app/analytics', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
+        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
       ]
     },
     {
@@ -446,7 +446,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLERO',
       items: [
         { id: 'dashboard', label: 'Tablero', icon: 'ph-house', route: '/app/dashboard' },
-        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', route: '/app/analytics', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
+        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
       ]
     },
     {
@@ -496,7 +496,7 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLERO',
       items: [
         { id: 'dashboard', label: 'Tablero', icon: 'ph-house', route: '/app/dashboard' },
-        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', route: '/app/analytics', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
+        { id: 'analytics', label: 'Analíticas', icon: 'ph-chart-bar', badge: 'Muy Pronto', badgeClass: 'badge-primary' }
       ]
     },
     {
