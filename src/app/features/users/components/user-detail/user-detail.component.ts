@@ -754,7 +754,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  private loadUser(id: number): void {
+  private loadUser(id: number, retryCount = 0): void {
     this.isLoading.set(true);
     this.userService.getUser(id).subscribe({
       next: (response: UserDetailResponse) => {
@@ -769,6 +769,12 @@ export class UserDetailComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         console.error('Error loading user:', err);
+        // On reload, checkAuth() may refresh the token in parallel causing a 401.
+        // Retry once after a short delay to let the token settle.
+        if ((err.status === 401 || err.status === 0) && retryCount < 1) {
+          setTimeout(() => this.loadUser(id, retryCount + 1), 1000);
+          return;
+        }
         this.isLoading.set(false);
       }
     });
