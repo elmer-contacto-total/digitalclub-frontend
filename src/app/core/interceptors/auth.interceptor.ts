@@ -78,9 +78,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
  * Add token to request headers
  */
 function addTokenToRequest(req: HttpRequest<unknown>, token: string | null): HttpRequest<unknown> {
-  const headers: Record<string, string> = {
-    'Accept': 'application/json'
-  };
+  const headers: Record<string, string> = {};
+
+  // Only set Accept: application/json for JSON requests (default).
+  // Blob/text/arraybuffer requests (file downloads) keep browser default.
+  if (req.responseType === 'json') {
+    headers['Accept'] = 'application/json';
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
