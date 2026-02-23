@@ -535,6 +535,7 @@ function createWindow(): void {
     minWidth: 1400,
     minHeight: 700,
     title: PROFILE_ID ? `MWS Desktop - Perfil ${PROFILE_ID}` : 'MWS Desktop',
+    icon: path.join(__dirname, '..', 'build', 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: false,  // Deshabilitado para permitir módulos ES6 de Angular
