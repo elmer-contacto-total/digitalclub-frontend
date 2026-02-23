@@ -72,6 +72,9 @@ export class SidebarComponent implements OnInit, OnDestroy {
     return getNavigationForRole(user.role, isWhatsAppBusiness);
   });
 
+  // Client logo
+  clientLogoUrl = computed(() => this.currentUser()?.clientLogoUrl || null);
+
   // App info
   appName = 'MWS';
   appVersion = 'v. 1.0.2';

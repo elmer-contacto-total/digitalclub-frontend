@@ -49,6 +49,7 @@ export interface AuthUser {
   country_id: number | null;
   client_id: number;
   client_type?: string;
+  client_logo_url?: string;
   uuid_token: string;
   role?: UserRole;
   avatar_data?: string;
@@ -70,6 +71,7 @@ export interface CurrentUser {
   role: UserRole;
   clientId: number;
   clientType?: string;
+  clientLogoUrl?: string;
   countryId: number | null;
   timeZone: string;
   locale: string;
@@ -217,6 +219,7 @@ export function mapAuthUserToCurrentUser(authUser: AuthUser, role?: UserRole): C
     role: role ?? authUser.role ?? UserRole.STANDARD,
     clientId: authUser.client_id,
     clientType: authUser.client_type,
+    clientLogoUrl: authUser.client_logo_url,
     countryId: authUser.country_id,
     timeZone: authUser.time_zone,
     locale: authUser.locale ?? 'es',
