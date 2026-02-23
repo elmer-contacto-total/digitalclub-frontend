@@ -300,23 +300,20 @@ export class ImportService {
    * PARIDAD: Rails Admin::ImportsController#sample_csv
    */
   downloadSampleCsv(importType: string = 'user'): void {
-    this.http.get(`${this.baseUrl}/sample_csv`, {
-      params: { importType },
-      responseType: 'blob',
-      observe: 'response'
-    }).subscribe({
-      next: (response) => {
-        const blob = response.body;
-        if (!blob) return;
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'usuarios_muestra.csv';
-        a.click();
-        window.URL.revokeObjectURL(url);
-      },
-      error: (err) => console.error('Error downloading sample CSV:', err)
-    });
+    const BOM = '\uFEFF';
+    let csv: string;
+    if (importType === 'foh') {
+      csv = BOM + 'APELLIDO_P,APELLIDO_M,NOMBRE,CELULAR,CORREO\nPerez,Gomez,Juan,987654321,juan@email.com\n';
+    } else {
+      csv = BOM + 'APELLIDO_P,APELLIDO_M,NOMBRE,CELULAR,CORREO,EJECUTIVO\nPerez,Gomez,Juan,987654321,juan@email.com,manager@email.com\n';
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'usuarios_muestra.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
   }
 
   /**
