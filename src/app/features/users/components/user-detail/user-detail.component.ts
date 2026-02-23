@@ -10,6 +10,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { UserService, UserDetailResponse } from '../../../../core/services/user.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { LoginAsService } from '../../../../core/services/login-as.service';
 import { User, UserRole, UserStatus, RoleUtils, getFullName, getInitials } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
@@ -285,11 +286,12 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       <!-- Login As Confirmation -->
       @if (showLoginAsConfirm()) {
         <app-confirm-dialog
+          [isOpen]="true"
           title="Iniciar sesión como"
           [message]="'¿Deseas iniciar sesión como ' + getFullName(user()!) + '? Podrás volver a tu cuenta después.'"
-          confirmText="Iniciar como"
-          (confirm)="loginAs()"
-          (cancel)="showLoginAsConfirm.set(false)"
+          confirmLabel="Iniciar como"
+          (confirmed)="loginAs()"
+          (cancelled)="showLoginAsConfirm.set(false)"
         />
       }
     </div>
@@ -696,6 +698,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private userService = inject(UserService);
   private authService = inject(AuthService);
+  private loginAsService = inject(LoginAsService);
 
   // Navigation
   backUrl = signal('/app/users');
@@ -877,12 +880,9 @@ export class UserDetailComponent implements OnInit, OnDestroy {
     const user = this.user();
     if (!user) return;
 
-    this.userService.loginAs(user.id).subscribe({
-      next: (response) => {
-        // Store original user ID and switch to new token
-        localStorage.setItem('originalUserId', response.originalUserId.toString());
-        localStorage.setItem('token', response.token);
-        window.location.reload();
+    this.loginAsService.loginAs(user.id).subscribe({
+      next: () => {
+        window.location.href = '/app/dashboard';
       },
       error: (err) => {
         console.error('Error logging in as user:', err);
