@@ -16,6 +16,7 @@ export interface ActiveClient {
   companyName?: string;
   status: string;
   clientType?: string;
+  logoUrl?: string;
 }
 
 interface SetCurrentClientResponse {
@@ -90,8 +91,15 @@ export class ActiveClientService {
         const clients = response.data || [];
         this._availableClients.set(clients);
 
-        // Si no hay cliente activo, seleccionar el primero (sin llamar al backend)
-        if (!this._activeClient() && clients.length > 0) {
+        // Sincronizar active client con datos frescos (ej: logoUrl nuevo)
+        const active = this._activeClient();
+        if (active) {
+          const fresh = clients.find(c => c.id === active.id);
+          if (fresh) {
+            this.setActiveClientLocal(fresh);
+          }
+        } else if (clients.length > 0) {
+          // Si no hay cliente activo, seleccionar el primero (sin llamar al backend)
           this.setActiveClientLocal(clients[0]);
         }
         this._loading.set(false);

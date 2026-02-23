@@ -73,7 +73,12 @@ export class SidebarComponent implements OnInit, OnDestroy {
   });
 
   // Client logo
-  clientLogoUrl = computed(() => this.currentUser()?.clientLogoUrl || null);
+  clientLogoUrl = computed(() => {
+    if (this.isSuperAdmin()) {
+      return this.activeClient()?.logoUrl || null;
+    }
+    return this.currentUser()?.clientLogoUrl || null;
+  });
 
   // App info
   appName = 'MWS';
