@@ -94,6 +94,7 @@ const MEDIA_API_URL = process.env.MEDIA_API_URL || 'https://cobranza.innovag.com
 
 // Estado dinámico del layout
 let sidebarCollapsed = false;
+let impersonationActive = false;
 
 // ==================== BACKUP DE MEDIA IDs CAPTURADOS ====================
 // Persiste los whatsappMessageId de medias capturadas para sobrevivir cierres de sesión de WhatsApp
@@ -1173,7 +1174,7 @@ function updateWhatsAppViewBounds(): void {
   if (!mainWindow || !whatsappView || !whatsappVisible) return;
 
   const [width, height] = mainWindow.getContentSize();
-  const headerHeight = 48;
+  const headerHeight = 48 + (impersonationActive ? 36 : 0);
 
   // WhatsApp ocupa el 50% derecho, debajo del header
   const whatsappWidth = Math.floor(width / 2);
@@ -1207,7 +1208,7 @@ function animateWhatsAppViewBounds(): void {
   }
 
   const [width, height] = mainWindow.getContentSize();
-  const headerHeight = 48;
+  const headerHeight = 48 + (impersonationActive ? 36 : 0);
 
   // WhatsApp ocupa el 50% derecho, debajo del header
   const targetWidth = Math.floor(width / 2);
@@ -2195,6 +2196,14 @@ function setupIPC(): void {
   // Toggle sidebar
   ipcMain.on('toggle-sidebar', () => {
     // Actualizar bounds de WhatsApp view cuando cambia sidebar
+    if (whatsappVisible) {
+      updateWhatsAppViewBounds();
+    }
+  });
+
+  // Actualizar bounds cuando cambia el estado de impersonation
+  ipcMain.on('set-impersonation', (_, active: boolean) => {
+    impersonationActive = active;
     if (whatsappVisible) {
       updateWhatsAppViewBounds();
     }

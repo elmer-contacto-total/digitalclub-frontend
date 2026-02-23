@@ -170,6 +170,11 @@ const electronAPI = {
     ipcRenderer.on('outgoing-message-detected', (_, data) => callback(data));
   },
 
+  // Notificar estado de impersonation (ajusta bounds de WhatsApp view)
+  setImpersonation: (active: boolean) => {
+    ipcRenderer.send('set-impersonation', active);
+  },
+
   // Notificar a Electron el usuario logueado
   setLoggedInUser: (userId: number, userName: string, clientId?: number) => {
     ipcRenderer.send('set-logged-in-user', { userId, userName, clientId });
@@ -351,6 +356,7 @@ declare global {
       };
       onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number }) => void) => void;
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
+      setImpersonation: (active: boolean) => void;
       setLoggedInUser: (userId: number, userName: string, clientId?: number) => void;
       onIncomingMessageDetected?: (callback: (data: { phone: string }) => void) => void;
       onOutgoingMessageDetected?: (callback: (data: { phone: string }) => void) => void;

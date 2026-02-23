@@ -130,6 +130,9 @@ export class LoginAsService {
             originalUserName: originalName,
             currentUserName: currentUser.fullName
           });
+
+          // Notify Electron to adjust WhatsApp view bounds
+          (window as any).electronAPI?.setImpersonation?.(true);
         }
       })
     );
@@ -200,6 +203,9 @@ export class LoginAsService {
             originalUserName: null,
             currentUserName: null
           });
+
+          // Notify Electron to adjust WhatsApp view bounds
+          (window as any).electronAPI?.setImpersonation?.(false);
         }
       })
     );
@@ -247,6 +253,9 @@ export class LoginAsService {
           originalUserName: originalName,
           currentUserName: currentName
         });
+
+        // Notify Electron to adjust WhatsApp view bounds
+        (window as any).electronAPI?.setImpersonation?.(true);
       } catch {
         // Invalid JSON, clear state
         this.clearImpersonationState();
