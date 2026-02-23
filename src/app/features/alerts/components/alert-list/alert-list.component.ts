@@ -92,8 +92,8 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                 </div>
               </div>
               <div class="alert-actions">
-                @if (alert.sender_id) {
-                  <a [routerLink]="['/app/agent_clients', alert.sender_id]" class="action-btn" title="Ver conversación">
+                @if (alert.sender_id || alert.ticket_id) {
+                  <a [routerLink]="alert.sender_id ? ['/app/agent_clients', alert.sender_id] : ['/app/tickets', alert.ticket_id]" class="action-btn" title="Ver conversación">
                     <i class="ph ph-eye"></i>
                   </a>
                 }

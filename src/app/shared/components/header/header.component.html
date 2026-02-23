@@ -143,7 +143,7 @@
             } @else {
               @for (alert of recentAlerts(); track alert.id) {
                 <a class="notification-item" [class.unread]="!alert.acknowledged"
-                   [routerLink]="alert.sender_id ? '/app/agent_clients/' + alert.sender_id : '/app/alerts'"
+                   [routerLink]="alert.sender_id ? '/app/agent_clients/' + alert.sender_id : alert.ticket_id ? '/app/tickets/' + alert.ticket_id : '/app/alerts'"
                    (click)="closeAllMenus()">
                   <div class="notification-icon" [ngClass]="getAlertIconBg(alert)">
                     <i class="ph" [ngClass]="getAlertIcon(alert)"></i>
