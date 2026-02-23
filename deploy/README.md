@@ -1,4 +1,4 @@
-# Despliegue Holape - digitalclub.contactototal.com.pe
+# Despliegue Holape - cobranza.innovag.com.pe
 
 ## Requisitos del Servidor
 
@@ -88,9 +88,9 @@ nohup java -jar target/holape-1.0.0.jar --spring.profiles.active=prod > logs/app
 
 ## URLs
 
-- **App**: http://digitalclub.contactototal.com.pe
-- **API**: http://digitalclub.contactototal.com.pe/api/
-- **WebSocket**: ws://digitalclub.contactototal.com.pe/ws/
+- **App**: https://cobranza.innovag.com.pe
+- **API**: https://cobranza.innovag.com.pe/api/
+- **WebSocket**: wss://cobranza.innovag.com.pe/ws/
 
 ## Comandos Útiles
 

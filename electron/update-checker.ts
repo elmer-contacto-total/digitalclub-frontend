@@ -33,7 +33,7 @@ interface UpdateCheckerConfig {
 
 // Default configuration
 const DEFAULT_CONFIG: UpdateCheckerConfig = {
-  apiBaseUrl: process.env.API_BASE_URL || 'http://digitalclub.contactototal.com.pe',
+  apiBaseUrl: process.env.API_BASE_URL || 'https://cobranza.innovag.com.pe',
   platform: 'windows'
 };
 

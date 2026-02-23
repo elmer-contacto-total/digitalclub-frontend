@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy script for Holape - digitalclub.contactototal.com.pe
+# Deploy script for Holape - cobranza.innovag.com.pe
 # Frontend: Puerto 9080 (Nginx + Angular)
 # Backend: Puerto 8443 (Spring Boot)
 #
@@ -7,7 +7,7 @@
 
 set -e
 
-DOMAIN="digitalclub.contactototal.com.pe"
+DOMAIN="cobranza.innovag.com.pe"
 FRONTEND_DIR="/var/www/holape-angular"
 
 # Rutas de los proyectos clonados
@@ -46,8 +46,8 @@ sudo chmod -R 755 $FRONTEND_DIR
 
 echo ""
 echo "=== [FRONTEND] Configurando Nginx ==="
-sudo cp "$ANGULAR_PROJECT/deploy/nginx.conf" /etc/nginx/sites-available/digitalclub
-sudo ln -sf /etc/nginx/sites-available/digitalclub /etc/nginx/sites-enabled/
+sudo cp "$ANGULAR_PROJECT/deploy/nginx.conf" /etc/nginx/sites-available/cobranza
+sudo ln -sf /etc/nginx/sites-available/cobranza /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 
@@ -122,8 +122,8 @@ echo "=========================================="
 echo "       DESPLIEGUE COMPLETADO"
 echo "=========================================="
 echo ""
-echo "Frontend: http://$DOMAIN"
-echo "API:      http://$DOMAIN/api/"
+echo "Frontend: https://$DOMAIN"
+echo "API:      https://$DOMAIN/api/"
 echo ""
 echo "Logs backend: tail -f $BACKEND_PROJECT/logs/app.log"
 echo "=========================================="

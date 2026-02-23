@@ -4,8 +4,8 @@
  */
 export const environment = {
   production: true,
-  apiUrl: 'http://digitalclub.contactototal.com.pe',  // Backend absoluto para Electron
-  wsUrl: 'ws://digitalclub.contactototal.com.pe/websocket',
+  apiUrl: 'https://cobranza.innovag.com.pe',  // Backend absoluto para Electron
+  wsUrl: 'wss://cobranza.innovag.com.pe/websocket',
   appName: 'Holape',
   version: '1.0.0'
 };
