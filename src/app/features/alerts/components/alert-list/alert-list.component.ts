@@ -1,6 +1,6 @@
 /**
  * AlertListComponent
- * PARIDAD: Rails admin/alerts/_alert.html.erb (list-group style)
+ * PARIDAD: Rails admin/alerts/_alert.html.erb
  *
  * Shows alerts in a list format with:
  * - Severity icon (color-coded)
@@ -17,206 +17,231 @@ import { AlertService } from '../../../../core/services/alert.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { Alert, AlertType } from '../../../../core/models/alert.model';
-import { UserRole } from '../../../../core/models/user.model';
+import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
+import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-alert-list',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, LoadingSpinnerComponent, PaginationComponent],
   template: `
-    <div class="container-fluid py-4">
+    <div class="alert-list-container">
       <!-- Page Header -->
-      <div class="page-header mb-4">
-        <div class="row align-items-center">
-          <div class="col">
-            <h1 class="h3 mb-0">Alertas</h1>
-          </div>
-          <div class="col-auto">
-            @if (alerts().length > 0 && hasUnread()) {
-              <button
-                type="button"
-                class="btn btn-outline-primary"
-                (click)="markAllAsRead()"
-                [disabled]="isMarkingAll()">
-                @if (isMarkingAll()) {
-                  <span class="spinner-border spinner-border-sm me-1"></span>
-                }
-                Marcar todas como leídas
-              </button>
-            }
-          </div>
+      <div class="page-header">
+        <div class="header-left">
+          <h1>Alertas</h1>
+          <p class="subtitle">Historial de alertas y notificaciones</p>
+        </div>
+        <div class="header-actions">
+          @if (alerts().length > 0 && hasUnread()) {
+            <button class="btn btn-outline" (click)="markAllAsRead()" [disabled]="isMarkingAll()">
+              @if (isMarkingAll()) {
+                <i class="ph ph-circle-notch ph-spin"></i>
+              } @else {
+                <i class="ph ph-checks"></i>
+              }
+              Marcar todas como leídas
+            </button>
+          }
         </div>
       </div>
 
-      <!-- Filter Tabs -->
-      <div class="card mb-4">
-        <div class="card-body py-2">
-          <ul class="nav nav-pills">
-            <li class="nav-item">
-              <button
-                type="button"
-                class="nav-link"
-                [class.active]="currentFilter() === 'all'"
-                (click)="setFilter('all')">
-                Todas
-                @if (totalCount() > 0) {
-                  <span class="badge bg-secondary ms-1">{{ totalCount() }}</span>
-                }
-              </button>
-            </li>
-            <li class="nav-item">
-              <button
-                type="button"
-                class="nav-link"
-                [class.active]="currentFilter() === 'unread'"
-                (click)="setFilter('unread')">
-                Sin leer
-                @if (unreadCount() > 0) {
-                  <span class="badge bg-danger ms-1">{{ unreadCount() }}</span>
-                }
-              </button>
-            </li>
-            <li class="nav-item">
-              <button
-                type="button"
-                class="nav-link"
-                [class.active]="currentFilter() === 'read'"
-                (click)="setFilter('read')">
-                Leídas
-              </button>
-            </li>
-          </ul>
-        </div>
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <button class="filter-btn" [class.active]="currentFilter() === 'all'" (click)="setFilter('all')">
+          Todas
+          @if (totalCount() > 0) {
+            <span class="filter-count">{{ totalCount() }}</span>
+          }
+        </button>
+        <button class="filter-btn" [class.active]="currentFilter() === 'unread'" (click)="setFilter('unread')">
+          Sin leer
+          @if (unreadCount() > 0) {
+            <span class="filter-count danger">{{ unreadCount() }}</span>
+          }
+        </button>
+        <button class="filter-btn" [class.active]="currentFilter() === 'read'" (click)="setFilter('read')">
+          Leídas
+        </button>
       </div>
 
       <!-- Loading -->
       @if (isLoading()) {
-        <div class="text-center py-5">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Cargando...</span>
-          </div>
+        <app-loading-spinner message="Cargando alertas..." />
+      } @else if (alerts().length === 0) {
+        <!-- Empty State -->
+        <div class="empty-state">
+          <i class="ph ph-bell-slash"></i>
+          <h3>No hay alertas</h3>
+          <p>No se encontraron alertas con el filtro seleccionado</p>
         </div>
-      }
-
-      <!-- Alert List -->
-      @if (!isLoading()) {
-        @if (alerts().length === 0) {
-          <div class="card">
-            <div class="card-body text-center py-5">
-              <i class="bi bi-bell-slash fs-1 text-muted mb-3 d-block"></i>
-              <p class="text-muted mb-0">No hay alertas</p>
-            </div>
-          </div>
-        } @else {
-          <div class="list-group">
-            @for (alert of alerts(); track alert.id) {
-              <div
-                class="list-group-item list-group-item-action"
-                [class.unread-alert]="!alert.acknowledged"
-                [class.bg-light]="!alert.acknowledged">
-                <div class="row g-0 align-items-center">
-                  <!-- Severity Icon -->
-                  <div class="col-auto me-3">
-                    <i
-                      class="bi bi-exclamation-circle fs-4"
-                      [ngClass]="getSeverityClass(alert.severity)">
-                    </i>
-                  </div>
-
-                  <!-- Content -->
-                  <div class="col">
-                    <div class="d-flex justify-content-between align-items-start">
-                      <div>
-                        <div class="fw-semibold" [class.text-dark]="!alert.acknowledged">
-                          {{ alert.title }}
-                        </div>
-                        <div class="text-muted small mt-1">{{ alert.message }}</div>
-                        <div class="text-muted small mt-1">
-                          <i class="bi bi-clock me-1"></i>
-                          Hace {{ getRelativeTime(alert.created_at) }}
-                        </div>
-                      </div>
-
-                      <!-- Actions -->
-                      <div class="ms-3 d-flex align-items-center gap-2">
-                        @if (alert.ticket_id) {
-                          <a
-                            [routerLink]="['/app/tickets', alert.ticket_id]"
-                            class="btn btn-sm btn-outline-secondary"
-                            title="Ver ticket">
-                            <i class="bi bi-eye"></i>
-                          </a>
-                        }
-                        @if (!alert.acknowledged) {
-                          <button
-                            type="button"
-                            class="btn btn-sm btn-outline-primary"
-                            (click)="markAsRead(alert)"
-                            [disabled]="isMarkingRead().has(alert.id)"
-                            title="Marcar como leída">
-                            @if (isMarkingRead().has(alert.id)) {
-                              <span class="spinner-border spinner-border-sm"></span>
-                            } @else {
-                              <i class="bi bi-check2"></i>
-                            }
-                          </button>
-                        } @else {
-                          <span class="badge bg-success">
-                            <i class="bi bi-check2"></i> Leída
-                          </span>
-                        }
-                      </div>
-                    </div>
-                  </div>
+      } @else {
+        <!-- Alert List -->
+        <div class="alerts-card">
+          @for (alert of alerts(); track alert.id) {
+            <div class="alert-item" [class.unread]="!alert.acknowledged">
+              <div class="alert-icon" [ngClass]="getSeverityIconClass(alert.severity)">
+                <i class="ph ph-warning-circle"></i>
+              </div>
+              <div class="alert-content">
+                <div class="alert-title" [class.fw-bold]="!alert.acknowledged">{{ alert.title }}</div>
+                <div class="alert-message">{{ alert.message }}</div>
+                <div class="alert-time">
+                  <i class="ph ph-clock"></i>
+                  Hace {{ getRelativeTime(alert.created_at) }}
                 </div>
               </div>
-            }
-          </div>
-
-          <!-- Pagination -->
-          @if (totalPages() > 1) {
-            <nav class="mt-4">
-              <ul class="pagination justify-content-center">
-                <li class="page-item" [class.disabled]="currentPage() === 0">
-                  <button class="page-link" (click)="goToPage(currentPage() - 1)">
-                    <i class="bi bi-chevron-left"></i>
-                  </button>
-                </li>
-                @for (page of getPageNumbers(); track page) {
-                  <li class="page-item" [class.active]="page === currentPage()">
-                    <button class="page-link" (click)="goToPage(page)">
-                      {{ page + 1 }}
-                    </button>
-                  </li>
+              <div class="alert-actions">
+                @if (alert.ticket_id) {
+                  <a [routerLink]="['/app/tickets', alert.ticket_id]" class="action-btn" title="Ver ticket">
+                    <i class="ph ph-eye"></i>
+                  </a>
                 }
-                <li class="page-item" [class.disabled]="currentPage() >= totalPages() - 1">
-                  <button class="page-link" (click)="goToPage(currentPage() + 1)">
-                    <i class="bi bi-chevron-right"></i>
+                @if (!alert.acknowledged) {
+                  <button class="action-btn success"
+                          (click)="markAsRead(alert)"
+                          [disabled]="isMarkingRead().has(alert.id)"
+                          title="Marcar como leída">
+                    @if (isMarkingRead().has(alert.id)) {
+                      <i class="ph ph-circle-notch ph-spin"></i>
+                    } @else {
+                      <i class="ph ph-check"></i>
+                    }
                   </button>
-                </li>
-              </ul>
-            </nav>
+                } @else {
+                  <span class="status-badge badge-success">
+                    <i class="ph ph-check"></i> Leída
+                  </span>
+                }
+              </div>
+            </div>
           }
+        </div>
+
+        <!-- Pagination -->
+        @if (totalPages() > 1) {
+          <app-pagination
+            [currentPage]="currentPage()"
+            [totalItems]="totalCount()"
+            [pageSize]="pageSize"
+            [showPageSize]="false"
+            (pageChange)="onPageChange($event)"
+          />
         }
       }
     </div>
   `,
   styles: [`
-    .unread-alert {
-      border-left: 4px solid var(--bs-primary);
+    .alert-list-container { padding: var(--space-6); }
+
+    .page-header {
+      display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-5);
+    }
+    .header-left h1 { font-size: var(--text-2xl); font-weight: var(--font-semibold); margin: 0; color: var(--fg-default); }
+    .subtitle { font-size: var(--text-base); color: var(--fg-muted); margin: var(--space-1) 0 0; }
+    .header-actions { display: flex; gap: var(--space-2); }
+
+    .filter-bar {
+      display: flex; gap: var(--space-1); margin-bottom: var(--space-4); flex-wrap: wrap;
+    }
+    .filter-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border: 1px solid var(--border-default); border-radius: var(--radius-full);
+      background: var(--card-bg); color: var(--fg-default); font-size: var(--text-sm); cursor: pointer;
+      transition: all var(--duration-normal);
+      &:hover { border-color: var(--accent-default); color: var(--accent-default); }
+      &.active { background: var(--accent-default); color: white; border-color: var(--accent-default); }
+    }
+    .filter-count {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 20px; height: 20px; padding: 0 5px;
+      border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: var(--font-semibold);
+      background: var(--bg-muted); color: var(--fg-muted);
+      .active > & { background: rgba(255,255,255,0.25); color: white; }
+      &.danger { background: var(--error-subtle); color: var(--error-text); }
+      .active > &.danger { background: rgba(255,255,255,0.25); color: white; }
     }
 
-    .list-group-item {
-      transition: background-color 0.2s ease;
+    .empty-state {
+      text-align: center; padding: 60px var(--space-5); background: var(--card-bg);
+      border: 1px solid var(--card-border); border-radius: var(--radius-lg);
+      > i { font-size: 48px; color: var(--fg-subtle); }
+      h3 { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-xl); color: var(--fg-default); }
+      p { color: var(--fg-muted); margin-bottom: 0; }
     }
 
-    .list-group-item:hover {
-      background-color: var(--bs-gray-100);
+    .alerts-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: var(--radius-xl); overflow: hidden;
     }
 
-    .nav-pills .nav-link {
-      cursor: pointer;
+    .alert-item {
+      display: flex; align-items: flex-start; gap: var(--space-3);
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--border-muted);
+      transition: background-color var(--duration-normal);
+      &:last-child { border-bottom: none; }
+      &:hover { background: var(--table-row-hover); }
+      &.unread { background: var(--accent-subtle); border-left: 3px solid var(--accent-default); }
     }
+
+    .alert-icon {
+      flex-shrink: 0; font-size: 22px; margin-top: 2px;
+      &.severity-warning { color: var(--warning-default); }
+      &.severity-danger { color: var(--error-default); }
+      &.severity-success { color: var(--success-default); }
+      &.severity-info { color: var(--fg-muted); }
+    }
+
+    .alert-content { flex: 1; min-width: 0; }
+    .alert-title {
+      font-size: var(--text-base); color: var(--fg-default); margin-bottom: 2px;
+      &.fw-bold { font-weight: var(--font-semibold); }
+    }
+    .alert-message {
+      font-size: var(--text-sm); color: var(--fg-muted); margin-bottom: var(--space-1);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .alert-time {
+      display: flex; align-items: center; gap: 4px;
+      font-size: var(--text-xs); color: var(--fg-subtle);
+    }
+
+    .alert-actions {
+      display: flex; align-items: center; gap: var(--space-1); flex-shrink: 0;
+    }
+
+    .action-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: var(--radius-md); border: 1px solid var(--border-default);
+      background: var(--card-bg); cursor: pointer; font-size: 16px; color: var(--fg-muted);
+      text-decoration: none; transition: all var(--duration-normal);
+      &:hover { border-color: var(--accent-default); color: var(--accent-default); }
+      &.success:hover { border-color: var(--success-default); color: var(--success-default); }
+      &:disabled { opacity: 0.5; cursor: not-allowed; }
+    }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      height: var(--badge-height); padding: 0 var(--space-3);
+      border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: var(--font-medium);
+      white-space: nowrap;
+    }
+    .badge-success { background: var(--success-subtle); color: var(--success-text); }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px;
+      border: none; border-radius: var(--radius-lg); font-size: var(--text-base); font-weight: var(--font-medium);
+      cursor: pointer; text-decoration: none; transition: all var(--duration-normal);
+      &:disabled { opacity: 0.5; cursor: not-allowed; }
+    }
+    .btn-outline {
+      background: var(--card-bg); color: var(--accent-default); border: 1px solid var(--accent-default);
+      &:hover:not(:disabled) { background: var(--accent-subtle); }
+    }
+
+    .ph-spin { animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   `]
 })
 export class AlertListComponent implements OnInit, OnDestroy {
@@ -231,9 +256,10 @@ export class AlertListComponent implements OnInit, OnDestroy {
   isMarkingAll = signal(false);
   isMarkingRead = signal<Set<number>>(new Set());
   currentFilter = signal<'all' | 'unread' | 'read'>('all');
-  currentPage = signal(0);
+  currentPage = signal(1);  // 1-based for PaginationComponent
   totalCount = signal(0);
   totalPages = signal(0);
+  readonly pageSize = 20;
 
   // Computed
   unreadCount = computed(() =>
@@ -260,8 +286,8 @@ export class AlertListComponent implements OnInit, OnDestroy {
 
     this.alertService.getAlerts({
       acknowledged,
-      page: this.currentPage(),
-      size: 20
+      page: this.currentPage() - 1,  // API is 0-based
+      size: this.pageSize
     })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -281,31 +307,13 @@ export class AlertListComponent implements OnInit, OnDestroy {
 
   setFilter(filter: 'all' | 'unread' | 'read'): void {
     this.currentFilter.set(filter);
-    this.currentPage.set(0);
+    this.currentPage.set(1);
     this.loadAlerts();
   }
 
-  goToPage(page: number): void {
-    if (page >= 0 && page < this.totalPages()) {
-      this.currentPage.set(page);
-      this.loadAlerts();
-    }
-  }
-
-  getPageNumbers(): number[] {
-    const total = this.totalPages();
-    const current = this.currentPage();
-    const pages: number[] = [];
-
-    // Show max 5 pages around current
-    const start = Math.max(0, current - 2);
-    const end = Math.min(total, start + 5);
-
-    for (let i = start; i < end; i++) {
-      pages.push(i);
-    }
-
-    return pages;
+  onPageChange(page: number): void {
+    this.currentPage.set(page);
+    this.loadAlerts();
   }
 
   markAsRead(alert: Alert): void {
@@ -317,7 +325,6 @@ export class AlertListComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
-          // Update alert in list
           this.alerts.update(alerts =>
             alerts.map(a => a.id === alert.id ? { ...a, acknowledged: true } : a)
           );
@@ -351,7 +358,6 @@ export class AlertListComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
-          // Update all alerts in list
           this.alerts.update(alerts =>
             alerts.map(a => ({ ...a, acknowledged: true }))
           );
@@ -366,14 +372,16 @@ export class AlertListComponent implements OnInit, OnDestroy {
       });
   }
 
-  getSeverityClass(severity: string): string {
-    return this.alertService.getSeverityClass(severity);
+  getSeverityIconClass(severity: string): string {
+    switch (severity) {
+      case 'success': return 'severity-success';
+      case 'priority':
+      case 'high': return 'severity-danger';
+      case 'warning': return 'severity-warning';
+      default: return 'severity-info';
+    }
   }
 
-  /**
-   * Get relative time in Spanish
-   * PARIDAD: Rails time_ago_in_words
-   */
   getRelativeTime(dateString: string): string {
     const date = new Date(dateString);
     const now = new Date();
