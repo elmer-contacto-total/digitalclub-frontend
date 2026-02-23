@@ -197,6 +197,11 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         this.contact.set(result);
         this.viewState.set('contact');
 
+        // Check if this registered contact belongs to another agent
+        const assignedToOther = result.type === 'registered'
+          && result.registered?.managerId != null
+          && result.registered.managerId !== this.authService.currentUser()?.id;
+
         // Initialize form fields
         if (result.type === 'local' && result.local) {
           this.selectedLabel.set(result.local.label);
@@ -207,12 +212,14 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           this.requiresResponse.set(result.registered.requireResponse === true);
         }
 
-        // Notificar a Electron del cliente activo (para captura de medios)
-        this.notifyElectronOfActiveClient(result);
+        // If assigned to another agent: don't notify Electron (keep WhatsApp overlay visible)
+        if (!assignedToOther) {
+          this.notifyElectronOfActiveClient(result);
 
-        // Auto-load action history for registered contacts
-        if (result.type === 'registered' && result.registered?.id) {
-          this.loadActionHistoryAuto(result.registered.id);
+          // Auto-load action history for registered contacts
+          if (result.type === 'registered' && result.registered?.id) {
+            this.loadActionHistoryAuto(result.registered.id);
+          }
         }
       } else if (processedPhone) {
         // No contact found in backend - show info message
@@ -236,9 +243,14 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         this.electronService.clearActiveClient();
       }
 
-      // SIEMPRE notificar al terminar de procesar (con el teléfono que procesamos)
+      // Notificar al terminar de procesar (con el teléfono que procesamos)
       // Electron verificará si coincide con el chat que está esperando
-      this.electronService.notifyCrmClientReady(processedPhone);
+      // Si el contacto está asignado a otro agente, NO notificar → el overlay de WhatsApp permanece
+      if (!this.isAssignedToMe() && this.isRegistered()) {
+        console.log('[CRM] Contact assigned to another agent - keeping WhatsApp overlay');
+      } else {
+        this.electronService.notifyCrmClientReady(processedPhone);
+      }
     });
   }
 

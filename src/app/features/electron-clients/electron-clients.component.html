@@ -63,6 +63,16 @@
 
       <!-- Contact Info -->
       @if (viewState() === 'contact') {
+        @if (isRegistered() && !isAssignedToMe()) {
+          <!-- Not assigned to this agent: show only the warning banner -->
+          <div class="not-assigned-fullscreen">
+            <div class="not-assigned-icon">
+              <i class="ph ph-warning-circle"></i>
+            </div>
+            <strong>Este contacto esta asignado a {{ getManagerName() }}.</strong>
+            <p>No puedes realizar acciones sobre este contacto.</p>
+          </div>
+        } @else {
         <div class="contact-info">
           <!-- Contact Card -->
           <div class="contact-card">
@@ -159,20 +169,6 @@
                 </div>
               }
 
-              <!-- Not Assigned Banner -->
-              @if (!isAssignedToMe()) {
-                <div class="section not-assigned-banner">
-                  <div class="not-assigned-content">
-                    <i class="ph ph-warning-circle"></i>
-                    <div>
-                      <strong>Este contacto esta asignado a {{ getManagerName() }}.</strong>
-                      <p>No puedes realizar acciones sobre este contacto.</p>
-                    </div>
-                  </div>
-                </div>
-              }
-
-              @if (isAssignedToMe()) {
               <!-- Quick Replies -->
               <div class="section">
                 <div class="section-header">
@@ -214,8 +210,7 @@
                   </div>
                 }
               </div>
-            } <!-- end isAssignedToMe (quick replies) -->
-            } <!-- end isRegistered -->
+            }
 
             <!-- Personal Label (for non-registered contacts) -->
             @if (!isRegistered()) {
@@ -245,7 +240,6 @@
               </div>
             }
 
-            @if (isAssignedToMe()) {
             <!-- Notes Section -->
             <div class="section">
               <div class="section-header">
@@ -352,9 +346,9 @@
                 </div>
               </div>
             }
-            } <!-- end isAssignedToMe -->
           </div>
         </div>
+        }
       }
     </div>
   }
