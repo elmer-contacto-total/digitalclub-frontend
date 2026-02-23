@@ -78,15 +78,15 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
  * Add token to request headers
  */
 function addTokenToRequest(req: HttpRequest<unknown>, token: string | null): HttpRequest<unknown> {
-  if (!token) {
-    return req;
+  const headers: Record<string, string> = {
+    'Accept': 'application/json'
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
-  return req.clone({
-    setHeaders: {
-      Authorization: `Bearer ${token}`
-    }
-  });
+  return req.clone({ setHeaders: headers });
 }
 
 /**
