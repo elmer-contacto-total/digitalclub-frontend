@@ -608,19 +608,11 @@ export class UserFormComponent implements OnInit {
   // Current user for permissions
   currentUser = this.authService.currentUser;
 
-  // Existing avatar URL from user data (parsed from Shrine JSON or direct URL)
+  // Existing avatar URL from user data (backend already resolves S3 URLs)
   existingAvatarUrl = computed(() => {
     const user = this.existingUser();
     if (!user) return null;
-    const avatarData = (user as any).avatarData;
-    if (!avatarData) return null;
-    // avatarData may be Shrine JSON or a direct URL
-    if (avatarData.startsWith('http')) return avatarData;
-    try {
-      const parsed = JSON.parse(avatarData);
-      if (parsed.id) return null; // S3 key only — would need presigned URL from backend
-    } catch { /* not JSON */ }
-    return null;
+    return (user as any).avatarData || null;
   });
 
   // Available roles based on current user's role

@@ -158,6 +158,7 @@ export interface UserListItem {
   managerName?: string;  // Nombre del manager para mostrar en lista
   managerRole?: UserRole; // Rol del manager
   friendlyRole?: string; // PARIDAD RAILS: Nombre amigable del rol desde client_structure
+  avatarData?: string;   // Resolved avatar URL from backend
   createdAt: string;
   // Additional fields for agent clients view
   fullName?: string;     // Computed: firstName + lastName

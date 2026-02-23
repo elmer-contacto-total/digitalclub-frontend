@@ -32,7 +32,11 @@ export type WhatsAppMessageType = 'p2p' | 'centralized';
       <!-- Main Info -->
       <div class="header-main">
         <div class="avatar">
-          <span class="initials">{{ getInitials() }}</span>
+          @if (client().avatarData) {
+            <img [src]="client().avatarData" alt="" />
+          } @else {
+            <span class="initials">{{ getInitials() }}</span>
+          }
         </div>
 
         <div class="client-info">

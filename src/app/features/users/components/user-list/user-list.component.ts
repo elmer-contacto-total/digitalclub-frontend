@@ -104,7 +104,13 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
                   <tr>
                     <td class="col-name">
                       <div class="user-name">
-                        <div class="avatar">{{ getInitials(user) }}</div>
+                        <div class="avatar">
+                          @if (user.avatarData) {
+                            <img [src]="user.avatarData" alt="" />
+                          } @else {
+                            {{ getInitials(user) }}
+                          }
+                        </div>
                         <span>{{ getFullName(user) }}</span>
                       </div>
                     </td>
@@ -560,6 +566,13 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       font-size: 12px;
       font-weight: 600;
       flex-shrink: 0;
+      overflow: hidden;
+
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
     }
 
     .col-email {
