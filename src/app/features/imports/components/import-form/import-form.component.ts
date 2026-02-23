@@ -24,13 +24,20 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
   template: `
     <div class="imports-page">
       <!-- Header -->
-      <div class="page-header">
-        <div class="page-header-left">
-          <a routerLink="/app/imports" class="back-link">
-            <i class="ph ph-arrow-left"></i>
-            Importaciones
-          </a>
-          <h1 class="page-title">Nueva importación</h1>
+      <a routerLink="/app/imports" class="back-link">
+        <i class="ph ph-arrow-left"></i>
+        Volver a Importaciones
+      </a>
+
+      <div class="hero-card">
+        <div class="hero-main">
+          <div class="hero-icon">
+            <i class="ph ph-upload-simple"></i>
+          </div>
+          <div class="hero-info">
+            <h1>Nueva importación</h1>
+            <p class="hero-subtitle">Suba un archivo CSV con la lista de usuarios a importar</p>
+          </div>
         </div>
       </div>
 
@@ -155,10 +162,6 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       margin: 0 auto;
     }
 
-    .page-header {
-      margin-bottom: var(--space-6);
-    }
-
     .back-link {
       display: inline-flex;
       align-items: center;
@@ -166,17 +169,58 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       color: var(--fg-muted);
       text-decoration: none;
       font-size: var(--text-sm);
-      margin-bottom: var(--space-2);
+      margin-bottom: var(--space-4);
       transition: color var(--duration-fast);
 
+      i { font-size: 16px; }
       &:hover { color: var(--accent-default); }
     }
 
-    .page-title {
-      margin: 0;
-      font-size: var(--text-2xl);
-      font-weight: var(--font-semibold);
-      color: var(--fg-default);
+    .hero-card {
+      background: linear-gradient(135deg, var(--accent-default) 0%, var(--accent-emphasis) 100%);
+      border-radius: var(--radius-xl);
+      padding: var(--space-6);
+      margin-bottom: var(--space-6);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-6);
+    }
+
+    .hero-main {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .hero-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+
+      i { font-size: 32px; }
+    }
+
+    .hero-info {
+      h1 {
+        margin: 0 0 var(--space-1) 0;
+        font-size: var(--text-xl);
+        font-weight: var(--font-bold);
+        color: white;
+      }
+
+      .hero-subtitle {
+        margin: 0;
+        font-size: var(--text-base);
+        opacity: 0.9;
+      }
     }
 
     /* Cards */
@@ -409,6 +453,8 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
     @media (max-width: 768px) {
       .imports-page { padding: var(--space-4); }
+      .hero-card { flex-direction: column; text-align: center; padding: var(--space-5); }
+      .hero-main { flex-direction: column; }
       .columns-grid { grid-template-columns: 1fr 1fr; }
     }
   `]
