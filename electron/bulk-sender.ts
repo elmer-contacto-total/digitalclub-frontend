@@ -1184,9 +1184,23 @@ export class BulkSender {
       return { success: false, error: `Archivo no encontrado: ${filePath}` };
     }
 
+    // Detect image by extension OR magic bytes (files may have wrong extension)
     const ext = path.extname(filePath).toLowerCase();
-    const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext);
+    let isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext);
+    if (!isImage) {
+      try {
+        const header = Buffer.alloc(8);
+        const fd = fs.openSync(filePath, 'r');
+        fs.readSync(fd, header, 0, 8, 0);
+        fs.closeSync(fd);
+        const hex = header.toString('hex');
+        isImage = hex.startsWith('ffd8ff') || hex.startsWith('89504e47') ||
+                  hex.startsWith('47494638') || hex.startsWith('52494646');
+      } catch { /* ignore, treat as non-image */ }
+    }
 
+    // Images must use clipboard (WhatsApp ignores untrusted DragEvents for images).
+    // Non-images use drag-drop.
     if (isImage) {
       return this.sendImageViaClipboard(filePath, caption, expectedPhone);
     } else {
@@ -1212,16 +1226,49 @@ export class BulkSender {
     };
 
     try {
-      // 1. Load image and validate
-      let image = nativeImage.createFromPath(filePath);
+      // 1. Load image and validate — detect real format from magic bytes, not extension
+      const fileBuffer = fs.readFileSync(filePath);
+      const headerHex = fileBuffer.subarray(0, 8).toString('hex');
+      rlog(`Step 1: file=${filePath}, size=${fileBuffer.length} bytes, header=${headerHex}`);
+
+      let mime = 'image/jpeg';
+      if (headerHex.startsWith('89504e47')) mime = 'image/png';
+      else if (headerHex.startsWith('47494638')) mime = 'image/gif';
+      else if (headerHex.startsWith('52494646')) mime = 'image/webp';
+
+      let image = nativeImage.createFromBuffer(fileBuffer);
       if (image.isEmpty()) {
-        rlog('Step 1 WARN: createFromPath failed, trying createFromBuffer...');
-        const buf = fs.readFileSync(filePath);
-        image = nativeImage.createFromBuffer(buf);
+        rlog(`Step 1 WARN: createFromBuffer failed, trying dataURL with mime=${mime}...`);
+        image = nativeImage.createFromDataURL(`data:${mime};base64,${fileBuffer.toString('base64')}`);
+      }
+      if (image.isEmpty() && this.whatsappView) {
+        // nativeImage can't decode (e.g. WebP) — convert via renderer canvas (Chromium CAN decode it)
+        rlog('Step 1 WARN: nativeImage failed, converting via renderer canvas...');
+        const base64 = fileBuffer.toString('base64');
+        const pngDataUrl: string | null = await this.whatsappView.webContents.executeJavaScript(`
+          (function() {
+            return new Promise(function(resolve) {
+              var img = new Image();
+              img.onload = function() {
+                var c = document.createElement('canvas');
+                c.width = img.naturalWidth;
+                c.height = img.naturalHeight;
+                c.getContext('2d').drawImage(img, 0, 0);
+                resolve(c.toDataURL('image/png'));
+              };
+              img.onerror = function() { resolve(null); };
+              img.src = 'data:${mime};base64,${base64}';
+            });
+          })()
+        `, true);
+        if (pngDataUrl) {
+          image = nativeImage.createFromDataURL(pngDataUrl);
+          rlog('Step 1 OK: converted via canvas, size=' + image.getSize().width + 'x' + image.getSize().height);
+        }
       }
       if (image.isEmpty()) {
-        rlog('Step 1 FAIL: image is empty (both path and buffer), falling back to drag-drop');
-        return this.sendFileViaDragDrop(filePath, caption, expectedPhone);
+        rlog('Step 1 FAIL: all methods failed');
+        return { success: false, error: `No se pudo cargar la imagen (size=${fileBuffer.length}, mime=${mime})` };
       }
       rlog('Step 1 OK: image loaded, size=' + image.getSize().width + 'x' + image.getSize().height);
 
@@ -1263,10 +1310,24 @@ export class BulkSender {
         rlog('Step 4 OK: no caption to type');
       }
 
-      // 5. Write image to system clipboard and paste via CDP Ctrl+V (focus-independent)
+      // 5. Save clipboard, write image, paste, then restore clipboard
+      const prevText = clipboard.readText();
+      const prevImage = clipboard.readImage();
+      const hadImage = !prevImage.isEmpty();
+
       clipboard.writeImage(image);
       await this.cdpKey('v', 'KeyV', 86, 2);  // 2 = Ctrl modifier
-      rlog('Step 5 OK: clipboard.writeImage + CDP Ctrl+V dispatched');
+
+      // Restore previous clipboard content after a brief delay for paste to register
+      await this.sleep(150);
+      if (hadImage) {
+        clipboard.writeImage(prevImage);
+      } else if (prevText) {
+        clipboard.writeText(prevText);
+      } else {
+        clipboard.clear();
+      }
+      rlog('Step 5 OK: clipboard.writeImage + CDP Ctrl+V + clipboard restored');
 
       // 6. Wait for media preview to appear
       // WhatsApp uses "Remove attachment" and "Add file" buttons in the media editor
