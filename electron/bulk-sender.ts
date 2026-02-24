@@ -1213,10 +1213,15 @@ export class BulkSender {
 
     try {
       // 1. Load image and validate
-      const image = nativeImage.createFromPath(filePath);
+      let image = nativeImage.createFromPath(filePath);
       if (image.isEmpty()) {
-        rlog('Step 1 FAIL: image is empty');
-        return { success: false, error: 'No se pudo cargar la imagen desde disco' };
+        rlog('Step 1 WARN: createFromPath failed, trying createFromBuffer...');
+        const buf = fs.readFileSync(filePath);
+        image = nativeImage.createFromBuffer(buf);
+      }
+      if (image.isEmpty()) {
+        rlog('Step 1 FAIL: image is empty (both path and buffer), falling back to drag-drop');
+        return this.sendFileViaDragDrop(filePath, caption, expectedPhone);
       }
       rlog('Step 1 OK: image loaded, size=' + image.getSize().width + 'x' + image.getSize().height);
 
