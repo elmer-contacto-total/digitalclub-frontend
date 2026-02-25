@@ -384,31 +384,44 @@ async function sendMediaDeletionToServer(whatsappMessageId: string, isDisappeari
   }
 }
 
-// Retry pending deletions every 60 seconds
-setInterval(async () => {
-  if (pendingDeletions.length === 0) return;
-  console.log(`[MWS Deleted] Reintentando ${pendingDeletions.length} eliminaciones pendientes`);
-  const toRetry = pendingDeletions.splice(0, pendingDeletions.length);
-  for (const id of toRetry) {
-    try {
-      const response = await fetch(`${MEDIA_API_URL}/mark-deleted`, {
-        method: 'POST',
-        headers: getMediaApiHeaders(),
-        body: JSON.stringify({ whatsappMessageId: id })
-      });
-      if (response.ok) {
-        console.log('[MWS Deleted] Reintento exitoso:', id);
-        capturedMediaIds.delete(id);
-      } else {
+// Retry pending deletions — extracted to reusable function
+let retryInProgress = false;
+async function retryPendingDeletions(): Promise<void> {
+  if (retryInProgress || pendingDeletions.length === 0) return;
+  if (!mediaAuthToken) {
+    console.log(`[MWS Deleted] ${pendingDeletions.length} eliminaciones pendientes, esperando auth token...`);
+    return;
+  }
+  retryInProgress = true;
+  try {
+    console.log(`[MWS Deleted] Reintentando ${pendingDeletions.length} eliminaciones pendientes`);
+    const toRetry = pendingDeletions.splice(0, pendingDeletions.length);
+    for (const id of toRetry) {
+      try {
+        const response = await fetch(`${MEDIA_API_URL}/mark-deleted`, {
+          method: 'POST',
+          headers: getMediaApiHeaders(),
+          body: JSON.stringify({ whatsappMessageId: id })
+        });
+        if (response.ok) {
+          console.log('[MWS Deleted] Reintento exitoso:', id);
+          capturedMediaIds.delete(id);
+        } else {
+          pendingDeletions.push(id);
+        }
+      } catch {
         pendingDeletions.push(id);
       }
-    } catch {
-      pendingDeletions.push(id);
     }
+    savePendingDeletions();
+    saveCapturedMediaIds();
+  } finally {
+    retryInProgress = false;
   }
-  savePendingDeletions();
-  saveCapturedMediaIds();
-}, 60000);
+}
+
+// Retry pending deletions every 60 seconds
+setInterval(retryPendingDeletions, 60000);
 
 /**
  * Callback para manejar medios capturados desde el BrowserView
@@ -959,6 +972,12 @@ function createWhatsAppView(): void {
   mainWindow.addBrowserView(whatsappView);
 
   // ===== INICIALIZAR SISTEMA DE SEGURIDAD DE MEDIOS =====
+  // Filtrar del backup los IDs ya pendientes de notificar eliminación (evita re-detección)
+  const filteredBackup = new Map(capturedMediaIds);
+  for (const pendingId of pendingDeletions) {
+    filteredBackup.delete(pendingId);
+  }
+
   initializeMediaSecurity(whatsappView, mainWindow, userFingerprint.odaId, {
     onMediaCaptured: (data) => {
       // Pasar los datos crudos a handleMediaCaptured que agrega agentId, clientUserId, etc.
@@ -981,7 +1000,7 @@ function createWhatsAppView(): void {
         saveRevealedMessageIds();
       }
     }
-  }, capturedMediaIds, revealedMessageIds);
+  }, filteredBackup, revealedMessageIds);
 
   // User-Agent dinámico basado en fingerprint único
   whatsappView.webContents.setUserAgent(userFingerprint.userAgent);
@@ -1032,7 +1051,7 @@ function createWhatsAppView(): void {
   whatsappView.webContents.loadURL('https://web.whatsapp.com');
 
   // DevTools para WhatsApp BrowserView (debug)
-  //whatsappView.webContents.openDevTools();
+  whatsappView.webContents.openDevTools();
 
   // Marcar como inicializado
   whatsappInitialized = true;
@@ -2099,6 +2118,11 @@ function setupIPC(): void {
     mediaAuthToken = token;
     bulkSender.setAuthToken(token);
     console.log('[MWS] Auth token actualizado para API de media y bulk sender');
+    // Reintentar pending deletions inmediatamente con el nuevo token
+    if (pendingDeletions.length > 0) {
+      console.log(`[MWS Deleted] Auth token recibido, reintentando ${pendingDeletions.length} eliminaciones pendientes`);
+      retryPendingDeletions();
+    }
   });
 
   ipcMain.on('clear-logged-in-user', () => {
@@ -2184,6 +2208,7 @@ function setupIPC(): void {
       // Ocultar WhatsApp temporalmente (remover del window)
       if (whatsappVisible && mainWindow.getBrowserViews().includes(whatsappView)) {
         mainWindow.removeBrowserView(whatsappView);
+        whatsappView.webContents.executeJavaScript('window.__hablapeViewVisible = false;', true).catch(() => {});
         console.log('[MWS] WhatsApp ocultado temporalmente (overlay abierto)');
       }
     } else {
@@ -2191,6 +2216,7 @@ function setupIPC(): void {
       if (whatsappVisible && !mainWindow.getBrowserViews().includes(whatsappView)) {
         mainWindow.addBrowserView(whatsappView);
         updateWhatsAppViewBounds();
+        whatsappView.webContents.executeJavaScript('window.__hablapeViewVisible = true;', true).catch(() => {});
         console.log('[MWS] WhatsApp restaurado (overlay cerrado)');
       }
     }

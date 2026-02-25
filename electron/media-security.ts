@@ -788,6 +788,15 @@ const MEDIA_CAPTURE_SCRIPT = `
     }
   } catch (e) {}
 
+  // Mark all restored messages as "previously seen in DOM".
+  // They were captured in a prior session = confirmed to have been in DOM.
+  // This enables Method 2 fallback and re-baseline detection after app restart.
+  for (var restoredId of messagesWithMedia) {
+    if (!detectedDeletions.has(restoredId)) {
+      messageSeenInDOM.add(restoredId);
+    }
+  }
+
   function persistMessagesWithMedia() {
     try {
       var msgs = Array.from(messagesWithMedia);
@@ -813,8 +822,28 @@ const MEDIA_CAPTURE_SCRIPT = `
     // including groups. __hablapeCurrentChatName only updates for
     // individual contacts (via phone extraction) and goes stale on groups.
     try {
-      var headerEl = document.querySelector('#main header span[title]');
-      if (headerEl) return headerEl.getAttribute('title');
+      var headerEl = document.querySelector('#main header span[title]')
+        || document.querySelector('#main [data-testid="conversation-info-header-chat-title"]')
+        || document.querySelector('#main [data-testid="conversation-header"] span[title]');
+
+      if (!headerEl) {
+        // Broader search: any titled span in #main's header area
+        var header = document.querySelector('#main header')
+          || document.querySelector('#main [data-testid="conversation-header"]');
+        if (header) {
+          var spans = header.querySelectorAll('span[title]');
+          for (var si = 0; si < spans.length; si++) {
+            if (spans[si].getAttribute('title')) { headerEl = spans[si]; break; }
+          }
+        }
+      }
+
+      if (headerEl) {
+        var title = headerEl.getAttribute('title');
+        if (title) return title;
+        var text = (headerEl.textContent || '').trim();
+        if (text) return text;
+      }
     } catch (e) {}
     if (window.__hablapeCurrentChatName) return window.__hablapeCurrentChatName;
     return null;
@@ -2212,7 +2241,10 @@ const MEDIA_CAPTURE_SCRIPT = `
       for (const node of mutation.removedNodes) {
         if (node.nodeType !== 1) continue;
         // Check if the removed node was inside a message we captured
-        const parentMsg = node.closest ? node.closest('[data-id]') : null;
+        // node.closest() fails on detached nodes, so also check mutation.target
+        // (the node whose children changed — still in the DOM)
+        const parentMsg = (node.closest ? node.closest('[data-id]') : null)
+          || (mutation.target && mutation.target.closest ? mutation.target.closest('[data-id]') : null);
         const dataId = parentMsg ? parentMsg.getAttribute('data-id') : node.getAttribute?.('data-id');
         if (dataId && messagesWithMedia.has(dataId) && !detectedDeletions.has(dataId)) {
           // A child was removed from a captured message - check if media is gone
@@ -2220,6 +2252,10 @@ const MEDIA_CAPTURE_SCRIPT = `
           setTimeout(() => {
             // Verify message still tracked and not already detected
             if (!messagesWithMedia.has(dataId) || detectedDeletions.has(dataId)) return;
+
+            // Skip if view is hidden or no active chat (DOM may be in transition)
+            if (window.__hablapeViewVisible === false) return;
+            if (!document.querySelector('#main')) return;
 
             // Verify we're still in the same chat (avoid false positives from chat switch)
             var capturedChat = messageChatName.get(dataId);
@@ -2529,22 +2565,27 @@ const MEDIA_CAPTURE_SCRIPT = `
           const response = await fetch(audioSrc);
           const blob = await response.blob();
 
-          // Usar el contexto capturado por el click listener si es reciente (< 5 segundos)
+          // El click listener siempre corre antes de play() — confiar en su timestamp
+          // sin límite de tiempo estricto (el fetch del blob puede tardar >5s)
           let messageSentAt = null;
           let whatsappMessageId = null;
 
-          const audioContextAge = Date.now() - lastAudioContextTime;
-          if (audioContextAge < 5000 && lastAudioMessageTimestamp) {
+          if (lastAudioMessageTimestamp && lastAudioContextTime > 0) {
             messageSentAt = lastAudioMessageTimestamp;
             whatsappMessageId = lastAudioWhatsappMessageId;
             console.log('[MWS Debug] Audio play: usando contexto del click:', messageSentAt);
           } else {
-            // Fallback al método original
+            // Solo fallback si el click listener NO capturó nada
             const extracted = extractMessageTimestamp(audioElement);
             messageSentAt = extracted.messageSentAt;
             whatsappMessageId = extracted.whatsappMessageId;
-            console.log('[MWS Debug] Audio play: usando extractMessageTimestamp:', messageSentAt);
+            console.log('[MWS Debug] Audio play: fallback extractMessageTimestamp:', messageSentAt);
           }
+
+          // Limpiar contexto para evitar reusar timestamp de otro audio
+          lastAudioMessageTimestamp = null;
+          lastAudioWhatsappMessageId = null;
+          lastAudioContextTime = 0;
 
           // Track message for deletion detection BEFORE async blob read
           // (ensures tracking even if FileReader fails)
@@ -2591,7 +2632,7 @@ const MEDIA_CAPTURE_SCRIPT = `
     if (!messageEl) return false;
 
     // Method 1: data-testid/data-icon for revoked/recalled
-    if (messageEl.querySelector('[data-testid="recalled"], [data-testid="msg-revoked"], [data-icon="recalled"]')) {
+    if (messageEl.querySelector('[data-testid="recalled"], [data-testid="msg-revoked"], [data-testid="msg-revoked-bubble"], [data-icon="recalled"], [data-icon="msg-revoked"]')) {
       return true;
     }
 
@@ -2607,7 +2648,9 @@ const MEDIA_CAPTURE_SCRIPT = `
       'Cette message a \u00e9t\u00e9 supprim\u00e9e', // FR
       'Diese Nachricht wurde gel\u00f6scht',     // DE
       'Questo messaggio \u00e8 stato eliminato', // IT
-      'Esta mensagem foi eliminada'              // PT-PT
+      'Esta mensagem foi eliminada',              // PT-PT
+      'Esperando a que este mensaje est\u00e9 disponible', // Mensaje eliminado antes de descarga
+      'Waiting for this message'                  // EN: deleted before download
     ];
     for (var i = 0; i < deletionPhrases.length; i++) {
       if (textContent.includes(deletionPhrases[i])) return true;
@@ -2640,20 +2683,11 @@ const MEDIA_CAPTURE_SCRIPT = `
       return false;
     }
 
-    // Images: verify there's an <img> with a real src and visible dimensions
-    var images = messageEl.querySelectorAll('img[src^="blob:"], img[src^="http"]');
-    var hasRealImage = false;
-    for (var i = 0; i < images.length; i++) {
-      var rect = images[i].getBoundingClientRect();
-      if (rect.width > 30 && rect.height > 30) {
-        hasRealImage = true;
-        break;
-      }
-    }
-    // Fallback: canvas-rendered media
-    if (!hasRealImage) {
-      hasRealImage = !!messageEl.querySelector('[data-testid="media-canvas"]');
-    }
+    // Images: check for img with real src or WhatsApp media elements
+    // Don't use getBoundingClientRect — lazy-loaded images have 0x0 dimensions while off-viewport
+    var hasRealImage = !!messageEl.querySelector(
+      'img[src^="blob:"], img[src^="http"], [data-testid="media-canvas"], [data-testid="image-thumb"]'
+    );
 
     // Audio: the <audio> element is global (not inside the message div), so check
     // for audio UI elements instead: waveform, ptt container, play/pause buttons
@@ -2663,7 +2697,12 @@ const MEDIA_CAPTURE_SCRIPT = `
       '[data-icon="ptt-play"], [data-icon="ptt-pause"], [data-icon="audio-play"], [data-icon="audio-pause"]'
     );
 
-    return hasRealImage || hasAudio;
+    // Video: check for video elements and WhatsApp video UI
+    var hasVideo = !!messageEl.querySelector(
+      'video, [data-testid*="video"], [data-testid="video-thumb"]'
+    );
+
+    return hasRealImage || hasAudio || hasVideo;
   }
 
   let deletionScanCount = 0;
@@ -2676,11 +2715,42 @@ const MEDIA_CAPTURE_SCRIPT = `
     deletionScanCount++;
     const debugEntries = [];
     const currentChat = getCurrentChatHeaderName();
+    const viewVisible = window.__hablapeViewVisible !== false;
+
+    // Always log first 10 scans and then every 20th for diagnostics
+    if (deletionScanCount <= 10 || deletionScanCount % 20 === 0) {
+      console.log('[MWS Deleted] Scan #' + deletionScanCount +
+        ' | tracked:' + messagesWithMedia.size +
+        ' | chat:' + (currentChat || 'null') +
+        ' | visible:' + viewVisible +
+        ' | #main:' + !!document.querySelector('#main'));
+    }
+
+    // Guard 1: No chat open at all (no #main element)
+    if (!document.querySelector('#main')) {
+      previousChatName = null;
+      messageNoMediaScans.clear();
+      if (deletionScanCount % 20 === 0) {
+        console.log('[MWS Deleted] Scan #' + deletionScanCount + ' skipped: no chat open');
+      }
+      return;
+    }
+
+    // Guard 2: View explicitly hidden (hideWhatsApp or overlay mode)
+    if (!viewVisible) {
+      viewWasHidden = true;
+      messageNoMediaScans.clear();
+      if (deletionScanCount % 20 === 0) {
+        console.log('[MWS Deleted] Scan #' + deletionScanCount + ' skipped: view hidden');
+      }
+      return;
+    }
 
     // When chat changes, re-baseline tracked messages for the new chat.
     // This ensures messages restored from localStorage get fresh lastSeen/neighbor
     // so absence detection works when they're later deleted.
     if (currentChat && currentChat !== previousChatName) {
+      messageNoMediaScans.clear();  // Reset Method 3 counters on chat change
       previousChatName = currentChat;
       for (var rebaseId of messagesWithMedia) {
         if (detectedDeletions.has(rebaseId)) continue;
@@ -2689,6 +2759,29 @@ const MEDIA_CAPTURE_SCRIPT = `
         if (rebaseEl) {
           messageSeenInDOM.add(rebaseId);
           messageLastSeen.set(rebaseId, deletionScanCount);
+
+          // Immediate deletion check on re-baseline — catches deletions
+          // that happened while we were in another chat
+          if (isMessageDeletedByMarker(rebaseEl) || !hasMediaElements(rebaseEl)) {
+            console.log('[MWS Deleted] Eliminación detectada (re-baseline):', rebaseId);
+            detectedDeletions.add(rebaseId);
+            window.__hablapeDeletedQueue.push({
+              whatsappMessageId: rebaseId,
+              detectedAt: new Date().toISOString(),
+              isDisappearing: messagesWithTimer.has(rebaseId)
+            });
+            persistDeletedQueue();
+            messagesWithMedia.delete(rebaseId);
+            messageChatName.delete(rebaseId);
+            messageNoMediaScans.delete(rebaseId);
+            messageNeighbor.delete(rebaseId);
+            messageLastSeen.delete(rebaseId);
+            messageSeenInDOM.delete(rebaseId);
+            messagesWithTimer.delete(rebaseId);
+            persistMessagesWithMedia();
+            continue;
+          }
+
           // Record both neighbors for future absence checks
           var nextNb = rebaseEl.nextElementSibling;
           while (nextNb && !nextNb.getAttribute('data-id')) nextNb = nextNb.nextElementSibling;
@@ -2710,8 +2803,8 @@ const MEDIA_CAPTURE_SCRIPT = `
 
     // When view transitions from hidden → visible, selectively refresh lastSeen
     // using neighbor check to distinguish deletion from scroll displacement
-    const viewVisible = window.__hablapeViewVisible !== false;
-    if (viewVisible && viewWasHidden) {
+    // (viewVisible is guaranteed true here — !viewVisible already returned above)
+    if (viewWasHidden) {
       for (const [msgId] of messageLastSeen) {
         if (detectedDeletions.has(msgId)) continue;
         const el = document.querySelector('[data-id="' + msgId + '"]');
@@ -2735,8 +2828,6 @@ const MEDIA_CAPTURE_SCRIPT = `
         }
       }
       viewWasHidden = false;
-    } else if (!viewVisible) {
-      viewWasHidden = true;
     }
 
     // Only check messages that we know had media (captured in this session)
@@ -2767,21 +2858,15 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       if (!messageEl) {
         // Message not in DOM. Could be: deleted, scrolled away, or chat switched.
-        if (lastSeen && capturedChat && currentChat && capturedChat === currentChat) {
+        // If capturedChat is null (header wasn't visible at capture), allow check in any chat
+        // — neighbor presence + messageSeenInDOM guards are sufficient to prevent false positives.
+        if (lastSeen && currentChat && (!capturedChat || capturedChat === currentChat)) {
           var neighbors = messageNeighbor.get(messageId);
           var scansSinceSeen = deletionScanCount - lastSeen;
           var isDeleted = false;
           var hasNeighbors = neighbors && (neighbors.next || neighbors.prev);
 
-          if (!hasNeighbors) {
-            // No neighbors recorded. Only use absence fallback if the message
-            // was actually observed in DOM during this session (not just restored
-            // from localStorage). Messages never seen in DOM could be far up in
-            // scroll history — absence is expected, not a deletion signal.
-            if (messageSeenInDOM.has(messageId) && scansSinceSeen >= 2 && scansSinceSeen <= 15) {
-              isDeleted = true;
-            }
-          } else {
+          if (hasNeighbors) {
             var nextInDOM = neighbors.next ? !!document.querySelector('[data-id="' + neighbors.next + '"]') : false;
             var prevInDOM = neighbors.prev ? !!document.querySelector('[data-id="' + neighbors.prev + '"]') : false;
             var anyNeighborInDOM = nextInDOM || prevInDOM;
@@ -2790,10 +2875,17 @@ const MEDIA_CAPTURE_SCRIPT = `
               // No time window limit: neighbor presence is a strong signal
               isDeleted = true;
             }
-            // Both neighbors also gone → likely scroll → do NOT flag
+          }
+
+          // Fallback: neighbors absent or all out of DOM. After 60s (20 scans)
+          // in the same chat, if the message was confirmed in DOM before, flag as
+          // deleted. Covers out-of-viewport deletions that the observer missed.
+          if (!isDeleted && scansSinceSeen >= 20 && messageSeenInDOM.has(messageId)) {
+            isDeleted = true;
           }
 
           if (isDeleted) {
+            console.log('[MWS Deleted] Eliminación detectada (Method 2 - absent):', messageId);
             detectedDeletions.add(messageId);
             window.__hablapeDeletedQueue.push({
               whatsappMessageId: messageId,
@@ -2830,6 +2922,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // Check for deletion markers (Methods 1-2: instant, high confidence)
       if (isMessageDeletedByMarker(messageEl)) {
+        console.log('[MWS Deleted] Eliminación detectada (Method 1 - marker):', messageId);
         detectedDeletions.add(messageId);
         window.__hablapeDeletedQueue.push({
           whatsappMessageId: messageId,
@@ -2848,10 +2941,11 @@ const MEDIA_CAPTURE_SCRIPT = `
         persistMessagesWithMedia();
       } else if (!hasMediaElements(messageEl)) {
         // Method 3: media gone but message still in DOM
-        // Require 3 consecutive scans (~9s) to avoid lazy loading false positives
+        // Require 5 consecutive scans (~15s) to avoid lazy loading false positives
         var noMediaCount = (messageNoMediaScans.get(messageId) || 0) + 1;
         messageNoMediaScans.set(messageId, noMediaCount);
-        if (noMediaCount >= 3) {
+        if (noMediaCount >= 5) {
+          console.log('[MWS Deleted] Eliminación detectada (Method 3 - media gone):', messageId);
           detectedDeletions.add(messageId);
           window.__hablapeDeletedQueue.push({
             whatsappMessageId: messageId,
@@ -3026,7 +3120,7 @@ export function setupMediaCapture(
         console.log(`[MWS Deleted] Scan #${d.scanCount} | tracked: ${d.mediaCount} | deleted: ${d.deletedCount} | chat: ${d.currentChat || 'null'}`);
         if (d.entries && d.entries.length > 0) {
           for (const e of d.entries) {
-            console.log(`[MWS Deleted]   ${e.msgId} | inDOM:${e.inDOM} lastSeen:${e.lastSeen} sameChat:${e.sameChat} img:${e.hasImg} blob:${e.hasBlob} recalled:${e.hasRecalled} | "${e.textSnippet}"`);
+            console.log(`[MWS Deleted]   ${e.msgId} | inDOM:${e.inDOM} lastSeen:${e.lastSeen} since:${e.scansSince} seen:${e.everSeen} nb:${e.neighbor} sameChat:${e.sameChat} recalled:${e.hasRecalled} | "${e.textSnippet}"`);
           }
         }
       }
