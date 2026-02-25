@@ -2151,17 +2151,29 @@ const MEDIA_CAPTURE_SCRIPT = `
                 if (!isLastMessage) {
                   console.log('[MWS Incoming] Ignorado (no es último msg, probable scroll-load):', msgDataId.substring(0, 30));
                 } else {
-                  // Capturar telefono y texto AHORA (no al disparar timer, para evitar race con cambio de chat)
+                  // Capturar phone AHORA (evitar race con cambio de chat), pero leer texto DENTRO del timer
+                  // porque WhatsApp renderiza .selectable-text en un ciclo posterior al nodo del mensaje
                   var detectedPhone = window.__hablapeCurrentChatPhone || '';
-                  var detectedMsgText = '';
-                  var selectableEl = messageEl.querySelector('.selectable-text');
-                  if (selectableEl) {
-                    detectedMsgText = (selectableEl.innerText || selectableEl.textContent || '').trim();
-                  }
+                  var detectedMsgEl = messageEl;
 
                   if (incomingDebounceTimer) clearTimeout(incomingDebounceTimer);
                   incomingDebounceTimer = setTimeout(function() {
                     incomingDebounceTimer = null;
+                    var detectedMsgText = '';
+                    var selectableEl = detectedMsgEl.querySelector('.selectable-text');
+                    if (selectableEl) {
+                      detectedMsgText = (selectableEl.innerText || selectableEl.textContent || '').trim();
+                    }
+                    if (!detectedMsgText) {
+                      // Fallback: buscar span con texto si .selectable-text no existe aún
+                      var spans = detectedMsgEl.querySelectorAll('span[dir="ltr"], span[dir="rtl"], span.selectable-text, span[title]');
+                      for (var si = 0; si < spans.length && !detectedMsgText; si++) {
+                        var spanText = (spans[si].innerText || spans[si].textContent || '').trim();
+                        if (spanText && spanText.length > 1) {
+                          detectedMsgText = spanText;
+                        }
+                      }
+                    }
                     if (detectedPhone) {
                       console.log('[HABLAPE_INCOMING_DETECTED]' + detectedPhone + '|||' + detectedMsgText);
                     }
@@ -2283,16 +2295,29 @@ const MEDIA_CAPTURE_SCRIPT = `
       '(true_:', startsWithTrue, ', class message-out:', hasClassOut, ', closest:', !!closestOut, ')');
 
     if (!isOutgoing) {
-      var phone = window.__hablapeCurrentChatPhone || '';
-      var lastMsgText = '';
-      var lastMsgSelectable = lastMsg.querySelector('.selectable-text');
-      if (lastMsgSelectable) {
-        lastMsgText = (lastMsgSelectable.innerText || lastMsgSelectable.textContent || '').trim();
-      }
-      console.log('[MWS CheckLast] Último msg es ENTRANTE. phone:', phone || '(vacío)');
-      if (phone) {
-        console.log('[HABLAPE_INCOMING_DETECTED]' + phone + '|||' + lastMsgText);
-        console.log('[MWS CheckLast] ✓ Señal emitida para:', phone);
+      var checkLastPhone = window.__hablapeCurrentChatPhone || '';
+      var checkLastMsgEl = lastMsg;
+      console.log('[MWS CheckLast] Último msg es ENTRANTE. phone:', checkLastPhone || '(vacío)');
+      if (checkLastPhone) {
+        setTimeout(function() {
+          var lastMsgText = '';
+          var lastMsgSelectable = checkLastMsgEl.querySelector('.selectable-text');
+          if (lastMsgSelectable) {
+            lastMsgText = (lastMsgSelectable.innerText || lastMsgSelectable.textContent || '').trim();
+          }
+          if (!lastMsgText) {
+            // Fallback: buscar span con texto si .selectable-text no existe aún
+            var spans = checkLastMsgEl.querySelectorAll('span[dir="ltr"], span[dir="rtl"], span.selectable-text, span[title]');
+            for (var si = 0; si < spans.length && !lastMsgText; si++) {
+              var spanText = (spans[si].innerText || spans[si].textContent || '').trim();
+              if (spanText && spanText.length > 1) {
+                lastMsgText = spanText;
+              }
+            }
+          }
+          console.log('[HABLAPE_INCOMING_DETECTED]' + checkLastPhone + '|||' + lastMsgText);
+          console.log('[MWS CheckLast] ✓ Señal emitida para:', checkLastPhone);
+        }, 500);
       } else {
         console.log('[MWS CheckLast] ✗ No hay phone disponible, no se emite señal');
       }
