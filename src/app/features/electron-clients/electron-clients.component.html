@@ -311,7 +311,7 @@
                             <span class="history-date">{{ formatDate(item.createdAt) }}</span>
                           </div>
                           <div class="history-action">
-                            {{ formatAction(item.action, item.auditableType) }}
+                            {{ formatAction(item.action, item.auditableType, item.auditedChanges) }}
                             @if (getTicketNotes(item)) {
                               <span class="history-note-inline" [title]="getTicketNotes(item)!">— {{ getTicketNotes(item) }}</span>
                             }

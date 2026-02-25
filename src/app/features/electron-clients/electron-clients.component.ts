@@ -752,9 +752,16 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   /**
    * Get formatted action for display
    */
-  formatAction(action: string, auditableType?: string): string {
+  formatAction(action: string, auditableType?: string, changes?: Record<string, unknown>): string {
     if (auditableType === 'Ticket') {
       return action === 'update' ? 'Cerró ticket' : action === 'create' ? 'Abrió ticket' : action;
+    }
+    // Special case: require_response change on User → show meaningful label
+    if (auditableType === 'User' && changes?.['require_response']) {
+      const rr = changes['require_response'];
+      if (Array.isArray(rr)) {
+        return rr[1] ? 'Ticket abierto' : 'Ticket atendido';
+      }
     }
     const actions: Record<string, string> = {
       'create': 'Creó',
@@ -777,7 +784,9 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       }
       return summary.length > 0 ? summary : ['status'];
     }
-    return Object.keys(changes).slice(0, 3).map(key => this.formatFieldLabel(key));
+    // Filter out require_response (already shown in action label)
+    const keys = Object.keys(changes).filter(k => k !== 'require_response');
+    return keys.slice(0, 3).map(key => this.formatFieldLabel(key));
   }
 
   /**
