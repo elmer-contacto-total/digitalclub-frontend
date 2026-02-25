@@ -757,11 +757,11 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       return action === 'update' ? 'Cerró ticket' : action === 'create' ? 'Abrió ticket' : action;
     }
     // Special case: require_response change on User → show meaningful label
-    if (auditableType === 'User' && changes?.['require_response']) {
-      const rr = changes['require_response'];
-      if (Array.isArray(rr)) {
-        return rr[1] ? 'Ticket abierto' : 'Ticket atendido';
-      }
+    // Rails audits use snake_case keys, Spring Boot uses camelCase
+    const rr = auditableType === 'User' ? (changes?.['require_response'] || changes?.['requireResponse']) : null;
+    if (rr && Array.isArray(rr)) {
+      const newVal = rr[1];
+      return (newVal === true || newVal === 'true') ? 'Ticket abierto' : 'Ticket atendido';
     }
     const actions: Record<string, string> = {
       'create': 'Creó',
@@ -784,8 +784,8 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
       }
       return summary.length > 0 ? summary : ['status'];
     }
-    // Filter out require_response (already shown in action label)
-    const keys = Object.keys(changes).filter(k => k !== 'require_response');
+    // Filter out require_response/requireResponse (already shown in action label)
+    const keys = Object.keys(changes).filter(k => k !== 'require_response' && k !== 'requireResponse');
     return keys.slice(0, 3).map(key => this.formatFieldLabel(key));
   }
 
