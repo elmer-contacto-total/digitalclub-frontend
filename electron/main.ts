@@ -224,9 +224,9 @@ function getMediaApiHeaders(): Record<string, string> {
 
 /**
  * Notify backend of an incoming message detected in WhatsApp Web.
- * Creates/activates ticket without scraping message content.
+ * Creates/activates ticket using the message content as ticket subject.
  */
-async function notifyIncomingMessage(senderPhone: string): Promise<void> {
+async function notifyIncomingMessage(senderPhone: string, messageContent?: string): Promise<void> {
   try {
     const response = await fetch(`${BACKEND_BASE_URL}/app/messages/activate_incoming_ticket`, {
       method: 'POST',
@@ -234,7 +234,8 @@ async function notifyIncomingMessage(senderPhone: string): Promise<void> {
       body: JSON.stringify({
         senderPhone: senderPhone,
         recipientId: loggedInUserId,
-        clientId: loggedInClientId
+        clientId: loggedInClientId,
+        messageContent: messageContent || null
       })
     });
 
@@ -1068,13 +1069,16 @@ function createWhatsAppView(): void {
     // Chat bloqueado por click en sidebar - sincronizar estado
     // Mensaje entrante detectado - activar ticket
     else if (message.startsWith('[HABLAPE_INCOMING_DETECTED]')) {
-      const phone = message.replace('[HABLAPE_INCOMING_DETECTED]', '').trim();
-      console.log('[MWS] INCOMING_DETECTED recibido. phone:', phone,
+      const payload = message.replace('[HABLAPE_INCOMING_DETECTED]', '').trim();
+      const separatorIdx = payload.indexOf('|||');
+      const phone = separatorIdx >= 0 ? payload.substring(0, separatorIdx) : payload;
+      const messageContent = separatorIdx >= 0 ? payload.substring(separatorIdx + 3).trim() : '';
+      console.log('[MWS] INCOMING_DETECTED recibido. phone:', phone, 'msgContent:', messageContent.substring(0, 50),
         'loggedInUserId:', loggedInUserId, 'loggedInClientId:', loggedInClientId,
         'mediaAuthToken:', mediaAuthToken ? 'SET' : 'NULL');
       if (phone && loggedInUserId && loggedInClientId && mediaAuthToken) {
         console.log('[MWS] ✓ Llamando notifyIncomingMessage para:', phone);
-        notifyIncomingMessage(phone);
+        notifyIncomingMessage(phone, messageContent || undefined);
       } else {
         console.log('[MWS] ✗ Condición no cumplida, no se llama notifyIncomingMessage');
       }

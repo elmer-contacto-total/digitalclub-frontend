@@ -2151,14 +2151,19 @@ const MEDIA_CAPTURE_SCRIPT = `
                 if (!isLastMessage) {
                   console.log('[MWS Incoming] Ignorado (no es último msg, probable scroll-load):', msgDataId.substring(0, 30));
                 } else {
-                  // Capturar telefono AHORA (no al disparar timer, para evitar race con cambio de chat)
+                  // Capturar telefono y texto AHORA (no al disparar timer, para evitar race con cambio de chat)
                   var detectedPhone = window.__hablapeCurrentChatPhone || '';
+                  var detectedMsgText = '';
+                  var selectableEl = messageEl.querySelector('.selectable-text');
+                  if (selectableEl) {
+                    detectedMsgText = (selectableEl.innerText || selectableEl.textContent || '').trim();
+                  }
 
                   if (incomingDebounceTimer) clearTimeout(incomingDebounceTimer);
                   incomingDebounceTimer = setTimeout(function() {
                     incomingDebounceTimer = null;
                     if (detectedPhone) {
-                      console.log('[HABLAPE_INCOMING_DETECTED]' + detectedPhone);
+                      console.log('[HABLAPE_INCOMING_DETECTED]' + detectedPhone + '|||' + detectedMsgText);
                     }
                   }, INCOMING_DEBOUNCE_MS);
                 }
@@ -2279,9 +2284,14 @@ const MEDIA_CAPTURE_SCRIPT = `
 
     if (!isOutgoing) {
       var phone = window.__hablapeCurrentChatPhone || '';
+      var lastMsgText = '';
+      var lastMsgSelectable = lastMsg.querySelector('.selectable-text');
+      if (lastMsgSelectable) {
+        lastMsgText = (lastMsgSelectable.innerText || lastMsgSelectable.textContent || '').trim();
+      }
       console.log('[MWS CheckLast] Último msg es ENTRANTE. phone:', phone || '(vacío)');
       if (phone) {
-        console.log('[HABLAPE_INCOMING_DETECTED]' + phone);
+        console.log('[HABLAPE_INCOMING_DETECTED]' + phone + '|||' + lastMsgText);
         console.log('[MWS CheckLast] ✓ Señal emitida para:', phone);
       } else {
         console.log('[MWS CheckLast] ✗ No hay phone disponible, no se emite señal');
@@ -2620,15 +2630,13 @@ const MEDIA_CAPTURE_SCRIPT = `
       hasRealImage = !!messageEl.querySelector('[data-testid="media-canvas"]');
     }
 
-    // Audio: verify there's an <audio> element or a functional play button
-    var hasAudio = !!messageEl.querySelector('audio');
-    if (!hasAudio) {
-      var audioContainer = messageEl.querySelector('[data-testid*="audio"], [data-testid*="ptt"]');
-      if (audioContainer) {
-        var playBtn = audioContainer.querySelector('[data-testid*="play"], [data-icon*="play"], button');
-        hasAudio = !!playBtn;
-      }
-    }
+    // Audio: the <audio> element is global (not inside the message div), so check
+    // for audio UI elements instead: waveform, ptt container, play/pause buttons
+    var hasAudio = !!messageEl.querySelector(
+      '[data-testid*="audio"], [data-testid*="ptt"], [data-testid*="voice"],' +
+      '[data-icon*="audio"], [data-icon*="ptt"],' +
+      '[data-icon="ptt-play"], [data-icon="ptt-pause"], [data-icon="audio-play"], [data-icon="audio-pause"]'
+    );
 
     return hasRealImage || hasAudio;
   }
