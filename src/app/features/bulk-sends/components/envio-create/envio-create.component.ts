@@ -34,7 +34,7 @@ interface ParsedCsv {
           </div>
           <div class="hero-info">
             <h1>Nuevo Envío Masivo</h1>
-            <p>Sube un CSV, escribe tu mensaje con variables, adjunta un archivo y envía</p>
+            <p>Sube un CSV, escribe tu mensaje con variables y envía</p>
           </div>
         </div>
       </div>
@@ -177,52 +177,11 @@ interface ParsedCsv {
         </div>
       </div>
 
-      <!-- STEP 3: Attachment -->
-      <div class="card">
-        <div class="card-header">
-          <span class="step-badge">3</span>
-          <h3>Adjunto (Opcional)</h3>
-          @if (attachmentFile()) {
-            <span class="check-badge"><i class="ph-fill ph-check-circle"></i></span>
-          }
-        </div>
-        <div class="attachment-section">
-          @if (!attachmentFile()) {
-            <div class="attach-zone" (click)="attachInput.click()">
-              <i class="ph ph-paperclip"></i>
-              <p>Clic para adjuntar imagen, video o documento</p>
-              <span class="help-text">Formatos: jpg, png, gif, mp4, pdf, doc, docx, xls, xlsx</span>
-              <input #attachInput type="file"
-                     accept=".jpg,.jpeg,.png,.gif,.mp4,.pdf,.doc,.docx,.xls,.xlsx"
-                     style="display: none"
-                     (change)="onAttachmentSelected($event)">
-            </div>
-          } @else {
-            <div class="attachment-preview">
-              @if (attachmentPreview()) {
-                <img [src]="attachmentPreview()!" alt="Preview" class="thumb">
-              } @else {
-                <div class="file-icon">
-                  <i [class]="getFileIcon(attachmentFile()!.name)"></i>
-                </div>
-              }
-              <div class="attach-info">
-                <span class="file-name">{{ attachmentFile()!.name }}</span>
-                <span class="file-size">{{ formatSize(attachmentFile()!.size) }}</span>
-              </div>
-              <button class="btn-icon" (click)="removeAttachment()" title="Quitar adjunto">
-                <i class="ph ph-x-circle"></i>
-              </button>
-            </div>
-          }
-        </div>
-      </div>
-
-      <!-- STEP 4: Agent Assignment (supervisors only) -->
+      <!-- STEP 3: Agent Assignment (supervisors only) -->
       @if (isSupervisor()) {
         <div class="card">
           <div class="card-header">
-            <span class="step-badge">4</span>
+            <span class="step-badge">3</span>
             <h3>Asignar Agente</h3>
             @if (selectedAgentId()) {
               <span class="check-badge"><i class="ph-fill ph-check-circle"></i></span>
@@ -251,7 +210,7 @@ interface ParsedCsv {
       <!-- STEP 5: Actions -->
       <div class="card">
         <div class="card-header">
-          <span class="step-badge">{{ isSupervisor() ? '5' : '4' }}</span>
+          <span class="step-badge">{{ isSupervisor() ? '4' : '3' }}</span>
           <h3>Enviar</h3>
         </div>
 
@@ -280,12 +239,6 @@ interface ParsedCsv {
                 <div class="stat">
                   <span class="stat-label">Agente</span>
                   <span class="stat-value">{{ getSelectedAgentName() }}</span>
-                </div>
-              }
-              @if (attachmentFile()) {
-                <div class="stat">
-                  <span class="stat-label">Adjunto</span>
-                  <span class="stat-value">{{ attachmentFile()!.name }}</span>
                 </div>
               }
             </div>
@@ -435,26 +388,6 @@ interface ParsedCsv {
       .preview-text { margin: var(--space-1) 0 0; font-size: var(--text-base); color: var(--fg-default); white-space: pre-wrap; }
     }
 
-    .attachment-section { padding: var(--space-4) var(--space-5); }
-    .attach-zone {
-      padding: var(--space-6); border: 2px dashed var(--border-default); border-radius: var(--radius-xl);
-      text-align: center; cursor: pointer; transition: all var(--duration-normal);
-      i { font-size: 32px; color: var(--fg-muted); }
-      &:hover { border-color: var(--accent-default); background: var(--accent-subtle); }
-      p { margin: var(--space-2) 0 0; font-size: var(--text-base); color: var(--fg-muted); }
-      .help-text { font-size: var(--text-sm); color: var(--fg-subtle); }
-    }
-    .attachment-preview {
-      display: flex; align-items: center; gap: var(--space-3);
-      .thumb { width: 60px; height: 60px; object-fit: cover; border-radius: var(--radius-lg); }
-      .file-icon {
-        width: 60px; height: 60px; border-radius: var(--radius-lg); background: var(--accent-subtle);
-        display: flex; align-items: center; justify-content: center;
-        i { font-size: 28px; color: var(--accent-default); }
-      }
-      .attach-info { flex: 1; .file-name { display: block; font-weight: var(--font-medium); color: var(--fg-default); } .file-size { font-size: var(--text-sm); color: var(--fg-subtle); } }
-    }
-
     .agent-section {
       padding: var(--space-4) var(--space-5);
       label { font-size: var(--text-base); font-weight: var(--font-medium); margin-bottom: var(--space-2); display: block; color: var(--fg-default); }
@@ -518,8 +451,6 @@ export class EnvioCreateComponent implements OnDestroy {
   showCsvPreview = signal(false);
   messageContent = signal('');
   messageContentValue = '';
-  attachmentFile = signal<File | null>(null);
-  attachmentPreview = signal<string | null>(null);
   showConfirmation = signal(false);
   isSending = signal(false);
   errors = signal<string[]>([]);
@@ -570,7 +501,6 @@ export class EnvioCreateComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.attachmentPreview.set(null);
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -686,42 +616,6 @@ export class EnvioCreateComponent implements OnDestroy {
     });
   }
 
-  // Attachment
-  onAttachmentSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    if (input.files?.[0]) {
-      const file = input.files[0];
-      this.attachmentFile.set(file);
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => this.attachmentPreview.set(e.target?.result as string);
-        reader.readAsDataURL(file);
-      } else {
-        this.attachmentPreview.set(null);
-      }
-    }
-  }
-
-  removeAttachment(): void {
-    this.attachmentFile.set(null);
-    this.attachmentPreview.set(null);
-  }
-
-  getFileIcon(filename: string): string {
-    const ext = filename.split('.').pop()?.toLowerCase();
-    if (ext === 'pdf') return 'ph ph-file-pdf';
-    if (['doc', 'docx'].includes(ext || '')) return 'ph ph-file-doc';
-    if (['xls', 'xlsx'].includes(ext || '')) return 'ph ph-file-xls';
-    if (ext === 'mp4') return 'ph ph-file-video';
-    return 'ph ph-file';
-  }
-
-  formatSize(bytes: number): string {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
   canPrepare(): boolean {
     const hasBasics = !!this.csv() && this.messageContent().length > 0;
     if (this.isSupervisor()) {
@@ -753,13 +647,12 @@ export class EnvioCreateComponent implements OnDestroy {
       this.messageContent(),
       +this.selectedPhoneColumn,
       +this.selectedNameColumn,
-      this.attachmentFile() || undefined,
+      undefined,
       agentId
     ).pipe(takeUntil(this.destroy$)).subscribe({
       next: (res: any) => {
         this.toast.success('Envío masivo creado');
         this.isSending.set(false);
-        this.attachmentPreview.set(null);
         this.router.navigate(['/app/bulk_sends']);
       },
       error: (err) => {
