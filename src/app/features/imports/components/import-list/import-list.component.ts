@@ -35,14 +35,20 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
           <h1 class="page-title">Importaciones</h1>
           <p class="page-subtitle">Gestión de importaciones masivas de usuarios</p>
         </div>
-        @if (canCreateImport()) {
-          <div class="page-actions">
+        <div class="page-actions">
+          @if (isAdmin()) {
+            <a routerLink="templates" class="btn-secondary">
+              <i class="ph ph-gear"></i>
+              Configurar Templates
+            </a>
+          }
+          @if (canCreateImport()) {
             <a routerLink="new" class="btn-primary" [queryParams]="{import_type: 'users'}">
               <i class="ph ph-plus"></i>
               Nueva importación
             </a>
-          </div>
-        }
+          }
+        </div>
       </div>
 
       <!-- Content -->
@@ -184,7 +190,28 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     }
 
     .page-actions {
+      display: flex;
+      gap: var(--space-3);
       flex-shrink: 0;
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      height: var(--btn-height);
+      background: var(--bg-muted);
+      color: var(--fg-default);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      font-size: var(--text-base);
+      font-weight: var(--font-medium);
+      cursor: pointer;
+      text-decoration: none;
+      transition: all var(--duration-fast);
+
+      &:hover { background: var(--bg-emphasis); border-color: var(--accent-default); color: var(--accent-default); }
     }
 
     /* Buttons */
@@ -427,6 +454,11 @@ export class ImportListComponent implements OnInit, OnDestroy {
     const user = this.currentUser();
     if (!user) return false;
     return RoleUtils.canManageUsers(user.role);
+  }
+
+  isAdmin(): boolean {
+    const user = this.currentUser();
+    return user ? RoleUtils.isAdmin(user.role) : false;
   }
 
   isSuperAdmin(): boolean {

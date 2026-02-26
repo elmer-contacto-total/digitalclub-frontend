@@ -1,14 +1,15 @@
 /**
  * Import Form Component
  * PARIDAD: Rails admin/imports/new.html.erb
- * Paso 1: Subir archivo CSV para importación
+ * Paso 1: Subir archivo CSV para importación.
+ * Auto-aplica template o auto-detección de columnas, luego navega directo a preview.
  */
 import { Component, inject, signal, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
-import { ImportService } from '../../../../core/services/import.service';
+import { ImportService, CreateImportResponse, MappingColumn } from '../../../../core/services/import.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
@@ -141,17 +142,17 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
           <button type="submit" class="btn-primary" [disabled]="!selectedFile() || isSubmitting()">
             @if (isSubmitting()) {
               <span class="spinner"></span>
-              Validando...
+              {{ stepLabel() }}
             } @else {
-              <i class="ph ph-check"></i>
-              Validar archivo
+              <i class="ph ph-upload-simple"></i>
+              Importar
             }
           </button>
         </div>
       </form>
 
       @if (isSubmitting()) {
-        <app-loading-spinner [fullscreen]="true" message="Validando archivo..." />
+        <app-loading-spinner [fullscreen]="true" [message]="stepLabel()" />
       }
     </div>
   `,
@@ -466,11 +467,19 @@ export class ImportFormComponent implements OnDestroy {
   private toast = inject(ToastService);
   private destroy$ = new Subject<void>();
 
+  private static readonly REQUIRED_FIELDS = ['phone', 'first_name', 'last_name'];
+  private static readonly REQUIRED_LABELS: Record<string, string> = {
+    phone: 'Teléfono',
+    first_name: 'Nombre',
+    last_name: 'Apellido'
+  };
+
   // Form state
   importType = 'user';
   selectedFile = signal<File | null>(null);
   isSubmitting = signal(false);
   errors = signal<string[]>([]);
+  stepLabel = signal('Subiendo archivo...');
 
   constructor() {
     // Get import type from query params
@@ -528,18 +537,18 @@ export class ImportFormComponent implements OnDestroy {
 
     this.isSubmitting.set(true);
     this.errors.set([]);
+    this.stepLabel.set('Subiendo archivo...');
+
+    const isFoh = this.importType === 'foh';
 
     this.importService.createImport(file, this.importType).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (response) => {
-        this.isSubmitting.set(false);
-
         if (response.result === 'success') {
-          this.toast.success('Archivo subido correctamente. Mapee las columnas.');
-          // Navigate to column mapping page
-          this.router.navigate(['/app/imports', response.import.id, 'mapping']);
+          this.autoApplyMapping(response, isFoh);
         } else {
+          this.isSubmitting.set(false);
           this.errors.set(['Error al procesar el archivo']);
         }
       },
@@ -554,6 +563,128 @@ export class ImportFormComponent implements OnDestroy {
         } else {
           this.errors.set(['Error al subir el archivo. Intente nuevamente.']);
         }
+      }
+    });
+  }
+
+  /**
+   * Auto-apply mapping: try template match first, then fall back to auto-suggestions.
+   * If required fields are covered, confirm mapping and navigate to preview.
+   */
+  private autoApplyMapping(response: CreateImportResponse, isFoh: boolean): void {
+    const columns = response.mapping.columns;
+    const headers = columns.map((c: MappingColumn) => c.header);
+    const importId = response.import.id;
+
+    this.stepLabel.set('Buscando template...');
+
+    this.importService.findMatchingTemplate(headers, isFoh).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (matchResult) => {
+        let columnMapping: Record<string, string>;
+
+        if (matchResult.found && matchResult.template) {
+          // Template found — convert header-based mapping to index-based
+          columnMapping = this.buildMappingFromTemplate(columns, matchResult.template.columnMapping);
+          this.confirmAndNavigate(importId, columnMapping, isFoh,
+            `Template "${matchResult.template.name}" aplicado automáticamente`);
+        } else {
+          // No template — use auto-suggestions
+          columnMapping = this.buildMappingFromSuggestions(columns);
+          const missing = this.getMissingRequiredFields(columnMapping);
+
+          if (missing.length === 0) {
+            this.confirmAndNavigate(importId, columnMapping, isFoh,
+              'Mapeo automático aplicado. Para importaciones más rápidas, pida a un administrador que configure un template.');
+          } else {
+            // Can't auto-map — show error
+            this.isSubmitting.set(false);
+            const missingLabels = missing
+              .map(f => ImportFormComponent.REQUIRED_LABELS[f] || f)
+              .join(', ');
+            this.errors.set([
+              `No se encontró un template de importación compatible y la detección automática no pudo identificar los campos obligatorios: ${missingLabels}.`,
+              'Contacte al administrador para que configure un template desde Importaciones \u2192 Configurar Templates.'
+            ]);
+          }
+        }
+      },
+      error: () => {
+        // Template search failed — fall back to auto-suggestions silently
+        const columnMapping = this.buildMappingFromSuggestions(columns);
+        const missing = this.getMissingRequiredFields(columnMapping);
+
+        if (missing.length === 0) {
+          this.confirmAndNavigate(importId, columnMapping, isFoh,
+            'Mapeo automático aplicado. Para importaciones más rápidas, pida a un administrador que configure un template.');
+        } else {
+          this.isSubmitting.set(false);
+          const missingLabels = missing
+            .map(f => ImportFormComponent.REQUIRED_LABELS[f] || f)
+            .join(', ');
+          this.errors.set([
+            `No se pudo determinar el mapeo de columnas automáticamente. Faltan: ${missingLabels}.`,
+            'Contacte al administrador para que configure un template desde Importaciones \u2192 Configurar Templates.'
+          ]);
+        }
+      }
+    });
+  }
+
+  /**
+   * Convert template's header-based mapping to index-based mapping.
+   */
+  private buildMappingFromTemplate(columns: MappingColumn[], templateMapping: Record<string, string>): Record<string, string> {
+    const mapping: Record<string, string> = {};
+    for (const col of columns) {
+      const field = templateMapping[col.header];
+      if (field) {
+        mapping[col.index.toString()] = field;
+      }
+    }
+    return mapping;
+  }
+
+  /**
+   * Build index-based mapping from backend auto-suggestions.
+   */
+  private buildMappingFromSuggestions(columns: MappingColumn[]): Record<string, string> {
+    const mapping: Record<string, string> = {};
+    for (const col of columns) {
+      if (col.suggestion) {
+        mapping[col.index.toString()] = col.suggestion;
+      }
+    }
+    return mapping;
+  }
+
+  /**
+   * Check which required fields are missing from the mapping.
+   */
+  private getMissingRequiredFields(mapping: Record<string, string>): string[] {
+    const assignedFields = new Set(Object.values(mapping));
+    return ImportFormComponent.REQUIRED_FIELDS.filter(f => !assignedFields.has(f));
+  }
+
+  /**
+   * Confirm the mapping with the backend and navigate to preview.
+   */
+  private confirmAndNavigate(importId: number, columnMapping: Record<string, string>, isFoh: boolean, toastMessage: string): void {
+    this.stepLabel.set('Validando columnas...');
+
+    this.importService.confirmMapping(importId, columnMapping, isFoh).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: () => {
+        this.isSubmitting.set(false);
+        this.toast.success(toastMessage);
+        this.router.navigate(['/app/imports', importId, 'preview']);
+      },
+      error: (err) => {
+        console.error('Error confirming mapping:', err);
+        this.isSubmitting.set(false);
+        this.errors.set([err.error?.message || 'Error al confirmar el mapeo de columnas.']);
       }
     });
   }
