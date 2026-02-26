@@ -1117,6 +1117,96 @@ const MEDIA_CAPTURE_SCRIPT = `
     console.log('[MWS] Chat actual para extracción:', name);
   };
 
+  // =========================================================================
+  // SEED: Inyectar IDs conocidos desde el backend (sincronización cross-agente)
+  // Llamado por Electron main process cuando se carga un chat (crm-client-ready)
+  // =========================================================================
+  window.__hablapeSeedKnownMedia = function(knownIds) {
+    if (!Array.isArray(knownIds) || knownIds.length === 0) {
+      return { seededMedia: 0, seededProcessed: 0, skippedDeleted: 0 };
+    }
+
+    var seededMedia = 0;
+    var seededProcessed = 0;
+    var skippedDeleted = 0;
+
+    for (var i = 0; i < knownIds.length; i++) {
+      var item = knownIds[i];
+      var msgId = item.whatsappMessageId;
+      if (!msgId) continue;
+
+      if (item.deleted) {
+        // Ya eliminado en servidor — agregar a detectedDeletions para no re-reportar
+        if (!detectedDeletions.has(msgId)) {
+          detectedDeletions.add(msgId);
+          skippedDeleted++;
+        }
+        continue;
+      }
+
+      // Seedear messagesWithMedia para detección de eliminación
+      if (!messagesWithMedia.has(msgId)) {
+        messagesWithMedia.add(msgId);
+        if (item.chatName) {
+          messageChatName.set(msgId, item.chatName);
+        }
+        messageSeenInDOM.add(msgId); // Habilita Method 2 (absence detection)
+        seededMedia++;
+      }
+
+      // Seedear processedMessageIds para prevenir re-captura de imágenes
+      if (!processedMessageIds.has(msgId)) {
+        processedMessageIds.add(msgId);
+        seededProcessed++;
+      }
+    }
+
+    // Persistir a localStorage para sobrevivir recargas de WhatsApp Web
+    if (seededMedia > 0) {
+      persistMessagesWithMedia();
+    }
+    if (seededProcessed > 0) {
+      try {
+        var arr = Array.from(processedMessageIds);
+        var toSave = arr.slice(-500);
+        localStorage.setItem('__hablapeRevealedMessages', JSON.stringify(toSave));
+      } catch (e) {}
+    }
+
+    console.log('[MWS Sync] Seeded from backend: ' + seededMedia + ' media, ' +
+      seededProcessed + ' processed, ' + skippedDeleted + ' already-deleted');
+
+    // Limpiar overlays "Presionar para ver" de mensajes ya conocidos
+    // (el MutationObserver pudo haberlos creado ANTES de que el seed llegara)
+    var removedOverlays = 0;
+    try {
+      var overlays = document.querySelectorAll('.hablape-image-overlay');
+      for (var j = 0; j < overlays.length; j++) {
+        var ov = overlays[j];
+        var msgEl = ov.closest('[data-id]');
+        if (!msgEl) continue;
+        var msgDataId = msgEl.getAttribute('data-id');
+        if (msgDataId && processedMessageIds.has(msgDataId)) {
+          // Quitar blur de la imagen
+          var protectedImg = ov.parentElement ? ov.parentElement.querySelector('img.hablape-protected-image') : null;
+          if (protectedImg) {
+            protectedImg.classList.remove('hablape-protected-image');
+            protectedImg.classList.remove('revealed');
+            protectedImg.__hablapeProtected = false;
+          }
+          // Remover overlay del DOM
+          ov.remove();
+          removedOverlays++;
+        }
+      }
+    } catch (e) {}
+    if (removedOverlays > 0) {
+      console.log('[MWS Sync] Removed ' + removedOverlays + ' pre-existing overlays');
+    }
+
+    return { seededMedia: seededMedia, seededProcessed: seededProcessed, skippedDeleted: skippedDeleted, removedOverlays: removedOverlays };
+  };
+
   function extractPhoneFromContactPanel() {
     // MÉTODO 1: Buscar panel por data-testid conocidos
     let contactPanel = document.querySelector('[data-testid="contact-info-drawer"]') ||

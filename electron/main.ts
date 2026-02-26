@@ -305,6 +305,72 @@ async function sendAuditLog(payload: AuditLogPayload): Promise<void> {
   }
 }
 
+// ==================== SINCRONIZACIÓN CROSS-AGENTE ====================
+// Cuando un chat se abre (crm-client-ready), consulta al backend los
+// whatsappMessageIds conocidos para ese teléfono y los inyecta en el IIFE.
+// Esto resuelve: (1) detección de eliminación tras reasignación de agente,
+// (2) re-captura innecesaria de imágenes ya capturadas.
+
+/**
+ * Consulta al backend los whatsappMessageIds conocidos para un teléfono.
+ * Retorna array vacío en cualquier error (fail-open).
+ */
+async function fetchKnownMediaIds(phone: string): Promise<Array<{ whatsappMessageId: string; deleted: boolean; chatName: string | null }>> {
+  if (!phone || phone === 'unknown') return [];
+  if (!mediaAuthToken) {
+    console.log('[MWS Sync] No auth token, skipping known-ids fetch');
+    return [];
+  }
+
+  try {
+    const url = `${MEDIA_API_URL}/chat/${encodeURIComponent(phone)}/known-ids?limit=500`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getMediaApiHeaders(),
+      signal: AbortSignal.timeout(5000)
+    });
+
+    if (!response.ok) {
+      console.warn(`[MWS Sync] Backend returned ${response.status} for known-ids`);
+      return [];
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) return [];
+
+    console.log(`[MWS Sync] Fetched ${data.length} known media IDs for phone ${phone}`);
+    return data;
+  } catch (err: any) {
+    console.warn('[MWS Sync] Failed to fetch known-ids:', err.message || err);
+    return [];
+  }
+}
+
+/**
+ * Inyecta IDs conocidos en el IIFE via executeJavaScript.
+ * Debe llamarse ANTES de desbloquear el chat.
+ */
+async function seedKnownMediaInWhatsApp(
+  knownIds: Array<{ whatsappMessageId: string; deleted: boolean; chatName: string | null }>
+): Promise<void> {
+  if (!whatsappView || knownIds.length === 0) return;
+
+  try {
+    const serialized = JSON.stringify(knownIds);
+    const result = await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        if (window.__hablapeSeedKnownMedia) {
+          return window.__hablapeSeedKnownMedia(${serialized});
+        }
+        return { error: 'function_not_found' };
+      })()
+    `, true);
+    console.log('[MWS Sync] Seed result:', JSON.stringify(result));
+  } catch (err: any) {
+    console.warn('[MWS Sync] Failed to seed known media:', err.message || err);
+  }
+}
+
 /**
  * Envía un medio capturado al backend
  */
@@ -1051,7 +1117,7 @@ function createWhatsAppView(): void {
   whatsappView.webContents.loadURL('https://web.whatsapp.com');
 
   // DevTools para WhatsApp BrowserView (debug)
-  whatsappView.webContents.openDevTools();
+  //whatsappView.webContents.openDevTools();
 
   // Marcar como inicializado
   whatsappInitialized = true;
@@ -2161,6 +2227,15 @@ function setupIPC(): void {
   ipcMain.on('crm-client-ready', async (_, data: { phone: string }) => {
     const phone = data?.phone || '';
     console.log('[MWS] *** CRM terminó de procesar:', phone || '(sin teléfono)');
+
+    // Sincronización cross-agente: seedear IDs conocidos ANTES de desbloquear
+    if (phone) {
+      const knownIds = await fetchKnownMediaIds(phone);
+      if (knownIds.length > 0) {
+        await seedKnownMediaInWhatsApp(knownIds);
+      }
+    }
+
     await tryUnblockWhatsAppChat(phone);
   });
 
