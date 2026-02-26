@@ -50,43 +50,35 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
           <span>Instrucciones</span>
         </div>
         <div class="card-body">
-          <p>Prepare y cargue un archivo CSV (delimitado por comas) con la lista de usuarios a importar. El archivo debe contener las siguientes columnas:</p>
-          <div class="columns-grid">
-            <div class="column-item required">
+          <p>Prepare y cargue un archivo CSV (delimitado por comas) con la lista de usuarios a importar.</p>
+          <p>El formato del archivo debe coincidir con un template de importación configurado previamente. Los campos mínimos requeridos son:</p>
+          <div class="required-fields-list">
+            <div class="required-field">
               <i class="ph ph-check-circle"></i>
-              <span>APELLIDO_P</span>
-              <small>obligatorio</small>
+              <span>Teléfono</span>
             </div>
-            <div class="column-item">
-              <i class="ph ph-circle"></i>
-              <span>APELLIDO_M</span>
-              <small>opcional</small>
-            </div>
-            <div class="column-item required">
+            <div class="required-field">
               <i class="ph ph-check-circle"></i>
-              <span>NOMBRES</span>
-              <small>obligatorio</small>
+              <span>Nombre</span>
             </div>
-            <div class="column-item required">
+            <div class="required-field">
               <i class="ph ph-check-circle"></i>
-              <span>CELULAR</span>
-              <small>único, sin 51</small>
-            </div>
-            <div class="column-item">
-              <i class="ph ph-circle"></i>
-              <span>CORREO</span>
-              <small>único si se ingresa</small>
-            </div>
-            <div class="column-item required">
-              <i class="ph ph-check-circle"></i>
-              <span>EJECUTIVO</span>
-              <small>obligatorio</small>
+              <span>Apellido</span>
             </div>
           </div>
-          <button type="button" class="btn-secondary" (click)="downloadSampleCsv()">
-            <i class="ph ph-download-simple"></i>
-            Descargar CSV de ejemplo
-          </button>
+          <p class="hint-text">Los nombres exactos de las columnas y campos adicionales dependen del template configurado.</p>
+          <div class="instructions-actions">
+            <button type="button" class="btn-secondary" (click)="downloadSampleCsv()">
+              <i class="ph ph-download-simple"></i>
+              Descargar CSV de ejemplo
+            </button>
+            @if (authService.isAdmin()) {
+              <a routerLink="/app/imports/templates" class="btn-secondary">
+                <i class="ph ph-gear"></i>
+                Configurar templates
+              </a>
+            }
+          </div>
         </div>
       </div>
 
@@ -287,15 +279,14 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       line-height: 1.5;
     }
 
-    /* Columns Grid */
-    .columns-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: var(--space-2);
-      margin-bottom: var(--space-4);
+    /* Required Fields */
+    .required-fields-list {
+      display: flex;
+      gap: var(--space-3);
+      margin-bottom: var(--space-3);
     }
 
-    .column-item {
+    .required-field {
       display: flex;
       align-items: center;
       gap: var(--space-2);
@@ -304,11 +295,20 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       border-radius: var(--radius-md);
       font-size: var(--text-sm);
 
-      i { color: var(--fg-subtle); font-size: 16px; }
+      i { color: var(--success-default); font-size: 16px; }
       span { color: var(--fg-default); font-weight: var(--font-medium); }
-      small { color: var(--fg-subtle); font-size: var(--text-xs); margin-left: auto; }
+    }
 
-      &.required i { color: var(--success-default); }
+    .hint-text {
+      font-size: var(--text-sm) !important;
+      color: var(--fg-subtle) !important;
+      font-style: italic;
+    }
+
+    .instructions-actions {
+      display: flex;
+      gap: var(--space-3);
+      flex-wrap: wrap;
     }
 
     /* Upload Area */
@@ -557,13 +557,14 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       .imports-page { padding: var(--space-4); }
       .hero-card { flex-direction: column; text-align: center; padding: var(--space-5); }
       .hero-main { flex-direction: column; }
-      .columns-grid { grid-template-columns: 1fr 1fr; }
+      .required-fields-list { flex-wrap: wrap; }
+      .instructions-actions { flex-direction: column; }
     }
   `]
 })
 export class ImportFormComponent implements OnDestroy {
   private importService = inject(ImportService);
-  private authService = inject(AuthService);
+  readonly authService = inject(AuthService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private toast = inject(ToastService);
