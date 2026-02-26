@@ -51,6 +51,36 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
         </div>
       </div>
 
+      <!-- Search & Filters -->
+      <div class="search-bar">
+        <div class="search-input-wrapper">
+          <i class="ph ph-magnifying-glass search-icon"></i>
+          <input
+            type="text"
+            class="search-input"
+            placeholder="Buscar por usuario, tipo, acción, ID o cambios..."
+            [(ngModel)]="searchText"
+            (keyup.enter)="applySearch()">
+          @if (searchText) {
+            <button class="clear-btn" (click)="clearSearch()">
+              <i class="ph ph-x"></i>
+            </button>
+          }
+        </div>
+        <select class="filter-select" [(ngModel)]="filterType" (change)="applySearch()">
+          <option value="">Todos los tipos</option>
+          @for (type of auditableTypes(); track type) {
+            <option [value]="type">{{ type }}</option>
+          }
+        </select>
+        <select class="filter-select" [(ngModel)]="filterAction" (change)="applySearch()">
+          <option value="">Todas las acciones</option>
+          <option value="create">Crear</option>
+          <option value="update">Actualizar</option>
+          <option value="destroy">Eliminar</option>
+        </select>
+      </div>
+
       <!-- Quick Date Filters -->
       <div class="filter-bar">
         <button class="filter-btn" [class.active]="selectedQuickFilter() === 'today'"
@@ -173,6 +203,34 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
       &:focus { outline: none; border-color: var(--accent-default); }
     }
 
+    .search-bar {
+      display: flex; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; align-items: center;
+    }
+    .search-input-wrapper {
+      position: relative; flex: 1; min-width: 250px;
+    }
+    .search-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--fg-muted); font-size: 16px; pointer-events: none;
+    }
+    .search-input {
+      width: 100%; padding: 8px 36px 8px 36px; border: 1px solid var(--border-default); border-radius: var(--radius-md);
+      background: var(--input-bg); color: var(--fg-default); font-size: var(--text-sm);
+      &:focus { outline: none; border-color: var(--accent-default); }
+      &::placeholder { color: var(--fg-subtle); }
+    }
+    .clear-btn {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--fg-muted); cursor: pointer; padding: 4px;
+      display: flex; align-items: center; font-size: 14px;
+      &:hover { color: var(--fg-default); }
+    }
+    .filter-select {
+      padding: 8px 12px; border: 1px solid var(--border-default); border-radius: var(--radius-md);
+      background: var(--input-bg); color: var(--fg-default); font-size: var(--text-sm); min-width: 160px;
+      &:focus { outline: none; border-color: var(--accent-default); }
+    }
+
     .filter-bar {
       display: flex; gap: var(--space-1); margin-bottom: var(--space-4); flex-wrap: wrap;
     }
@@ -264,6 +322,12 @@ export class AuditListComponent implements OnInit, OnDestroy {
   fromDate = this.getDefaultFromDate();
   toDate = this.formatDateForInput(new Date());
 
+  // Search & filters
+  searchText = '';
+  filterType = '';
+  filterAction = '';
+  auditableTypes = signal<string[]>([]);
+
   // Modal
   showChangesModal = signal(false);
   selectedAudit = signal<Audit | null>(null);
@@ -276,6 +340,7 @@ export class AuditListComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadAudits();
+    this.loadAuditableTypes();
   }
 
   ngOnDestroy(): void {
@@ -289,6 +354,9 @@ export class AuditListComponent implements OnInit, OnDestroy {
     this.auditService.getAudits({
       startDate: this.fromDate,
       endDate: this.toDate,
+      search: this.searchText || undefined,
+      auditableType: this.filterType || undefined,
+      action: this.filterAction || undefined,
       page: this.currentPage() - 1,
       size: this.pageSize()
     })
@@ -388,7 +456,13 @@ export class AuditListComponent implements OnInit, OnDestroy {
 
   exportAudits(): void {
     this.isExporting.set(true);
-    this.auditService.exportAuditsCsv(this.fromDate, this.toDate)
+    this.auditService.exportAuditsCsv({
+      startDate: this.fromDate,
+      endDate: this.toDate,
+      search: this.searchText || undefined,
+      auditableType: this.filterType || undefined,
+      action: this.filterAction || undefined,
+    })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (blob) => {
@@ -406,6 +480,27 @@ export class AuditListComponent implements OnInit, OnDestroy {
           this.toastService.error('Error al exportar las auditorías');
           this.isExporting.set(false);
         }
+      });
+  }
+
+  applySearch(): void {
+    this.currentPage.set(1);
+    this.selectedQuickFilter.set('all');
+    this.loadAudits();
+  }
+
+  clearSearch(): void {
+    this.searchText = '';
+    this.currentPage.set(1);
+    this.loadAudits();
+  }
+
+  private loadAuditableTypes(): void {
+    this.auditService.getAuditableTypes()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (response) => this.auditableTypes.set(response.types),
+        error: () => {} // silent — dropdown just won't have options
       });
   }
 

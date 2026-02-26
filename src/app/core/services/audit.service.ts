@@ -16,11 +16,14 @@ export class AuditService {
   private baseUrl = `${environment.apiUrl}/app/audits`;
 
   /**
-   * Get paginated list of audits
+   * Get paginated list of audits with search/filter support
    */
   getAudits(params?: {
     startDate?: string;
     endDate?: string;
+    search?: string;
+    auditableType?: string;
+    action?: string;
     page?: number;
     size?: number;
   }): Observable<AuditListResponse> {
@@ -31,6 +34,15 @@ export class AuditService {
     }
     if (params?.endDate) {
       httpParams = httpParams.set('endDate', params.endDate);
+    }
+    if (params?.search) {
+      httpParams = httpParams.set('search', params.search);
+    }
+    if (params?.auditableType) {
+      httpParams = httpParams.set('auditableType', params.auditableType);
+    }
+    if (params?.action) {
+      httpParams = httpParams.set('action', params.action);
     }
     if (params?.page !== undefined) {
       httpParams = httpParams.set('page', params.page.toString());
@@ -74,10 +86,19 @@ export class AuditService {
   /**
    * Export audits as CSV (blob download with auth headers)
    */
-  exportAuditsCsv(startDate?: string, endDate?: string): Observable<Blob> {
+  exportAuditsCsv(params?: {
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+    auditableType?: string;
+    action?: string;
+  }): Observable<Blob> {
     let httpParams = new HttpParams();
-    if (startDate) httpParams = httpParams.set('startDate', startDate);
-    if (endDate) httpParams = httpParams.set('endDate', endDate);
+    if (params?.startDate) httpParams = httpParams.set('startDate', params.startDate);
+    if (params?.endDate) httpParams = httpParams.set('endDate', params.endDate);
+    if (params?.search) httpParams = httpParams.set('search', params.search);
+    if (params?.auditableType) httpParams = httpParams.set('auditableType', params.auditableType);
+    if (params?.action) httpParams = httpParams.set('action', params.action);
     return this.http.get(`${this.baseUrl}/export`, { params: httpParams, responseType: 'blob' });
   }
 
