@@ -9,7 +9,7 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
-import { ImportService, CreateImportResponse, MappingColumn } from '../../../../core/services/import.service';
+import { ImportService, CreateImportResponse, MappingColumn, MappingTemplate } from '../../../../core/services/import.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
@@ -157,6 +157,30 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
           </button>
         </div>
       </form>
+
+      @if (showTemplateSelector()) {
+        <div class="card template-selector-card">
+          <div class="card-header">
+            <i class="ph ph-list-checks"></i>
+            <span>Seleccionar template</span>
+          </div>
+          <div class="card-body">
+            <p>Se encontraron {{ matchedTemplates().length }} templates compatibles con este CSV. Seleccione cuál aplicar:</p>
+            <div class="template-options">
+              @for (tpl of matchedTemplates(); track tpl.id) {
+                <button class="template-option" (click)="selectTemplate(tpl)">
+                  <div class="template-option-info">
+                    <strong>{{ tpl.name }}</strong>
+                    <small>{{ tpl.headers.length }} columnas mapeadas</small>
+                  </div>
+                  <i class="ph ph-caret-right"></i>
+                </button>
+              }
+            </div>
+            <button class="btn-ghost cancel-selector" (click)="cancelTemplateSelection()">Cancelar</button>
+          </div>
+        </div>
+      }
 
       @if (isSubmitting()) {
         <app-loading-spinner [fullscreen]="true" [message]="stepLabel()" />
@@ -479,6 +503,56 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Template Selector */
+    .template-selector-card {
+      margin-top: var(--space-4);
+    }
+
+    .template-selector-card .card-body p {
+      margin: 0 0 var(--space-3);
+    }
+
+    .template-options {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+    }
+
+    .template-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) var(--space-4);
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all var(--duration-fast);
+      text-align: left;
+
+      &:hover {
+        border-color: var(--accent-default);
+        background: var(--accent-subtle);
+      }
+
+      i { font-size: 18px; color: var(--fg-subtle); }
+    }
+
+    .template-option-info {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+
+      strong { font-size: var(--text-base); color: var(--fg-default); }
+      small { font-size: var(--text-xs); color: var(--fg-muted); }
+    }
+
+    .cancel-selector {
+      width: 100%;
+      justify-content: center;
+    }
+
     @media (max-width: 768px) {
       .imports-page { padding: var(--space-4); }
       .hero-card { flex-direction: column; text-align: center; padding: var(--space-5); }
@@ -509,6 +583,16 @@ export class ImportFormComponent implements OnDestroy {
   errors = signal<string[]>([]);
   stepLabel = signal('Subiendo archivo...');
   showTemplateAction = signal(false);
+
+  // E2: Track created import to clean up if user re-submits with a different file
+  private createdImportId = signal<number | null>(null);
+
+  // Template selector state (shown when multiple templates match)
+  showTemplateSelector = signal(false);
+  matchedTemplates = signal<MappingTemplate[]>([]);
+  private pendingColumns = signal<MappingColumn[]>([]);
+  private pendingImportId = signal<number | null>(null);
+  private pendingIsFoh = signal(false);
 
   constructor() {
     // Get import type from query params
@@ -569,6 +653,9 @@ export class ImportFormComponent implements OnDestroy {
     this.showTemplateAction.set(false);
     this.stepLabel.set('Subiendo archivo...');
 
+    // E2: Clean up previous import if user re-submits with a different file
+    this.cleanupPreviousImport();
+
     const isFoh = this.importType === 'foh';
 
     this.importService.createImport(file, this.importType).pipe(
@@ -598,80 +685,107 @@ export class ImportFormComponent implements OnDestroy {
   }
 
   /**
-   * Auto-apply mapping: try template match first, then fall back to auto-suggestions.
-   * If required fields are covered, confirm mapping and navigate to preview.
+   * Auto-apply mapping: search for matching templates.
+   * - 0 matches → error
+   * - 1 match → apply automatically
+   * - 2+ matches → show selector for user to choose
    */
   private autoApplyMapping(response: CreateImportResponse, isFoh: boolean): void {
     const columns = response.mapping.columns;
     const headers = columns.map((c: MappingColumn) => c.header);
     const importId = response.import.id;
 
+    // E2: Track import id for cleanup if user re-submits
+    this.createdImportId.set(importId);
+
     this.stepLabel.set('Buscando template...');
 
-    this.importService.findMatchingTemplate(headers, isFoh).pipe(
+    this.importService.findMatchingTemplates(headers, isFoh).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (matchResult) => {
-        let columnMapping: Record<string, string>;
-
-        if (matchResult.found && matchResult.template) {
-          // Template found — convert header-based mapping to index-based
-          columnMapping = this.buildMappingFromTemplate(columns, matchResult.template.columnMapping);
-          this.confirmAndNavigate(importId, columnMapping, isFoh,
-            `Template "${matchResult.template.name}" aplicado automáticamente`);
+        if (matchResult.found && matchResult.templates.length === 1) {
+          // Single match — apply automatically
+          this.applyTemplate(matchResult.templates[0], columns, importId, isFoh);
+        } else if (matchResult.found && matchResult.templates.length > 1) {
+          // Multiple matches — show selector
+          this.isSubmitting.set(false);
+          this.showTemplateSelector.set(true);
+          this.matchedTemplates.set(matchResult.templates);
+          this.pendingColumns.set(columns);
+          this.pendingImportId.set(importId);
+          this.pendingIsFoh.set(isFoh);
         } else {
-          // No template — use auto-suggestions
-          columnMapping = this.buildMappingFromSuggestions(columns);
-          const missing = this.getMissingRequiredFields(columnMapping);
-
-          if (missing.length === 0) {
-            const infoMsg = this.authService.isAdmin()
-              ? 'Mapeo automático aplicado. Puede configurar un template para este formato desde Configurar Templates.'
-              : 'Mapeo automático aplicado. Para importaciones más rápidas, pida a un administrador que configure un template.';
-            this.confirmAndNavigate(importId, columnMapping, isFoh, infoMsg);
-          } else {
-            this.showMappingError(missing);
-          }
+          this.showNoTemplateError();
         }
       },
       error: () => {
-        // Template search failed — fall back to auto-suggestions silently
-        const columnMapping = this.buildMappingFromSuggestions(columns);
-        const missing = this.getMissingRequiredFields(columnMapping);
-
-        if (missing.length === 0) {
-          const infoMsg = this.authService.isAdmin()
-            ? 'Mapeo automático aplicado. Puede configurar un template para este formato desde Configurar Templates.'
-            : 'Mapeo automático aplicado. Para importaciones más rápidas, pida a un administrador que configure un template.';
-          this.confirmAndNavigate(importId, columnMapping, isFoh, infoMsg);
-        } else {
-          this.showMappingError(missing);
-        }
+        this.showNoTemplateError();
       }
     });
   }
 
   /**
-   * Show appropriate error when auto-mapping fails.
+   * User selected a template from the selector.
+   */
+  selectTemplate(template: MappingTemplate): void {
+    this.showTemplateSelector.set(false);
+    this.isSubmitting.set(true);
+    this.stepLabel.set('Aplicando template...');
+    this.applyTemplate(template, this.pendingColumns(), this.pendingImportId()!, this.pendingIsFoh());
+  }
+
+  /**
+   * User cancelled the template selection.
+   */
+  cancelTemplateSelection(): void {
+    this.showTemplateSelector.set(false);
+    this.matchedTemplates.set([]);
+  }
+
+  /**
+   * Apply a single template: validate required fields and navigate to preview.
+   */
+  private applyTemplate(template: MappingTemplate, columns: MappingColumn[], importId: number, isFoh: boolean): void {
+    const columnMapping = this.buildMappingFromTemplate(columns, template.columnMapping);
+    const missing = this.getMissingRequiredFields(columnMapping);
+
+    // Detect extra CSV columns not covered by the template
+    const templateHeaderSet = new Set(
+      Object.keys(template.columnMapping).map(h => h.toLowerCase())
+    );
+    const extraColumns = columns
+      .filter(c => !templateHeaderSet.has(c.header.toLowerCase()))
+      .map(c => c.header);
+
+    if (missing.length === 0) {
+      let msg = `Template "${template.name}" aplicado automáticamente`;
+      if (extraColumns.length > 0) {
+        msg += `. Columnas ignoradas: ${extraColumns.join(', ')}`;
+      }
+      this.confirmAndNavigate(importId, columnMapping, isFoh, msg);
+    } else {
+      this.showTemplateMissingFieldsError(missing, template.name, extraColumns);
+    }
+  }
+
+  /**
+   * Show error when no matching template is found for the CSV format.
    * Admin sees a button to configure templates; non-admin sees a message to contact admin.
    */
-  private showMappingError(missingFields: string[]): void {
+  private showNoTemplateError(): void {
     this.isSubmitting.set(false);
-    const missingLabels = missingFields
-      .map(f => ImportFormComponent.REQUIRED_LABELS[f] || f)
-      .join(', ');
-
     const isAdmin = this.authService.isAdmin();
     this.showTemplateAction.set(isAdmin);
 
     if (isAdmin) {
       this.errors.set([
-        `No se encontró un template de importación compatible y la detección automática no pudo identificar los campos obligatorios: ${missingLabels}.`,
-        'Configure un template para este formato de CSV.'
+        'No se encontró un template de importación compatible con este formato de CSV.',
+        'Configure un template para este formato.'
       ]);
     } else {
       this.errors.set([
-        `No se encontró un template de importación compatible y la detección automática no pudo identificar los campos obligatorios: ${missingLabels}.`,
+        'No se encontró un template de importación compatible con este formato de CSV.',
         'Contacte al administrador para que configure un template de importación.'
       ]);
     }
@@ -679,26 +793,22 @@ export class ImportFormComponent implements OnDestroy {
 
   /**
    * Convert template's header-based mapping to index-based mapping.
+   * Note (E3): Template values may include `custom_field:HEADER` keys for custom fields.
+   * The backend's confirmMappingAndValidate already parses the `custom_field:` prefix correctly,
+   * so no special handling is needed here.
    */
   private buildMappingFromTemplate(columns: MappingColumn[], templateMapping: Record<string, string>): Record<string, string> {
+    // Build case-insensitive lookup since backend matches templates case-insensitively
+    const lowerCaseMapping = new Map<string, string>();
+    for (const [header, field] of Object.entries(templateMapping)) {
+      lowerCaseMapping.set(header.toLowerCase(), field);
+    }
+
     const mapping: Record<string, string> = {};
     for (const col of columns) {
-      const field = templateMapping[col.header];
+      const field = lowerCaseMapping.get(col.header.toLowerCase());
       if (field) {
         mapping[col.index.toString()] = field;
-      }
-    }
-    return mapping;
-  }
-
-  /**
-   * Build index-based mapping from backend auto-suggestions.
-   */
-  private buildMappingFromSuggestions(columns: MappingColumn[]): Record<string, string> {
-    const mapping: Record<string, string> = {};
-    for (const col of columns) {
-      if (col.suggestion) {
-        mapping[col.index.toString()] = col.suggestion;
       }
     }
     return mapping;
@@ -713,6 +823,50 @@ export class ImportFormComponent implements OnDestroy {
   }
 
   /**
+   * Show error when a matched template is missing required fields.
+   * Directs admin to fix the template rather than silently falling back to auto-detection.
+   */
+  private showTemplateMissingFieldsError(missingFields: string[], templateName: string, extraColumns: string[]): void {
+    this.isSubmitting.set(false);
+    const missingLabels = missingFields
+      .map(f => ImportFormComponent.REQUIRED_LABELS[f] || f)
+      .join(', ');
+
+    const isAdmin = this.authService.isAdmin();
+    this.showTemplateAction.set(isAdmin);
+
+    const errors: string[] = [
+      `El template "${templateName}" no mapea los campos obligatorios: ${missingLabels}.`
+    ];
+
+    if (extraColumns.length > 0) {
+      errors.push(`Columnas del CSV no cubiertas por el template: ${extraColumns.join(', ')}.`);
+    }
+
+    if (isAdmin) {
+      errors.push('Edite el template para incluir los campos faltantes.');
+    } else {
+      errors.push('Contacte al administrador para que corrija el template.');
+    }
+
+    this.errors.set(errors);
+  }
+
+  /**
+   * E2: Clean up a previously created import when the user re-submits with a different file.
+   * Fire-and-forget — errors are logged but don't block the new import.
+   */
+  private cleanupPreviousImport(): void {
+    const prevId = this.createdImportId();
+    if (prevId) {
+      this.importService.deleteImport(prevId).subscribe({
+        error: (err) => console.warn('Could not clean up previous import:', err)
+      });
+      this.createdImportId.set(null);
+    }
+  }
+
+  /**
    * Confirm the mapping with the backend and navigate to preview.
    */
   private confirmAndNavigate(importId: number, columnMapping: Record<string, string>, isFoh: boolean, toastMessage: string): void {
@@ -723,6 +877,8 @@ export class ImportFormComponent implements OnDestroy {
     ).subscribe({
       next: () => {
         this.isSubmitting.set(false);
+        // E2: Clear tracked import — it's now valid and navigating to preview
+        this.createdImportId.set(null);
         this.toast.success(toastMessage);
         this.router.navigate(['/app/imports', importId, 'preview']);
       },

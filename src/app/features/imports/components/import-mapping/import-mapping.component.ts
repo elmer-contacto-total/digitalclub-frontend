@@ -683,12 +683,12 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
 
         // Search for matching template
         const headers = data.columns.map(c => c.header);
-        this.importService.findMatchingTemplate(headers, this.isFoh()).pipe(
+        this.importService.findMatchingTemplates(headers, this.isFoh()).pipe(
           takeUntil(this.destroy$)
         ).subscribe({
           next: (res) => {
-            if (res.found && res.template) {
-              this.matchedTemplate.set(res.template);
+            if (res.found && res.templates.length > 0) {
+              this.matchedTemplate.set(res.templates[0]);
             }
           },
           error: () => { /* ignore template match errors */ }

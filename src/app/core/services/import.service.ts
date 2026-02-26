@@ -75,7 +75,7 @@ export interface MappingTemplate {
 
 export interface MatchTemplateResponse {
   found: boolean;
-  template?: MappingTemplate;
+  templates: MappingTemplate[];
 }
 
 export interface CreateImportResponse {
@@ -349,9 +349,10 @@ export class ImportService {
   }
 
   /**
-   * Find a matching template for given CSV headers
+   * Find matching templates for given CSV headers.
+   * Returns all matches sorted by specificity (most headers first).
    */
-  findMatchingTemplate(headers: string[], isFoh: boolean = false): Observable<MatchTemplateResponse> {
+  findMatchingTemplates(headers: string[], isFoh: boolean = false): Observable<MatchTemplateResponse> {
     return this.http.post<MatchTemplateResponse>(
       `${this.baseUrl}/mapping_templates/match`,
       { headers, isFoh }
