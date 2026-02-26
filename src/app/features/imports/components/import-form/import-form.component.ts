@@ -10,6 +10,7 @@ import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { ImportService, CreateImportResponse, MappingColumn } from '../../../../core/services/import.service';
+import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
@@ -101,6 +102,12 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
                   <li>{{ error }}</li>
                 }
               </ul>
+              @if (showTemplateAction()) {
+                <a routerLink="/app/imports/templates" class="btn-template-action">
+                  <i class="ph ph-gear"></i>
+                  Configurar template
+                </a>
+              }
             </div>
           </div>
         }
@@ -378,6 +385,26 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
       li { font-size: var(--text-sm); }
     }
 
+    .btn-template-action {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+      padding: var(--space-2) var(--space-4);
+      background: var(--accent-default);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      font-weight: var(--font-medium);
+      text-decoration: none;
+      cursor: pointer;
+      transition: background var(--duration-fast);
+
+      &:hover { background: var(--accent-emphasis); }
+      i { font-size: 16px; }
+    }
+
     /* Buttons */
     .btn-primary {
       display: inline-flex;
@@ -462,6 +489,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 })
 export class ImportFormComponent implements OnDestroy {
   private importService = inject(ImportService);
+  private authService = inject(AuthService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private toast = inject(ToastService);
@@ -480,6 +508,7 @@ export class ImportFormComponent implements OnDestroy {
   isSubmitting = signal(false);
   errors = signal<string[]>([]);
   stepLabel = signal('Subiendo archivo...');
+  showTemplateAction = signal(false);
 
   constructor() {
     // Get import type from query params
@@ -537,6 +566,7 @@ export class ImportFormComponent implements OnDestroy {
 
     this.isSubmitting.set(true);
     this.errors.set([]);
+    this.showTemplateAction.set(false);
     this.stepLabel.set('Subiendo archivo...');
 
     const isFoh = this.importType === 'foh';
@@ -595,18 +625,12 @@ export class ImportFormComponent implements OnDestroy {
           const missing = this.getMissingRequiredFields(columnMapping);
 
           if (missing.length === 0) {
-            this.confirmAndNavigate(importId, columnMapping, isFoh,
-              'Mapeo automático aplicado. Para importaciones más rápidas, pida a un administrador que configure un template.');
+            const infoMsg = this.authService.isAdmin()
+              ? 'Mapeo automático aplicado. Puede configurar un template para este formato desde Configurar Templates.'
+              : 'Mapeo automático aplicado. Para importaciones más rápidas, pida a un administrador que configure un template.';
+            this.confirmAndNavigate(importId, columnMapping, isFoh, infoMsg);
           } else {
-            // Can't auto-map — show error
-            this.isSubmitting.set(false);
-            const missingLabels = missing
-              .map(f => ImportFormComponent.REQUIRED_LABELS[f] || f)
-              .join(', ');
-            this.errors.set([
-              `No se encontró un template de importación compatible y la detección automática no pudo identificar los campos obligatorios: ${missingLabels}.`,
-              'Contacte al administrador para que configure un template desde Importaciones \u2192 Configurar Templates.'
-            ]);
+            this.showMappingError(missing);
           }
         }
       },
@@ -616,20 +640,41 @@ export class ImportFormComponent implements OnDestroy {
         const missing = this.getMissingRequiredFields(columnMapping);
 
         if (missing.length === 0) {
-          this.confirmAndNavigate(importId, columnMapping, isFoh,
-            'Mapeo automático aplicado. Para importaciones más rápidas, pida a un administrador que configure un template.');
+          const infoMsg = this.authService.isAdmin()
+            ? 'Mapeo automático aplicado. Puede configurar un template para este formato desde Configurar Templates.'
+            : 'Mapeo automático aplicado. Para importaciones más rápidas, pida a un administrador que configure un template.';
+          this.confirmAndNavigate(importId, columnMapping, isFoh, infoMsg);
         } else {
-          this.isSubmitting.set(false);
-          const missingLabels = missing
-            .map(f => ImportFormComponent.REQUIRED_LABELS[f] || f)
-            .join(', ');
-          this.errors.set([
-            `No se pudo determinar el mapeo de columnas automáticamente. Faltan: ${missingLabels}.`,
-            'Contacte al administrador para que configure un template desde Importaciones \u2192 Configurar Templates.'
-          ]);
+          this.showMappingError(missing);
         }
       }
     });
+  }
+
+  /**
+   * Show appropriate error when auto-mapping fails.
+   * Admin sees a button to configure templates; non-admin sees a message to contact admin.
+   */
+  private showMappingError(missingFields: string[]): void {
+    this.isSubmitting.set(false);
+    const missingLabels = missingFields
+      .map(f => ImportFormComponent.REQUIRED_LABELS[f] || f)
+      .join(', ');
+
+    const isAdmin = this.authService.isAdmin();
+    this.showTemplateAction.set(isAdmin);
+
+    if (isAdmin) {
+      this.errors.set([
+        `No se encontró un template de importación compatible y la detección automática no pudo identificar los campos obligatorios: ${missingLabels}.`,
+        'Configure un template para este formato de CSV.'
+      ]);
+    } else {
+      this.errors.set([
+        `No se encontró un template de importación compatible y la detección automática no pudo identificar los campos obligatorios: ${missingLabels}.`,
+        'Contacte al administrador para que configure un template de importación.'
+      ]);
+    }
   }
 
   /**
