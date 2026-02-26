@@ -17,6 +17,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
 interface FieldOption {
   value: string;
   label: string;
+  dbField: string | null;
   required: boolean;
   category?: 'linker' | 'system';
 }
@@ -134,12 +135,13 @@ interface FieldOption {
                                 (ngModelChange)="setMapping(col.index, $event)"
                                 class="field-select"
                                 [class.field-required]="isRequiredField(sampleMappings()[col.index])"
-                                [class.field-ignore]="sampleMappings()[col.index] === 'ignore'">
+                                [class.field-ignore]="sampleMappings()[col.index] === 'ignore'"
+                                [class.field-linker]="isLinkerField(sampleMappings()[col.index])">
                           <option value="">— Sin asignar —</option>
                           @for (opt of availableFields; track opt.value) {
                             <option [value]="opt.value"
                                     [disabled]="isFieldUsed(opt.value, col.index)">
-                              {{ opt.label }}{{ opt.required ? ' *' : '' }}{{ isFieldUsed(opt.value, col.index) ? ' (ya asignado)' : '' }}
+                              {{ opt.category === 'linker' ? '\u{1F517} ' : '' }}{{ opt.label }}{{ opt.dbField ? ' [' + opt.dbField + ']' : '' }}{{ opt.required ? ' *' : '' }}{{ isFieldUsed(opt.value, col.index) ? ' (ya asignado)' : '' }}
                             </option>
                           }
                         </select>
@@ -474,6 +476,22 @@ interface FieldOption {
       &:focus { outline: none; border-color: var(--accent-default); box-shadow: 0 0 0 2px var(--accent-subtle); }
       &.field-required { border-color: var(--success-default); background: var(--success-subtle); }
       &.field-ignore { border-color: var(--border-muted); color: var(--fg-subtle); font-style: italic; }
+      &.field-linker {
+        border-color: #8b5cf6;
+        background: rgba(139, 92, 246, 0.08);
+        color: #7c3aed;
+      }
+
+      :host-context([data-theme="dark"]) &.field-linker {
+        border-color: #a78bfa;
+        background: rgba(167, 139, 250, 0.15);
+        color: #c4b5fd;
+      }
+
+      :host-context([data-theme="dark"]) & option {
+        background: var(--bg-subtle);
+        color: var(--fg-default);
+      }
     }
 
     /* Required Status */
@@ -725,19 +743,19 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
 
   // Field options (same as import-mapping)
   availableFields: FieldOption[] = [
-    { value: 'phone', label: 'Teléfono', required: true },
-    { value: 'first_name', label: 'Nombre', required: true },
-    { value: 'last_name', label: 'Apellido', required: true },
-    { value: 'last_name_2', label: 'Apellido materno', required: false },
-    { value: 'first_name_2', label: 'Segundo nombre', required: false },
-    { value: 'email', label: 'Email', required: false },
-    { value: 'codigo', label: 'Código', required: false },
-    { value: 'role', label: 'Rol', required: false },
-    { value: 'phone_code', label: 'Cód. País', required: false },
-    { value: 'manager_email', label: 'Vinculador de agente', required: false, category: 'linker' },
-    { value: 'phone_order', label: 'Orden teléfono', required: false },
-    { value: 'custom_field', label: 'Campo personalizado', required: false },
-    { value: 'ignore', label: 'Ignorar', required: false },
+    { value: 'phone', label: 'Teléfono', dbField: 'phone', required: true },
+    { value: 'first_name', label: 'Nombre', dbField: 'first_name', required: true },
+    { value: 'last_name', label: 'Apellido', dbField: 'last_name', required: true },
+    { value: 'last_name_2', label: 'Apellido materno', dbField: 'last_name', required: false },
+    { value: 'first_name_2', label: 'Segundo nombre', dbField: 'first_name', required: false },
+    { value: 'email', label: 'Email', dbField: 'email', required: false },
+    { value: 'codigo', label: 'Código', dbField: 'codigo', required: false },
+    { value: 'role', label: 'Rol', dbField: 'role', required: false },
+    { value: 'phone_code', label: 'Cód. País', dbField: 'phone_code', required: false },
+    { value: 'manager_email', label: 'Vinculador de agente', dbField: 'manager_email', required: false, category: 'linker' },
+    { value: 'phone_order', label: 'Orden teléfono', dbField: 'phone_order', required: false },
+    { value: 'custom_field', label: 'Campo personalizado', dbField: 'custom_fields', required: false },
+    { value: 'ignore', label: 'Ignorar', dbField: null, required: false },
   ];
 
   private requiredFieldValues = ['phone', 'first_name', 'last_name'];
@@ -904,6 +922,12 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
   isRequiredField(fieldValue: string | undefined): boolean {
     if (!fieldValue) return false;
     return this.requiredFieldValues.includes(fieldValue);
+  }
+
+  isLinkerField(fieldValue: string | undefined): boolean {
+    if (!fieldValue) return false;
+    const opt = this.availableFields.find(f => f.value === fieldValue);
+    return opt?.category === 'linker';
   }
 
   saveTemplate(): void {
