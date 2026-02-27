@@ -54,6 +54,22 @@ interface FieldOption {
         }
       </div>
 
+      <!-- Info Banner -->
+      @if (!isCreating()) {
+        <div class="info-banner">
+          <i class="ph ph-info"></i>
+          <div class="info-content">
+            <strong>¿Cómo funcionan los templates?</strong>
+            <p>Un template define cómo se mapean las columnas de un CSV a los campos del sistema (teléfono, nombre, apellido, etc.). Cuando un usuario sube un archivo, el sistema busca automáticamente un template compatible con las mismas columnas y lo aplica sin intervención manual.</p>
+            <div class="info-details">
+              <span class="info-tag"><i class="ph ph-upload-simple"></i> Suba un CSV de muestra para crear un template</span>
+              <span class="info-tag"><i class="ph ph-arrows-left-right"></i> Asigne cada columna a un campo del sistema</span>
+              <span class="info-tag"><i class="ph ph-lightning"></i> Las importaciones futuras se mapean solas</span>
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- Create Template Flow -->
       @if (isCreating()) {
         <div class="card create-card">
@@ -339,6 +355,47 @@ interface FieldOption {
       margin: var(--space-1) 0 0;
       font-size: var(--text-sm);
       color: var(--fg-muted);
+    }
+
+    /* Info Banner */
+    .info-banner {
+      display: flex;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      background: var(--accent-subtle);
+      border: 1px solid var(--accent-muted);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--space-6);
+      > i { font-size: 20px; color: var(--accent-default); flex-shrink: 0; margin-top: 2px; }
+    }
+
+    .info-content {
+      strong { font-size: var(--text-sm); color: var(--fg-default); }
+      p {
+        margin: var(--space-1) 0 var(--space-3);
+        font-size: var(--text-sm);
+        color: var(--fg-muted);
+        line-height: 1.5;
+      }
+    }
+
+    .info-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    .info-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      background: var(--card-bg);
+      border: 1px solid var(--border-muted);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-xs);
+      color: var(--fg-muted);
+      i { font-size: 14px; color: var(--accent-default); }
     }
 
     /* Cards */
