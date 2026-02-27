@@ -701,10 +701,13 @@ export class ImportFormComponent implements OnDestroy {
 
     this.stepLabel.set('Buscando template...');
 
+    console.log('[import-form] findMatchingTemplates request:', { headers, isFoh, headerCount: headers.length });
+
     this.importService.findMatchingTemplates(headers, isFoh).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (matchResult) => {
+        console.log('[import-form] findMatchingTemplates response:', matchResult);
         if (matchResult.found && matchResult.templates.length === 1) {
           // Single match — apply automatically
           this.applyTemplate(matchResult.templates[0], columns, importId, isFoh);
@@ -720,7 +723,8 @@ export class ImportFormComponent implements OnDestroy {
           this.showNoTemplateError();
         }
       },
-      error: () => {
+      error: (err) => {
+        console.error('[import-form] findMatchingTemplates ERROR:', err);
         this.showNoTemplateError();
       }
     });
