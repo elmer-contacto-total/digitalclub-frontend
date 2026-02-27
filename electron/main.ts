@@ -181,14 +181,29 @@ const revealedMessageIds: Set<string> = loadRevealedMessageIds();
 // Cola de eliminaciones pendientes por reintentar (si el backend falló)
 // Persistida en disco para sobrevivir reinicios de la app
 const PENDING_DELETIONS_FILE = path.join(app.getPath('userData'), 'pending-deletions.json');
+const MAX_PENDING_DELETIONS = 1000;
+const PENDING_DELETION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 días
 
-function loadPendingDeletions(): string[] {
+interface PendingDeletion {
+  id: string;
+  addedAt: string;
+}
+
+function loadPendingDeletions(): PendingDeletion[] {
   try {
     if (fs.existsSync(PENDING_DELETIONS_FILE)) {
       const data = JSON.parse(fs.readFileSync(PENDING_DELETIONS_FILE, 'utf-8'));
       if (Array.isArray(data)) {
-        console.log(`[MWS Deleted] Cargadas ${data.length} eliminaciones pendientes de disco`);
-        return data;
+        const cutoff = Date.now() - PENDING_DELETION_MAX_AGE_MS;
+        // Backwards compat: migrar strings planos a objetos
+        const migrated: PendingDeletion[] = data
+          .map((item: string | PendingDeletion) =>
+            typeof item === 'string' ? { id: item, addedAt: new Date().toISOString() } : item
+          )
+          .filter((item: PendingDeletion) => new Date(item.addedAt).getTime() >= cutoff);
+        const pruned = data.length - migrated.length;
+        console.log(`[MWS Deleted] Cargadas ${migrated.length} eliminaciones pendientes de disco${pruned > 0 ? ` (${pruned} expiradas descartadas)` : ''}`);
+        return migrated;
       }
     }
   } catch (e) {
@@ -199,13 +214,17 @@ function loadPendingDeletions(): string[] {
 
 function savePendingDeletions(): void {
   try {
-    fs.writeFileSync(PENDING_DELETIONS_FILE, JSON.stringify(pendingDeletions));
+    // Limitar a MAX_PENDING_DELETIONS (conservar las más recientes)
+    const toSave = pendingDeletions.length > MAX_PENDING_DELETIONS
+      ? pendingDeletions.slice(-MAX_PENDING_DELETIONS)
+      : pendingDeletions;
+    fs.writeFileSync(PENDING_DELETIONS_FILE, JSON.stringify(toSave));
   } catch (e) {
     console.error('[MWS Deleted] Error guardando eliminaciones pendientes:', e);
   }
 }
 
-const pendingDeletions: string[] = loadPendingDeletions();
+const pendingDeletions: PendingDeletion[] = loadPendingDeletions();
 
 // Token JWT para autenticación en API calls de media
 let mediaAuthToken: string | null = null;
@@ -432,6 +451,12 @@ async function sendMediaDeletionToServer(whatsappMessageId: string, isDisappeari
         // Limpiar del backup en disco — ya no necesitamos trackear este mensaje
         capturedMediaIds.delete(whatsappMessageId);
         saveCapturedMediaIds();
+        // Remover de cola pendiente (fue pre-persistido para crash safety)
+        const idx = pendingDeletions.findIndex(p => p.id === whatsappMessageId);
+        if (idx !== -1) {
+          pendingDeletions.splice(idx, 1);
+          savePendingDeletions();
+        }
         return;
       }
       console.error(`[MWS Deleted] Error notificando eliminación (intento ${attempt}/3):`, response.status);
@@ -442,12 +467,8 @@ async function sendMediaDeletionToServer(whatsappMessageId: string, isDisappeari
       await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
     }
   }
-  // All retries failed — queue for periodic retry
-  console.warn('[MWS Deleted] Todos los reintentos fallaron, agregando a cola pendiente:', whatsappMessageId);
-  if (!pendingDeletions.includes(whatsappMessageId)) {
-    pendingDeletions.push(whatsappMessageId);
-    savePendingDeletions();
-  }
+  // All retries failed — item ya está en pendingDeletions (pre-persistido), será reintentado periódicamente
+  console.warn('[MWS Deleted] Todos los reintentos fallaron, queda en cola pendiente:', whatsappMessageId);
 }
 
 // Retry pending deletions — extracted to reusable function
@@ -462,21 +483,21 @@ async function retryPendingDeletions(): Promise<void> {
   try {
     console.log(`[MWS Deleted] Reintentando ${pendingDeletions.length} eliminaciones pendientes`);
     const toRetry = pendingDeletions.splice(0, pendingDeletions.length);
-    for (const id of toRetry) {
+    for (const entry of toRetry) {
       try {
         const response = await fetch(`${MEDIA_API_URL}/mark-deleted`, {
           method: 'POST',
           headers: getMediaApiHeaders(),
-          body: JSON.stringify({ whatsappMessageId: id })
+          body: JSON.stringify({ whatsappMessageId: entry.id })
         });
         if (response.ok) {
-          console.log('[MWS Deleted] Reintento exitoso:', id);
-          capturedMediaIds.delete(id);
+          console.log('[MWS Deleted] Reintento exitoso:', entry.id);
+          capturedMediaIds.delete(entry.id);
         } else {
-          pendingDeletions.push(id);
+          pendingDeletions.push(entry);
         }
       } catch {
-        pendingDeletions.push(id);
+        pendingDeletions.push(entry);
       }
     }
     savePendingDeletions();
@@ -1030,6 +1051,7 @@ function createWhatsAppView(): void {
       nodeIntegration: false,
       contextIsolation: true,
       partition: 'persist:whatsapp',
+      backgroundThrottling: false,  // Evita que Chromium throttlee setInterval de 3s a ~60s cuando pierde foco
       // Preload vacío - ZERO INJECTION para anti-ban
       preload: path.join(__dirname, 'whatsapp-preload.js')
     }
@@ -1040,8 +1062,8 @@ function createWhatsAppView(): void {
   // ===== INICIALIZAR SISTEMA DE SEGURIDAD DE MEDIOS =====
   // Filtrar del backup los IDs ya pendientes de notificar eliminación (evita re-detección)
   const filteredBackup = new Map(capturedMediaIds);
-  for (const pendingId of pendingDeletions) {
-    filteredBackup.delete(pendingId);
+  for (const entry of pendingDeletions) {
+    filteredBackup.delete(entry.id);
   }
 
   initializeMediaSecurity(whatsappView, mainWindow, userFingerprint.odaId, {
@@ -1058,6 +1080,11 @@ function createWhatsAppView(): void {
     },
     onMediaDeleted: (data) => {
       console.log('[MWS Deleted] Mensaje eliminado detectado:', data.whatsappMessageId, data.isDisappearing ? '(disappearing)' : '');
+      // Pre-persistir a disco ANTES del HTTP call (crash-safe, backend es idempotente)
+      if (!pendingDeletions.some(p => p.id === data.whatsappMessageId)) {
+        pendingDeletions.push({ id: data.whatsappMessageId, addedAt: new Date().toISOString() });
+        savePendingDeletions();
+      }
       sendMediaDeletionToServer(data.whatsappMessageId, data.isDisappearing || false);
     },
     onMessageRevealed: (messageId) => {
