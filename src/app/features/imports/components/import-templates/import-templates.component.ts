@@ -191,7 +191,7 @@ interface FieldOption {
                   }
                 </div>
 
-                <!-- Template name + FOH toggle -->
+                <!-- Template name -->
                 <div class="template-config">
                   <div class="config-field">
                     <label for="template-name">Nombre del template</label>
@@ -199,12 +199,6 @@ interface FieldOption {
                            placeholder="Ej: Importación estándar, FOH Financiera, etc."
                            [ngModel]="templateName()"
                            (ngModelChange)="templateName.set($event)" />
-                  </div>
-                  <div class="config-field config-checkbox">
-                    <label>
-                      <input type="checkbox" [ngModel]="isFoh()" (ngModelChange)="isFoh.set($event)" />
-                      Template FOH (Financiera Oh)
-                    </label>
                   </div>
                 </div>
 
@@ -248,7 +242,6 @@ interface FieldOption {
             <thead>
               <tr>
                 <th>Nombre</th>
-                <th>Tipo</th>
                 <th class="text-right">Columnas</th>
                 <th>Fecha</th>
                 <th class="col-actions"></th>
@@ -263,9 +256,6 @@ interface FieldOption {
                       {{ tpl.name }}
                     </button>
                   </td>
-                  <td>
-                    <span class="type-tag">{{ tpl.isFoh ? 'FOH' : 'Estándar' }}</span>
-                  </td>
                   <td class="text-right">{{ tpl.headers.length }}</td>
                   <td class="text-nowrap">{{ formatDate(tpl.createdAt) }}</td>
                   <td class="col-actions">
@@ -276,7 +266,7 @@ interface FieldOption {
                 </tr>
                 @if (expandedTemplateId() === tpl.id) {
                   <tr class="detail-row">
-                    <td [colSpan]="5">
+                    <td [colSpan]="4">
                       <div class="template-detail">
                         <div class="detail-header">Mapeo de columnas:</div>
                         <div class="detail-mappings">
@@ -644,14 +634,6 @@ interface FieldOption {
       }
     }
 
-    .config-checkbox label {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      cursor: pointer;
-      input { cursor: pointer; }
-    }
-
     .text-input {
       width: 100%;
       padding: var(--space-2) var(--space-3);
@@ -698,15 +680,6 @@ interface FieldOption {
     .text-right { text-align: right; }
     .text-nowrap { white-space: nowrap; }
     .col-actions { width: 60px; text-align: center; }
-
-    .type-tag {
-      display: inline-block;
-      padding: 2px var(--space-2);
-      background: var(--bg-muted);
-      color: var(--fg-muted);
-      border-radius: var(--radius-sm);
-      font-size: var(--text-sm);
-    }
 
     .template-name-btn {
       display: inline-flex;
@@ -840,7 +813,6 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
   sampleMappings = signal<Record<number, string>>({});
   customFieldDuplicates = signal<Set<number>>(new Set());
   templateName = signal('');
-  isFoh = signal(false);
   isSaving = signal(false);
 
   // Field options (same as import-mapping)
@@ -948,7 +920,6 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
     this.sampleMappings.set({});
     this.customFieldDuplicates.set(new Set());
     this.templateName.set('');
-    this.isFoh.set(false);
     this.uploadError.set(null);
   }
 
@@ -1083,7 +1054,7 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
       }
     }
 
-    this.importService.saveMappingTemplate(name, this.isFoh(), columnMapping, headers).pipe(
+    this.importService.saveMappingTemplate(name, false, columnMapping, headers).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {
