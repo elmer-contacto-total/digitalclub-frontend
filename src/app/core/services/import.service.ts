@@ -85,6 +85,14 @@ export interface CreateImportResponse {
   message: string;
 }
 
+export interface PreviewCsvResponse {
+  result: string;
+  mapping: {
+    columns: MappingColumn[];
+    totalRows: number;
+  };
+}
+
 export interface ValidatedUsersResponse {
   id: number;
   validCount: number;
@@ -148,6 +156,16 @@ export class ImportService {
     formData.append('importType', importType);
 
     return this.http.post<CreateImportResponse>(this.baseUrl, formData);
+  }
+
+  /**
+   * Preview CSV: parsea headers + sample data sin crear un registro Import.
+   * Usado por el flujo de creación de templates.
+   */
+  previewCsv(file: File): Observable<PreviewCsvResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<PreviewCsvResponse>(`${this.baseUrl}/preview_csv`, formData);
   }
 
   /**

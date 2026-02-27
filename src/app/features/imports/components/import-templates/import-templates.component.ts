@@ -842,7 +842,6 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
   templateName = signal('');
   isFoh = signal(false);
   isSaving = signal(false);
-  tempImportId = signal<number | null>(null);
 
   // Field options (same as import-mapping)
   availableFields: FieldOption[] = [
@@ -891,8 +890,6 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    // Clean up temp import if still exists
-    this.cleanupTempImport();
   }
 
   loadTemplates(): void {
@@ -937,7 +934,6 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
   }
 
   cancelCreate(): void {
-    this.cleanupTempImport();
     this.isCreating.set(false);
     this.resetCreateState();
   }
@@ -980,14 +976,13 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
     this.isUploading.set(true);
     this.uploadError.set(null);
 
-    // Use createImport to parse the CSV (creates a temp import that we'll delete later)
-    this.importService.createImport(file, 'user').pipe(
+    // Preview CSV in-memory — does NOT create an Import record
+    this.importService.previewCsv(file).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: (response) => {
         this.isUploading.set(false);
         if (response.result === 'success') {
-          this.tempImportId.set(response.import.id);
           this.sampleColumns.set(response.mapping.columns);
 
           // Pre-fill from auto-suggestions
@@ -1088,7 +1083,6 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
       next: () => {
         this.isSaving.set(false);
         this.toast.success(`Template "${name}" guardado correctamente`);
-        this.cleanupTempImport();
         this.isCreating.set(false);
         this.resetCreateState();
         this.loadTemplates();
@@ -1138,15 +1132,4 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
     });
   }
 
-  private cleanupTempImport(): void {
-    const tempId = this.tempImportId();
-    if (tempId) {
-      this.importService.deleteImport(tempId).pipe(
-        takeUntil(this.destroy$)
-      ).subscribe({
-        error: (err) => console.warn('Could not clean up temp import:', err)
-      });
-      this.tempImportId.set(null);
-    }
-  }
 }
