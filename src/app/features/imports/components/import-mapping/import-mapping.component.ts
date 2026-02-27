@@ -673,17 +673,21 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
   // Required field names
   private requiredFieldValues = ['phone', 'first_name', 'last_name'];
 
-  // Computed: all required fields are mapped
+  // Computed: all required fields are mapped (strips +cf suffix for comparison)
   allRequiredMapped = computed(() => {
     const m = this.mappings();
-    const assignedValues = new Set(Object.values(m));
+    const assignedValues = new Set(
+      Object.values(m).map(v => v.endsWith('+cf') ? v.slice(0, -3) : v)
+    );
     return this.requiredFieldValues.every(f => assignedValues.has(f));
   });
 
-  // Computed: list of missing required field labels
+  // Computed: list of missing required field labels (strips +cf suffix for comparison)
   missingRequired = computed(() => {
     const m = this.mappings();
-    const assignedValues = new Set(Object.values(m));
+    const assignedValues = new Set(
+      Object.values(m).map(v => v.endsWith('+cf') ? v.slice(0, -3) : v)
+    );
     return this.availableFields
       .filter(f => f.required && !assignedValues.has(f.value))
       .map(f => f.label);
@@ -788,12 +792,14 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
 
   isRequiredField(fieldValue: string | undefined): boolean {
     if (!fieldValue) return false;
-    return this.requiredFieldValues.includes(fieldValue);
+    const base = fieldValue.endsWith('+cf') ? fieldValue.slice(0, -3) : fieldValue;
+    return this.requiredFieldValues.includes(base);
   }
 
   isLinkerField(fieldValue: string | undefined): boolean {
     if (!fieldValue) return false;
-    const opt = this.availableFields.find(f => f.value === fieldValue);
+    const base = fieldValue.endsWith('+cf') ? fieldValue.slice(0, -3) : fieldValue;
+    const opt = this.availableFields.find(f => f.value === base);
     return opt?.category === 'linker';
   }
 

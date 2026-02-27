@@ -871,13 +871,17 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
 
   allRequiredMapped = computed(() => {
     const m = this.sampleMappings();
-    const assignedValues = new Set(Object.values(m));
+    const assignedValues = new Set(
+      Object.values(m).map(v => v.endsWith('+cf') ? v.slice(0, -3) : v)
+    );
     return this.requiredFieldValues.every(f => assignedValues.has(f));
   });
 
   missingRequired = computed(() => {
     const m = this.sampleMappings();
-    const assignedValues = new Set(Object.values(m));
+    const assignedValues = new Set(
+      Object.values(m).map(v => v.endsWith('+cf') ? v.slice(0, -3) : v)
+    );
     return this.availableFields
       .filter(f => f.required && !assignedValues.has(f.value))
       .map(f => f.label);
@@ -1043,12 +1047,14 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
 
   isRequiredField(fieldValue: string | undefined): boolean {
     if (!fieldValue) return false;
-    return this.requiredFieldValues.includes(fieldValue);
+    const base = fieldValue.endsWith('+cf') ? fieldValue.slice(0, -3) : fieldValue;
+    return this.requiredFieldValues.includes(base);
   }
 
   isLinkerField(fieldValue: string | undefined): boolean {
     if (!fieldValue) return false;
-    const opt = this.availableFields.find(f => f.value === fieldValue);
+    const base = fieldValue.endsWith('+cf') ? fieldValue.slice(0, -3) : fieldValue;
+    const opt = this.availableFields.find(f => f.value === base);
     return opt?.category === 'linker';
   }
 
