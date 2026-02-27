@@ -147,12 +147,14 @@ interface FieldOption {
                         </select>
                         @if (sampleMappings()[col.index] && sampleMappings()[col.index] !== 'ignore'
                              && sampleMappings()[col.index] !== 'custom_field') {
-                          <label class="cf-duplicate-label">
-                            <input type="checkbox"
-                                   [checked]="customFieldDuplicates().has(col.index)"
-                                   (change)="toggleCustomFieldDuplicate(col.index)" />
-                            <small>También como campo personalizado</small>
-                          </label>
+                          <button type="button"
+                                  class="cf-toggle"
+                                  [class.cf-active]="customFieldDuplicates().has(col.index)"
+                                  (click)="toggleCustomFieldDuplicate(col.index)"
+                                  title="Guardar también como campo personalizado en el CRM">
+                            <i class="ph" [ngClass]="customFieldDuplicates().has(col.index) ? 'ph-check-square' : 'ph-square'"></i>
+                            <span>+ Campo personalizado</span>
+                          </button>
                         }
                       </div>
                     </div>
@@ -505,13 +507,36 @@ interface FieldOption {
       }
     }
 
-    .cf-duplicate-label {
-      display: flex;
+    .cf-toggle {
+      display: inline-flex;
       align-items: center;
       gap: 4px;
+      padding: 2px 8px;
+      border: 1px dashed var(--border-default);
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--fg-subtle);
+      font-size: var(--text-xs);
       cursor: pointer;
-      input { cursor: pointer; }
-      small { font-size: var(--text-xs); color: var(--fg-muted); }
+      transition: all var(--duration-fast);
+      i { font-size: 14px; }
+      &:hover {
+        border-color: var(--accent-muted);
+        color: var(--fg-muted);
+        background: var(--accent-subtle);
+      }
+      &.cf-active {
+        border-style: solid;
+        border-color: #8b5cf6;
+        background: rgba(139, 92, 246, 0.1);
+        color: #7c3aed;
+        font-weight: var(--font-medium);
+      }
+      :host-context([data-theme="dark"]) &.cf-active {
+        border-color: #a78bfa;
+        background: rgba(167, 139, 250, 0.15);
+        color: #c4b5fd;
+      }
     }
 
     /* Required Status */
