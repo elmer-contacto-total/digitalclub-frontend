@@ -145,6 +145,15 @@ interface FieldOption {
                             </option>
                           }
                         </select>
+                        @if (sampleMappings()[col.index] && sampleMappings()[col.index] !== 'ignore'
+                             && sampleMappings()[col.index] !== 'custom_field') {
+                          <label class="cf-duplicate-label">
+                            <input type="checkbox"
+                                   [checked]="customFieldDuplicates().has(col.index)"
+                                   (change)="toggleCustomFieldDuplicate(col.index)" />
+                            <small>También como campo personalizado</small>
+                          </label>
+                        }
                       </div>
                     </div>
                   }
@@ -464,6 +473,8 @@ interface FieldOption {
     .sample-value { font-size: var(--text-xs); color: var(--fg-muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sample-empty { font-size: var(--text-xs); color: var(--fg-subtle); }
 
+    .col-field { display: flex; flex-direction: column; gap: 4px; }
+
     .field-select {
       width: 100%;
       padding: var(--space-1) var(--space-2);
@@ -492,6 +503,15 @@ interface FieldOption {
         background: var(--bg-subtle);
         color: var(--fg-default);
       }
+    }
+
+    .cf-duplicate-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      input { cursor: pointer; }
+      small { font-size: var(--text-xs); color: var(--fg-muted); }
     }
 
     /* Required Status */
@@ -736,6 +756,7 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
   uploadError = signal<string | null>(null);
   sampleColumns = signal<MappingColumn[]>([]);
   sampleMappings = signal<Record<number, string>>({});
+  customFieldDuplicates = signal<Set<number>>(new Set());
   templateName = signal('');
   isFoh = signal(false);
   isSaving = signal(false);
@@ -818,8 +839,12 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
     if (fieldValue.startsWith('custom_field:')) {
       return `Campo: ${fieldValue.substring('custom_field:'.length)}`;
     }
-    const opt = this.availableFields.find(f => f.value === fieldValue);
-    return opt?.label || fieldValue;
+    // Manejar sufijo +cf para doble escritura
+    const hasCf = fieldValue.endsWith('+cf');
+    const baseField = hasCf ? fieldValue.slice(0, -3) : fieldValue;
+    const opt = this.availableFields.find(f => f.value === baseField);
+    const label = opt?.label || baseField;
+    return hasCf ? `${label} (+campo personalizado)` : label;
   }
 
   // ========== Create Flow ==========
@@ -839,6 +864,7 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
     this.sampleFile.set(null);
     this.sampleColumns.set([]);
     this.sampleMappings.set({});
+    this.customFieldDuplicates.set(new Set());
     this.templateName.set('');
     this.isFoh.set(false);
     this.uploadError.set(null);
@@ -909,6 +935,25 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
       delete current[colIndex];
     }
     this.sampleMappings.set(current);
+
+    // Limpiar duplicate flag si cambia a ignore, custom_field, o vacío
+    if (!fieldValue || fieldValue === 'ignore' || fieldValue === 'custom_field') {
+      const dups = new Set(this.customFieldDuplicates());
+      if (dups.has(colIndex)) {
+        dups.delete(colIndex);
+        this.customFieldDuplicates.set(dups);
+      }
+    }
+  }
+
+  toggleCustomFieldDuplicate(colIndex: number): void {
+    const current = new Set(this.customFieldDuplicates());
+    if (current.has(colIndex)) {
+      current.delete(colIndex);
+    } else {
+      current.add(colIndex);
+    }
+    this.customFieldDuplicates.set(current);
   }
 
   isFieldUsed(fieldValue: string, currentIndex: number): boolean {
@@ -946,7 +991,12 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
       headers.push(col.header);
       const field = m[col.index];
       if (field) {
-        columnMapping[col.header] = field === 'custom_field' ? `custom_field:${col.header}` : field;
+        let mappedValue = field === 'custom_field' ? `custom_field:${col.header}` : field;
+        // Agregar sufijo +cf si el checkbox está activado para esta columna
+        if (this.customFieldDuplicates().has(col.index) && field !== 'custom_field' && field !== 'ignore') {
+          mappedValue += '+cf';
+        }
+        columnMapping[col.header] = mappedValue;
       }
     }
 

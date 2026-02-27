@@ -108,6 +108,15 @@ interface FieldOption {
                         </option>
                       }
                     </select>
+                    @if (mappings()[col.index] && mappings()[col.index] !== 'ignore'
+                         && mappings()[col.index] !== 'custom_field') {
+                      <label class="cf-duplicate-label">
+                        <input type="checkbox"
+                               [checked]="customFieldDuplicates().has(col.index)"
+                               (change)="toggleCustomFieldDuplicate(col.index)" />
+                        <small>También como campo personalizado</small>
+                      </label>
+                    }
                   </div>
                 </div>
               }
@@ -343,6 +352,8 @@ interface FieldOption {
 
     .col-field {
       display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
 
     .field-select {
@@ -389,6 +400,15 @@ interface FieldOption {
         background: var(--bg-subtle);
         color: var(--fg-default);
       }
+    }
+
+    .cf-duplicate-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      input { cursor: pointer; }
+      small { font-size: var(--text-xs); color: var(--fg-muted); }
     }
 
     /* Required Status */
@@ -599,6 +619,7 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
 
   // Mapping: column index -> field value
   mappings = signal<Record<number, string>>({});
+  customFieldDuplicates = signal<Set<number>>(new Set());
 
   // Template state
   matchedTemplate = signal<MappingTemplate | null>(null);
@@ -710,6 +731,25 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
       delete current[colIndex];
     }
     this.mappings.set(current);
+
+    // Limpiar duplicate flag si cambia a ignore, custom_field, o vacío
+    if (!fieldValue || fieldValue === 'ignore' || fieldValue === 'custom_field') {
+      const dups = new Set(this.customFieldDuplicates());
+      if (dups.has(colIndex)) {
+        dups.delete(colIndex);
+        this.customFieldDuplicates.set(dups);
+      }
+    }
+  }
+
+  toggleCustomFieldDuplicate(colIndex: number): void {
+    const current = new Set(this.customFieldDuplicates());
+    if (current.has(colIndex)) {
+      current.delete(colIndex);
+    } else {
+      current.add(colIndex);
+    }
+    this.customFieldDuplicates.set(current);
   }
 
   isFieldUsed(fieldValue: string, currentIndex: number): boolean {
@@ -752,7 +792,11 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
         const col = cols.find(c => c.index === Number(idx));
         columnMapping[idx.toString()] = col ? `custom_field:${col.header}` : val;
       } else {
-        columnMapping[idx.toString()] = val;
+        let mappedValue = val;
+        if (this.customFieldDuplicates().has(Number(idx)) && val !== 'ignore') {
+          mappedValue += '+cf';
+        }
+        columnMapping[idx.toString()] = mappedValue;
       }
     }
 
@@ -780,16 +824,23 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
 
     const cols = this.columns();
     const newMappings: Record<number, string> = {};
+    const newDuplicates = new Set<number>();
 
     for (const col of cols) {
-      const field = template.columnMapping[col.header];
+      let field = template.columnMapping[col.header];
       if (field) {
+        // Detectar sufijo +cf y activar checkbox
+        if (field.endsWith('+cf')) {
+          field = field.slice(0, -3);
+          newDuplicates.add(col.index);
+        }
         // For custom_field:X format, display as 'custom_field' in the dropdown
         newMappings[col.index] = field.startsWith('custom_field:') ? 'custom_field' : field;
       }
     }
 
     this.mappings.set(newMappings);
+    this.customFieldDuplicates.set(newDuplicates);
     this.templateDismissed.set(true);
     this.toast.success(`Template "${template.name}" aplicado.`);
   }
@@ -824,7 +875,11 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
       headers.push(col.header);
       const field = m[col.index];
       if (field) {
-        columnMapping[col.header] = field === 'custom_field' ? `custom_field:${col.header}` : field;
+        let mappedValue = field === 'custom_field' ? `custom_field:${col.header}` : field;
+        if (this.customFieldDuplicates().has(col.index) && field !== 'custom_field' && field !== 'ignore') {
+          mappedValue += '+cf';
+        }
+        columnMapping[col.header] = mappedValue;
       }
     }
 
