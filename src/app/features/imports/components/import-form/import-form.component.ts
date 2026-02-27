@@ -819,7 +819,9 @@ export class ImportFormComponent implements OnDestroy {
    * Check which required fields are missing from the mapping.
    */
   private getMissingRequiredFields(mapping: Record<string, string>): string[] {
-    const assignedFields = new Set(Object.values(mapping));
+    const assignedFields = new Set(
+      Object.values(mapping).map(v => v.endsWith('+cf') ? v.slice(0, -3) : v)
+    );
     return ImportFormComponent.REQUIRED_FIELDS.filter(f => !assignedFields.has(f));
   }
 
