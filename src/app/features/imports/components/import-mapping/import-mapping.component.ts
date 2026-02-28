@@ -664,6 +664,7 @@ export class ImportMappingComponent implements OnInit, OnDestroy {
     { value: 'codigo', label: 'Código', dbField: 'codigo', required: false },
     { value: 'role', label: 'Rol', dbField: 'role', required: false },
     { value: 'phone_code', label: 'Cód. País', dbField: 'phone_code', required: false },
+    { value: 'import_string', label: 'Import string', dbField: 'import_string', required: false },
     { value: 'manager_email', label: 'Vinculador de agente', dbField: 'manager_email', required: false, category: 'linker' },
     { value: 'phone_order', label: 'Orden teléfono', dbField: 'phone_order', required: false },
     { value: 'custom_field', label: 'Campo personalizado', dbField: 'custom_fields', required: false },
