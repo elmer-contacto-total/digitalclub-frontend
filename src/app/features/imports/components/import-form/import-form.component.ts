@@ -890,8 +890,7 @@ export class ImportFormComponent implements OnDestroy {
         this.router.navigate(['/app/imports', importId, 'preview']);
       },
       error: (err) => {
-        console.error('Error confirming mapping — status:', err.status, 'type:', typeof err.error, 'error:', err.error);
-        console.error('Full error object:', JSON.stringify(err, null, 2));
+        console.error('Error confirming mapping:', err.status, err.error?.message || err.message);
         this.isSubmitting.set(false);
         const msg = err.error?.message || err.message || 'Error al confirmar el mapeo de columnas.';
         this.errors.set([msg]);
