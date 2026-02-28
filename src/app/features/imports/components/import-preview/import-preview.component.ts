@@ -1209,8 +1209,9 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
         this.router.navigate(['/app/imports', this.importId, 'progress']);
       },
       error: (err) => {
-        console.error('Error confirming import:', err);
-        this.toast.error('Error al iniciar importación');
+        console.error('Error confirming import:', err.status, err.error?.message || err.message);
+        const msg = err.error?.message || err.message || 'Error al iniciar importación';
+        this.toast.error(msg);
         this.isProcessing.set(false);
       }
     });
