@@ -169,7 +169,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
             <tbody>
               @for (user of tempUsers(); track user.id; let i = $index) {
                 <tr [class.row-error]="user.errorMessage">
-                  <td class="col-row-num">{{ startRecord() + i }}</td>
+                  <td class="col-row-num">{{ user.phoneOrder ?? (startRecord() + i) }}</td>
                   <td>{{ user.codigo }}</td>
                   <td>{{ user.lastName }}</td>
                   <td>{{ user.firstName }}</td>
