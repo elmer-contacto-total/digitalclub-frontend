@@ -4,7 +4,6 @@
 .admin-layout {
   --impersonation-bar-height: 0px;
   min-height: 100vh;
-  display: flex;
   background: var(--bg-base);
 
   &.impersonation-active {
@@ -13,7 +12,6 @@
 }
 
 .main-wrapper {
-  flex: 1;
   display: flex;
   flex-direction: column;
   margin-left: var(--sidebar-width);
