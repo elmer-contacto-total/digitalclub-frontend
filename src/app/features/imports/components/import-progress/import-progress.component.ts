@@ -57,10 +57,11 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
               <div>
                 <strong>Importación completada</strong>
                 <p>
-                  {{ validCount() }} usuarios importados exitosamente.
+                  {{ validCount() }} usuarios importados exitosamente
                   @if (errorCount() > 0) {
-                    {{ errorCount() }} con errores.
+                    y {{ errorCount() }} con errores
                   }
+                  de {{ importData()?.totRecords || 0 }} registros totales.
                 </p>
               </div>
             </div>
@@ -484,10 +485,18 @@ export class ImportProgressComponent implements OnInit, OnDestroy {
           this.errorsText.set(progress.errors);
         }
 
+        // Capture counts from backend as they arrive
+        if (progress.validCount != null) {
+          this.validCount.set(progress.validCount);
+        }
+        if (progress.invalidCount != null) {
+          this.errorCount.set(progress.invalidCount);
+        }
+
         // Update import data status
         this.importData.update(data => {
           if (data) {
-            return { ...data, status: progress.status };
+            return { ...data, status: progress.status, totRecords: progress.totRecords };
           }
           return data;
         });

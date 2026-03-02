@@ -203,6 +203,8 @@ export class ImportService {
     progress: number;
     progressPercent: number;
     totRecords: number;
+    validCount?: number;
+    invalidCount?: number;
     message: string;
     errors: string;
     status: ImportStatus;
@@ -211,6 +213,8 @@ export class ImportService {
       progress: number;
       progressPercent: number;
       totRecords: number;
+      validCount?: number;
+      invalidCount?: number;
       message: string;
       errors: string;
       status: ImportStatus;
