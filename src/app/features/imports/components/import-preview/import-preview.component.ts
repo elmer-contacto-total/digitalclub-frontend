@@ -13,7 +13,6 @@ import { ImportService, Import, ImportStatus, TempImportUser, UnmatchedColumn } 
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
-import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
 
 @Component({
   selector: 'app-import-preview',
@@ -23,8 +22,7 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     RouterLink,
     FormsModule,
     LoadingSpinnerComponent,
-    PaginationComponent,
-    ConfirmDialogComponent
+    PaginationComponent
   ],
   template: `
     <div class="imports-page">
@@ -165,103 +163,21 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
                     Error
                   }
                 </th>
-                <th class="col-actions">Acciones</th>
               </tr>
             </thead>
             <tbody>
               @for (user of tempUsers(); track user.id) {
-                <tr [class.row-error]="user.errorMessage" [class.row-editing]="editingUserId() === user.id">
-                  <!-- Codigo -->
-                  <td>
-                    @if (editingUserId() === user.id) {
-                      <input class="inline-input" [(ngModel)]="editForm.codigo" />
-                    } @else {
-                      {{ user.codigo }}
-                    }
-                  </td>
-                  <!-- Apellido -->
-                  <td>
-                    @if (editingUserId() === user.id) {
-                      <input class="inline-input" [(ngModel)]="editForm.lastName" />
-                    } @else {
-                      {{ user.lastName }}
-                    }
-                  </td>
-                  <!-- Nombres -->
-                  <td>
-                    @if (editingUserId() === user.id) {
-                      <input class="inline-input" [(ngModel)]="editForm.firstName" />
-                    } @else {
-                      {{ user.firstName }}
-                    }
-                  </td>
-                  <!-- Teléfono -->
-                  <td>
-                    @if (editingUserId() === user.id) {
-                      <input class="inline-input" [(ngModel)]="editForm.phone" />
-                    } @else {
-                      {{ user.phone }}
-                    }
-                  </td>
-                  <!-- Cód. País -->
-                  <td>
-                    @if (editingUserId() === user.id) {
-                      <input class="inline-input inline-input-sm" [(ngModel)]="editForm.phoneCode" />
-                    } @else {
-                      {{ user.phoneCode }}
-                    }
-                  </td>
-                  <!-- Email -->
-                  <td>
-                    @if (editingUserId() === user.id) {
-                      <input class="inline-input" [(ngModel)]="editForm.email" />
-                    } @else {
-                      {{ user.email }}
-                    }
-                  </td>
-                  <!-- Rol -->
-                  <td>
-                    @if (editingUserId() === user.id) {
-                      <input class="inline-input inline-input-sm" [(ngModel)]="editForm.role" />
-                    } @else {
-                      {{ user.role }}
-                    }
-                  </td>
-                  <!-- Ejecutivo -->
-                  <td>
-                    @if (editingUserId() === user.id) {
-                      <input class="inline-input" [(ngModel)]="editForm.managerEmail" />
-                    } @else {
-                      {{ user.managerEmail }}
-                    }
-                  </td>
-                  <!-- CRM -->
+                <tr [class.row-error]="user.errorMessage">
+                  <td>{{ user.codigo }}</td>
+                  <td>{{ user.lastName }}</td>
+                  <td>{{ user.firstName }}</td>
+                  <td>{{ user.phone }}</td>
+                  <td>{{ user.phoneCode }}</td>
+                  <td>{{ user.email }}</td>
+                  <td>{{ user.role }}</td>
+                  <td>{{ user.managerEmail }}</td>
                   <td class="text-subtle">{{ formatCrmFields(user.crmFields) }}</td>
-                  <!-- Error -->
                   <td class="error-cell">{{ user.errorMessage }}</td>
-                  <!-- Actions -->
-                  <td class="col-actions">
-                    @if (editingUserId() === user.id) {
-                      <div class="row-actions">
-                        <button class="action-btn action-btn-success" (click)="saveEdit(user.id)" title="Guardar"
-                          [disabled]="isSavingEdit()">
-                          <i class="ph ph-check"></i>
-                        </button>
-                        <button class="action-btn" (click)="cancelEdit()" title="Cancelar">
-                          <i class="ph ph-x"></i>
-                        </button>
-                      </div>
-                    } @else if (user.errorMessage) {
-                      <div class="row-actions">
-                        <button class="action-btn" (click)="startEdit(user)" title="Editar">
-                          <i class="ph ph-pencil-simple"></i>
-                        </button>
-                        <button class="action-btn action-btn-danger" (click)="confirmDeleteUser(user.id)" title="Eliminar">
-                          <i class="ph ph-trash"></i>
-                        </button>
-                      </div>
-                    }
-                  </td>
                 </tr>
               }
             </tbody>
@@ -312,19 +228,6 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
         <app-loading-spinner [fullscreen]="true" message="Cargando datos..." />
       }
 
-      <!-- Delete Confirmation Dialog -->
-      @if (userToDelete() !== null) {
-        <app-confirm-dialog
-          [isOpen]="true"
-          title="Eliminar Registro"
-          message="¿Está seguro de eliminar este registro? Esta acción no se puede deshacer."
-          type="danger"
-          confirmLabel="Eliminar"
-          [isLoading]="isDeletingUser()"
-          (confirmed)="deleteUser()"
-          (cancelled)="userToDelete.set(null)"
-        />
-      }
     </div>
   `,
   styles: [`
@@ -624,10 +527,6 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
       background: var(--error-subtle) !important;
     }
 
-    .row-editing {
-      background: var(--info-subtle) !important;
-    }
-
     .error-cell {
       color: var(--error-text);
       font-weight: var(--font-medium);
@@ -636,75 +535,6 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     }
 
     .text-subtle { color: var(--fg-subtle); }
-
-    .col-actions {
-      width: 90px;
-      text-align: center;
-    }
-
-    /* Inline Edit Inputs */
-    .inline-input {
-      width: 100%;
-      min-width: 80px;
-      padding: var(--space-1) var(--space-2);
-      border: 1px solid var(--border-default);
-      border-radius: var(--radius-sm);
-      font-size: var(--text-sm);
-      background: var(--input-bg);
-      color: var(--fg-default);
-
-      &:focus {
-        outline: none;
-        border-color: var(--accent-default);
-        box-shadow: 0 0 0 2px var(--accent-subtle, rgba(59, 130, 246, 0.15));
-      }
-    }
-
-    .inline-input-sm {
-      min-width: 50px;
-      max-width: 80px;
-    }
-
-    /* Row Actions */
-    .row-actions {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: var(--space-1);
-    }
-
-    .action-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      border: none;
-      border-radius: var(--radius-md);
-      background: transparent;
-      color: var(--fg-muted);
-      cursor: pointer;
-      transition: all var(--duration-fast);
-
-      &:hover:not(:disabled) {
-        background: var(--bg-muted);
-        color: var(--fg-default);
-      }
-
-      &:disabled { opacity: 0.5; cursor: not-allowed; }
-
-      i { font-size: 16px; }
-    }
-
-    .action-btn-danger:hover:not(:disabled) {
-      background: var(--error-subtle);
-      color: var(--error-default);
-    }
-
-    .action-btn-success:hover:not(:disabled) {
-      background: var(--success-subtle);
-      color: var(--success-default);
-    }
 
     /* Table Footer */
     .table-footer {
@@ -840,24 +670,6 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
   searchQuery = signal('');
   private searchSubject$ = new Subject<string>();
 
-  // Inline editing
-  editingUserId = signal<number | null>(null);
-  editForm = {
-    codigo: '',
-    firstName: '',
-    lastName: '',
-    phone: '',
-    phoneCode: '',
-    email: '',
-    role: '',
-    managerEmail: ''
-  };
-  isSavingEdit = signal(false);
-
-  // Delete
-  userToDelete = signal<number | null>(null);
-  isDeletingUser = signal(false);
-
   // State
   isLoading = signal(true);
   isValidating = signal(false);
@@ -887,7 +699,6 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     ).subscribe(query => {
       this.searchQuery.set(query);
       this.currentPage.set(1);
-      this.cancelEdit();
       this.loadTempUsers();
     });
   }
@@ -994,14 +805,12 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
 
   onPageChange(page: number): void {
     this.currentPage.set(page);
-    this.cancelEdit();
     this.loadTempUsers();
   }
 
   onPageSizeChange(size: number): void {
     this.pageSize.set(size);
     this.currentPage.set(1);
-    this.cancelEdit();
     this.loadTempUsers();
   }
 
@@ -1011,7 +820,6 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     if (this.errorFilter() === filter) return;
     this.errorFilter.set(filter);
     this.currentPage.set(1);
-    this.cancelEdit();
     this.loadTempUsers();
   }
 
@@ -1026,114 +834,6 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
     this.searchSubject$.next('');
     this.currentPage.set(1);
     this.loadTempUsers();
-  }
-
-  // ===== Inline Edit =====
-
-  startEdit(user: TempImportUser): void {
-    this.editingUserId.set(user.id);
-    this.editForm = {
-      codigo: user.codigo || '',
-      firstName: user.firstName || '',
-      lastName: user.lastName || '',
-      phone: user.phone || '',
-      phoneCode: user.phoneCode || '',
-      email: user.email || '',
-      role: user.role || '',
-      managerEmail: user.managerEmail || ''
-    };
-  }
-
-  cancelEdit(): void {
-    this.editingUserId.set(null);
-    this.editForm = { codigo: '', firstName: '', lastName: '', phone: '', phoneCode: '', email: '', role: '', managerEmail: '' };
-  }
-
-  saveEdit(userId: number): void {
-    this.isSavingEdit.set(true);
-
-    this.importService.updateTempUser(this.importId, userId, this.editForm).pipe(
-      takeUntil(this.destroy$)
-    ).subscribe({
-      next: () => {
-        // 1. Optimistic UI: update the record locally immediately
-        this.tempUsers.update(users => users.map(u =>
-          u.id === userId ? { ...u, ...this.editForm, errorMessage: null } : u
-        ));
-        this.cancelEdit();
-        this.isSavingEdit.set(false);
-
-        // 2. Partial revalidation in background
-        this.importService.revalidateAffected(this.importId, { tempUserId: userId }).pipe(
-          takeUntil(this.destroy$)
-        ).subscribe({
-          next: (result) => {
-            this.validCount.set(result.validCount);
-            this.invalidCount.set(result.invalidCount);
-            this.loadTempUsers();
-          },
-          error: () => this.loadTempUsers()
-        });
-      },
-      error: (err) => {
-        console.error('Error updating temp user:', err);
-        this.toast.error('Error al guardar cambios');
-        this.isSavingEdit.set(false);
-      }
-    });
-  }
-
-  // ===== Delete =====
-
-  confirmDeleteUser(userId: number): void {
-    this.userToDelete.set(userId);
-  }
-
-  deleteUser(): void {
-    const userId = this.userToDelete();
-    if (userId === null) return;
-
-    this.isDeletingUser.set(true);
-
-    // Capture phone/email before deletion for partial revalidation
-    const deletedUser = this.tempUsers().find(u => u.id === userId);
-
-    this.importService.deleteTempUser(this.importId, userId).pipe(
-      takeUntil(this.destroy$)
-    ).subscribe({
-      next: () => {
-        // 1. Optimistic UI: remove from array + adjust counts immediately
-        this.tempUsers.update(users => users.filter(u => u.id !== userId));
-        this.totalElements.update(n => Math.max(0, n - 1));
-        if (deletedUser?.errorMessage) {
-          this.invalidCount.update(n => Math.max(0, n - 1));
-        } else {
-          this.validCount.update(n => Math.max(0, n - 1));
-        }
-        this.userToDelete.set(null);
-        this.isDeletingUser.set(false);
-        this.toast.success('Registro eliminado');
-
-        // 2. Partial revalidation in background (using phone/email of the deleted record)
-        this.importService.revalidateAffected(this.importId, {
-          deletedPhone: deletedUser?.phone,
-          deletedEmail: deletedUser?.email
-        }).pipe(takeUntil(this.destroy$)).subscribe({
-          next: (result) => {
-            this.validCount.set(result.validCount);
-            this.invalidCount.set(result.invalidCount);
-            this.loadTempUsers();
-          },
-          error: () => this.loadTempUsers()
-        });
-      },
-      error: (err) => {
-        console.error('Error deleting temp user:', err);
-        this.toast.error('Error al eliminar registro');
-        this.isDeletingUser.set(false);
-        this.userToDelete.set(null);
-      }
-    });
   }
 
   // ===== CRM / Columns =====
