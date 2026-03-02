@@ -147,6 +147,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           <table class="data-table">
             <thead>
               <tr>
+                <th class="col-row-num">#</th>
                 <th>Codigo</th>
                 <th>Apellido</th>
                 <th>Nombres</th>
@@ -166,8 +167,9 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
               </tr>
             </thead>
             <tbody>
-              @for (user of tempUsers(); track user.id) {
+              @for (user of tempUsers(); track user.id; let i = $index) {
                 <tr [class.row-error]="user.errorMessage">
+                  <td class="col-row-num">{{ startRecord() + i }}</td>
                   <td>{{ user.codigo }}</td>
                   <td>{{ user.lastName }}</td>
                   <td>{{ user.firstName }}</td>
@@ -532,6 +534,13 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
       font-weight: var(--font-medium);
       font-size: var(--text-xs);
       max-width: 250px;
+    }
+
+    .col-row-num {
+      width: 50px;
+      text-align: center;
+      color: var(--fg-subtle);
+      font-variant-numeric: tabular-nums;
     }
 
     .text-subtle { color: var(--fg-subtle); }
