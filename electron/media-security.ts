@@ -751,6 +751,7 @@ const MEDIA_CAPTURE_SCRIPT = `
   const messageNoMediaScans = new Map(); // messageId → consecutive scans without media elements (for Method 3)
   const messageSeenInDOM = new Set();    // Messages actually observed in DOM (not just re-baselined)
   const messagesWithTimer = new Set();   // Messages with disappearing timer icon (ephemeral)
+  const messageContentSnapshot = new Map(); // DIAG-D: messageId → first 80 chars of textContent (for change detection)
 
   // Restore persisted tracking state from previous sessions
   try {
@@ -2586,6 +2587,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       if (messageEl) {
         // Extraer ID del mensaje
         lastAudioWhatsappMessageId = messageEl.getAttribute('data-id') || null;
+        lastAudioContextTime = Date.now(); // Set immediately so play() knows click handler ran
 
         // Check for disappearing message timer icon
         if (lastAudioWhatsappMessageId && messageEl.querySelector('[data-testid*="timer"], [data-icon*="timer"], [data-testid*="expire"], [data-icon*="expire"]')) {
@@ -2660,16 +2662,22 @@ const MEDIA_CAPTURE_SCRIPT = `
           let messageSentAt = null;
           let whatsappMessageId = null;
 
-          if (lastAudioMessageTimestamp && lastAudioContextTime > 0) {
-            messageSentAt = lastAudioMessageTimestamp;
+          if (lastAudioContextTime > 0) {
+            // Click handler ran — use whatsappMessageId always, timestamp if available
             whatsappMessageId = lastAudioWhatsappMessageId;
-            console.log('[MWS Debug] Audio play: usando contexto del click:', messageSentAt);
+            messageSentAt = lastAudioMessageTimestamp;
+            if (!messageSentAt) {
+              // Timestamp extraction failed in click handler, try fallback
+              const extracted = extractMessageTimestamp(audioElement);
+              messageSentAt = extracted.messageSentAt;
+            }
+            console.log('[MWS Debug] Audio play: contexto del click msgId:', whatsappMessageId, 'ts:', messageSentAt);
           } else {
-            // Solo fallback si el click listener NO capturó nada
+            // Click listener didn't fire — full fallback
             const extracted = extractMessageTimestamp(audioElement);
             messageSentAt = extracted.messageSentAt;
             whatsappMessageId = extracted.whatsappMessageId;
-            console.log('[MWS Debug] Audio play: fallback extractMessageTimestamp:', messageSentAt);
+            console.log('[MWS Debug] Audio play: fallback extractMessageTimestamp:', messageSentAt, 'msgId:', whatsappMessageId);
           }
 
           // Limpiar contexto para evitar reusar timestamp de otro audio
@@ -2693,6 +2701,7 @@ const MEDIA_CAPTURE_SCRIPT = `
               size: blob.size,
               duration: audioElement.duration || 0,
               chatPhone: getCurrentChatPhone(),
+              chatName: getCurrentChatHeaderName(),
               timestamp: new Date().toISOString(),
               messageSentAt: messageSentAt,
               whatsappMessageId: whatsappMessageId,
@@ -2826,6 +2835,32 @@ const MEDIA_CAPTURE_SCRIPT = `
       return;
     }
 
+    // DIAG-A: Log DOM structure on first scan and every 100 scans
+    if (deletionScanCount === 1 || deletionScanCount % 100 === 0) {
+      var allMsgEls = document.querySelectorAll('#main [data-id]');
+      if (allMsgEls.length > 0) {
+        var sample = allMsgEls[0];
+        var parentChain = [];
+        var p = sample;
+        for (var di = 0; di < 8 && p && p !== document.body; di++) {
+          parentChain.push(p.tagName + (p.id ? '#' + p.id : '') +
+            (p.getAttribute('data-id') ? '[data-id]' : ''));
+          p = p.parentElement;
+        }
+        var diagParent = sample.parentElement;
+        var sibCount = diagParent ? diagParent.childElementCount : 0;
+        var sibsWithDataId = 0;
+        if (diagParent) {
+          for (var dc = 0; dc < diagParent.children.length && dc < 20; dc++) {
+            if (diagParent.children[dc].getAttribute('data-id')) sibsWithDataId++;
+          }
+        }
+        console.log('[MWS DIAG-A] DOM structure: msgs=' + allMsgEls.length +
+          ' parentChain=' + parentChain.join(' > ') +
+          ' siblingCount=' + sibCount + ' sibsWithDataId=' + sibsWithDataId);
+      }
+    }
+
     // Guard 2: View explicitly hidden (hideWhatsApp or overlay mode)
     if (!viewVisible) {
       viewWasHidden = true;
@@ -2872,14 +2907,16 @@ const MEDIA_CAPTURE_SCRIPT = `
             continue;
           }
 
-          // Record both neighbors for future absence checks
-          var nextNb = rebaseEl.nextElementSibling;
-          while (nextNb && !nextNb.getAttribute('data-id')) nextNb = nextNb.nextElementSibling;
-          var prevNb = rebaseEl.previousElementSibling;
-          while (prevNb && !prevNb.getAttribute('data-id')) prevNb = prevNb.previousElementSibling;
+          // Record both neighbors using index-based lookup from cached DOM query
+          // (robust regardless of how many wrapper DIVs WhatsApp uses)
+          var rebaseAllMsgs = document.querySelectorAll('#main [data-id]');
+          var rebaseIdx = -1;
+          for (var ri = 0; ri < rebaseAllMsgs.length; ri++) {
+            if (rebaseAllMsgs[ri].getAttribute('data-id') === rebaseId) { rebaseIdx = ri; break; }
+          }
           messageNeighbor.set(rebaseId, {
-            next: nextNb ? nextNb.getAttribute('data-id') : null,
-            prev: prevNb ? prevNb.getAttribute('data-id') : null
+            next: rebaseIdx >= 0 && rebaseIdx < rebaseAllMsgs.length - 1 ? rebaseAllMsgs[rebaseIdx + 1].getAttribute('data-id') : null,
+            prev: rebaseIdx > 0 ? rebaseAllMsgs[rebaseIdx - 1].getAttribute('data-id') : null
           });
         } else if (messageSeenInDOM.has(rebaseId)) {
           // Message was seen in DOM before but is now gone after chat change.
@@ -2920,6 +2957,13 @@ const MEDIA_CAPTURE_SCRIPT = `
       viewWasHidden = false;
     }
 
+    // Cache all data-id elements for index-based neighbor lookup (once per scan)
+    var allDomMessages = document.querySelectorAll('#main [data-id]');
+    var domIdToIndex = {};
+    for (var dmi = 0; dmi < allDomMessages.length; dmi++) {
+      domIdToIndex[allDomMessages[dmi].getAttribute('data-id')] = dmi;
+    }
+
     // Only check messages that we know had media (captured in this session)
     for (const messageId of messagesWithMedia) {
       if (detectedDeletions.has(messageId)) continue;
@@ -2947,6 +2991,44 @@ const MEDIA_CAPTURE_SCRIPT = `
       debugEntries.push(debugEntry);
 
       if (!messageEl) {
+        // DIAG-C: One-time full DOM scan when a tracked message first disappears
+        if (messageSeenInDOM.has(messageId)) {
+          if (!window.__diagDisappeared) window.__diagDisappeared = new Set();
+          if (!window.__diagDisappeared.has(messageId)) {
+            window.__diagDisappeared.add(messageId);
+            var allDiagEls = document.querySelectorAll('#main [data-id]');
+            var deletionFindings = [];
+            for (var dfi = 0; dfi < allDiagEls.length; dfi++) {
+              var diagEl = allDiagEls[dfi];
+              var diagElText = (diagEl.textContent || '').substring(0, 80);
+              var diagElId = diagEl.getAttribute('data-id') || '';
+              var diagHasRecalled = !!diagEl.querySelector('[data-testid="recalled"], [data-icon="recalled"], [data-testid="msg-revoked"]');
+              var diagHasDeleteText = diagElText.includes('Se elimin') || diagElText.includes('deleted') || diagElText.includes('eliminado') || diagElText.includes('Waiting for this message');
+              if (diagHasRecalled || diagHasDeleteText) {
+                deletionFindings.push({
+                  dataId: diagElId.substring(0, 50),
+                  recalled: diagHasRecalled,
+                  text: diagElText,
+                  sameAsOriginal: diagElId === messageId
+                });
+              }
+            }
+            console.log('[MWS DIAG-C] Message DISAPPEARED from DOM: ' + messageId.substring(0, 50));
+            console.log('[MWS DIAG-C] Total elements with data-id in #main: ' + allDiagEls.length);
+            console.log('[MWS DIAG-C] Elements with deletion markers/text: ' + deletionFindings.length);
+            if (deletionFindings.length > 0) {
+              deletionFindings.forEach(function(f) {
+                console.log('[MWS DIAG-C]   -> dataId=' + f.dataId +
+                  ' sameId=' + f.sameAsOriginal +
+                  ' recalled=' + f.recalled +
+                  ' text="' + f.text + '"');
+              });
+            } else {
+              console.log('[MWS DIAG-C]   -> No deletion markers found in any visible message');
+            }
+          }
+        }
+
         // Message not in DOM. Could be: deleted, scrolled away, or chat switched.
         // If capturedChat is null (header wasn't visible at capture), allow check in any chat
         // — neighbor presence + messageSeenInDOM guards are sufficient to prevent false positives.
@@ -2967,10 +3049,10 @@ const MEDIA_CAPTURE_SCRIPT = `
             }
           }
 
-          // Fallback: neighbors absent or all out of DOM. After 60s (20 scans)
+          // Fallback: neighbors absent or all out of DOM. After 15s (5 scans)
           // in the same chat, if the message was confirmed in DOM before, flag as
           // deleted. Covers out-of-viewport deletions that the observer missed.
-          if (!isDeleted && scansSinceSeen >= 20 && messageSeenInDOM.has(messageId)) {
+          if (!isDeleted && scansSinceSeen >= 5 && messageSeenInDOM.has(messageId)) {
             isDeleted = true;
           }
 
@@ -3000,15 +3082,34 @@ const MEDIA_CAPTURE_SCRIPT = `
       // Message is in DOM — update last seen and neighbor
       messageSeenInDOM.add(messageId);
       messageLastSeen.set(messageId, deletionScanCount);
-      // Record both neighbors with data-id for scroll vs deletion disambiguation
-      var nextNbScan = messageEl.nextElementSibling;
-      while (nextNbScan && !nextNbScan.getAttribute('data-id')) nextNbScan = nextNbScan.nextElementSibling;
-      var prevNbScan = messageEl.previousElementSibling;
-      while (prevNbScan && !prevNbScan.getAttribute('data-id')) prevNbScan = prevNbScan.previousElementSibling;
+
+      // DIAG-D: Track content changes (detect "Se eliminó" transition on same data-id)
+      var currentContent = (messageEl.textContent || '').substring(0, 80);
+      var prevContent = messageContentSnapshot.get(messageId);
+      if (prevContent && prevContent !== currentContent) {
+        console.log('[MWS DIAG-D] Content CHANGED for ' + messageId.substring(0, 40));
+        console.log('[MWS DIAG-D]   before: "' + prevContent + '"');
+        console.log('[MWS DIAG-D]   after:  "' + currentContent + '"');
+      }
+      messageContentSnapshot.set(messageId, currentContent);
+
+      // Record both neighbors using index-based lookup from cached querySelectorAll.
+      // WhatsApp nests each message 8+ DIVs deep, so sibling walking is unreliable.
+      var myIdx = domIdToIndex[messageId];
+      var nextNbId = myIdx !== undefined && myIdx < allDomMessages.length - 1 ? allDomMessages[myIdx + 1].getAttribute('data-id') : null;
+      var prevNbId = myIdx !== undefined && myIdx > 0 ? allDomMessages[myIdx - 1].getAttribute('data-id') : null;
       messageNeighbor.set(messageId, {
-        next: nextNbScan ? nextNbScan.getAttribute('data-id') : null,
-        prev: prevNbScan ? prevNbScan.getAttribute('data-id') : null
+        next: nextNbId,
+        prev: prevNbId
       });
+
+      // DIAG-B: Log neighbor detail (first time per message + first 3 debug entries)
+      if (!prevContent || debugEntries.length <= 3) {
+        console.log('[MWS DIAG-B] Neighbors for ' + messageId.substring(0, 40) +
+          ': next=' + (nextNbId ? nextNbId.substring(0, 30) : 'NULL') +
+          ' prev=' + (prevNbId ? prevNbId.substring(0, 30) : 'NULL') +
+          ' | idx=' + myIdx + '/' + allDomMessages.length);
+      }
 
       // Check for deletion markers (Methods 1-2: instant, high confidence)
       if (isMessageDeletedByMarker(messageEl)) {
