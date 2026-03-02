@@ -61,6 +61,7 @@ export interface ObjectOption {
 
     .object-buttons {
       display: flex;
+      flex-wrap: wrap;
       gap: var(--space-2);
     }
 
