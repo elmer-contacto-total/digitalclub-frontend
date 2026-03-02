@@ -7,7 +7,7 @@ import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { Subject, takeUntil, interval, switchMap, takeWhile } from 'rxjs';
-import { ImportService, Import, TempImportUser } from '../../../../core/services/import.service';
+import { ImportService, Import, TempImportUser, ValidatedUsersResponse } from '../../../../core/services/import.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
@@ -56,7 +56,12 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
               <i class="ph ph-check-circle"></i>
               <div>
                 <strong>Importación completada</strong>
-                <p>Se importaron {{ importData()?.totRecords }} usuarios exitosamente.</p>
+                <p>
+                  {{ validCount() }} usuarios importados exitosamente.
+                  @if (errorCount() > 0) {
+                    {{ errorCount() }} con errores.
+                  }
+                </p>
               </div>
             </div>
           } @else if (importData()?.status === 'status_error') {
@@ -73,34 +78,32 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
         }
       </div>
 
-      <!-- Table -->
+      <!-- Error users table (loaded after completion) -->
       @if (tempUsers().length > 0) {
+        <h2 class="section-title">
+          <i class="ph ph-warning"></i>
+          Registros con errores ({{ errorCount() }})
+        </h2>
         <div class="table-card">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Codigo</th>
-                <th>Email</th>
+                <th>Fila</th>
+                <th>Teléfono</th>
                 <th>Nombres</th>
                 <th>Apellido</th>
-                <th>Cód. País</th>
-                <th>Teléfono</th>
-                <th>Rol</th>
-                <th>Manager</th>
+                <th>Email</th>
                 <th>Error</th>
               </tr>
             </thead>
             <tbody>
               @for (user of tempUsers(); track user.id) {
-                <tr [class.row-error]="user.errorMessage">
-                  <td>{{ user.codigo }}</td>
-                  <td>{{ user.email }}</td>
+                <tr class="row-error">
+                  <td>{{ user.phoneOrder }}</td>
+                  <td>{{ user.phone }}</td>
                   <td>{{ user.firstName }}</td>
                   <td>{{ user.lastName }}</td>
-                  <td>{{ user.phoneCode }}</td>
-                  <td>{{ user.phone }}</td>
-                  <td>{{ getRoleLabel(user.role) }}</td>
-                  <td>{{ user.managerEmail }}</td>
+                  <td>{{ user.email }}</td>
                   <td class="error-cell">{{ user.errorMessage }}</td>
                 </tr>
               }
@@ -204,6 +207,16 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
     .progress-complete { background: var(--success-default); }
     .progress-error { background: var(--error-default); }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-lg);
+      font-weight: var(--font-semibold);
+      color: var(--error-text);
+      margin-bottom: var(--space-3);
+    }
 
     /* Result Banners */
     .result-banner {
@@ -372,6 +385,10 @@ export class ImportProgressComponent implements OnInit, OnDestroy {
   progressMessage = signal('Iniciando procesamiento...');
   errorsText = signal('');
 
+  // Counts
+  validCount = signal(0);
+  errorCount = signal(0);
+
   // State
   isLoading = signal(true);
   isComplete = signal(false);
@@ -404,6 +421,7 @@ export class ImportProgressComponent implements OnInit, OnDestroy {
 
         if (this.importService.isComplete(data.status)) {
           this.isComplete.set(true);
+          this.loadErrorUsers();
         }
       },
       error: (err) => {
@@ -411,6 +429,21 @@ export class ImportProgressComponent implements OnInit, OnDestroy {
         this.toast.error('Error al cargar datos de importación');
         this.isLoading.set(false);
         this.router.navigate(['/app/imports']);
+      }
+    });
+  }
+
+  loadErrorUsers(): void {
+    this.importService.getValidatedUsers(this.importId, 0, 200, 'errors').pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (response) => {
+        this.tempUsers.set(response.tempUsers || []);
+        this.validCount.set(response.validCount || 0);
+        this.errorCount.set(response.invalidCount || 0);
+      },
+      error: (err) => {
+        console.error('Error loading error users:', err);
       }
     });
   }

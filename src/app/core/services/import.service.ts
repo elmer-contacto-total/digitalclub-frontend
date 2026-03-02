@@ -112,6 +112,7 @@ export interface TempImportUser {
   lastName: string;
   phone: string;
   phoneCode: string;
+  phoneOrder: number | null;
   email: string;
   managerEmail: string;
   crmFields: Record<string, string> | null;
