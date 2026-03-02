@@ -6,7 +6,7 @@
 import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
-import { Subject, takeUntil, interval, switchMap, takeWhile } from 'rxjs';
+import { Subject, takeUntil, interval, switchMap, takeWhile, catchError, EMPTY } from 'rxjs';
 import { ImportService, Import, TempImportUser, ValidatedUsersResponse } from '../../../../core/services/import.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
@@ -392,6 +392,7 @@ export class ImportProgressComponent implements OnInit, OnDestroy {
   // State
   isLoading = signal(true);
   isComplete = signal(false);
+  private pollFailures = 0;
 
   ngOnInit(): void {
     this.route.params.pipe(
@@ -449,13 +450,33 @@ export class ImportProgressComponent implements OnInit, OnDestroy {
   }
 
   startPolling(): void {
-    // Poll every 1 second until processing is complete
-    interval(1000).pipe(
+    // Poll every 2 seconds until processing is complete
+    interval(2000).pipe(
       takeUntil(this.destroy$),
-      switchMap(() => this.importService.getProgress(this.importId)),
+      switchMap(() => this.importService.getProgress(this.importId).pipe(
+        catchError(err => {
+          this.pollFailures++;
+          console.error(`Error polling progress (intento ${this.pollFailures}):`, err);
+
+          if (this.pollFailures === 3) {
+            this.toast.error('Problemas de conexión. Reintentando...');
+          }
+
+          if (this.pollFailures >= 10) {
+            this.progressMessage.set('Se perdió la conexión con el servidor');
+            this.toast.error('No se pudo obtener el progreso. Recargue la página.');
+            // Try one last load to get final state
+            this.loadImportData();
+          }
+
+          return EMPTY; // Skip this tick, keep polling
+        })
+      )),
+      takeWhile(() => this.pollFailures < 10),
       takeWhile(progress => progress.status !== 'status_completed' && progress.status !== 'status_error', true)
     ).subscribe({
       next: (progress) => {
+        this.pollFailures = 0; // Reset on success
         this.progressPercent.set(progress.progressPercent);
         this.progressMessage.set(progress.message || 'Procesando...');
 
@@ -487,9 +508,6 @@ export class ImportProgressComponent implements OnInit, OnDestroy {
           // Reload full data
           this.loadImportData();
         }
-      },
-      error: (err) => {
-        console.error('Error polling progress:', err);
       }
     });
   }
