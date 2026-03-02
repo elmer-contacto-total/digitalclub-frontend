@@ -323,12 +323,12 @@
   text-align: left;
 
   &:hover {
-    background: var(--sidebar-hover);
+    background: var(--sidebar-item-hover);
     color: var(--fg-default);
   }
 
   &.active {
-    background: var(--sidebar-active);
+    background: var(--sidebar-item-active);
     color: var(--accent-default);
 
     .nav-icon {
