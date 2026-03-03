@@ -764,11 +764,11 @@ export class ImportFormComponent implements OnDestroy {
       .map(c => c.header);
 
     if (missing.length === 0) {
-      let msg = `Template "${template.name}" aplicado automáticamente`;
+      let detailMsg = `Template "${template.name}" aplicado automáticamente`;
       if (extraColumns.length > 0) {
-        msg += `. Columnas ignoradas: ${extraColumns.join(', ')}`;
+        detailMsg += `. Columnas ignoradas: ${extraColumns.join(', ')}`;
       }
-      this.confirmAndNavigate(importId, columnMapping, isFoh, msg);
+      this.confirmAndNavigate(importId, columnMapping, isFoh, template.name, detailMsg);
     } else {
       this.showTemplateMissingFieldsError(missing, template.name, extraColumns);
     }
@@ -876,7 +876,7 @@ export class ImportFormComponent implements OnDestroy {
   /**
    * Confirm the mapping with the backend and navigate to preview.
    */
-  private confirmAndNavigate(importId: number, columnMapping: Record<string, string>, isFoh: boolean, toastMessage: string): void {
+  private confirmAndNavigate(importId: number, columnMapping: Record<string, string>, isFoh: boolean, templateName: string, detailMessage: string): void {
     this.stepLabel.set('Validando columnas...');
 
     this.importService.confirmMapping(importId, columnMapping, isFoh).pipe(
@@ -886,8 +886,10 @@ export class ImportFormComponent implements OnDestroy {
         this.isSubmitting.set(false);
         // E2: Clear tracked import — it's now valid and navigating to preview
         this.createdImportId.set(null);
-        this.toast.success(toastMessage);
-        this.router.navigate(['/app/imports', importId, 'preview']);
+        this.toast.success(`Template "${templateName}" aplicado`);
+        this.router.navigate(['/app/imports', importId, 'preview'], {
+          state: { templateMessage: detailMessage }
+        });
       },
       error: (err) => {
         console.error('Error confirming mapping:', err.status, err.error?.message || err.message);
