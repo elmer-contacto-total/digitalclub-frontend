@@ -41,10 +41,11 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           <div class="spinner"></div>
           <div>
             <strong>Validando archivo...</strong>
-            <p>Por favor, espere mientras se procesan los registros.</p>
-            @if (templateMessage()) {
-              <p class="template-info">{{ templateMessage() }}</p>
-            }
+            <p>Por favor, espere mientras se procesan los registros.
+              @if (templateMessage()) {
+                <br/>{{ templateMessage() }}
+              }
+            </p>
           </div>
         </div>
       } @else if (importData()?.status === 'status_valid' && invalidCount() === 0) {
@@ -281,16 +282,6 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
       background: var(--info-subtle);
       border: 1px solid var(--info-default);
       color: var(--info-text);
-    }
-
-    .template-info {
-      margin-top: var(--space-2) !important;
-      padding: var(--space-2) var(--space-3);
-      background: rgba(0, 0, 0, 0.05);
-      border-radius: var(--radius-md);
-      font-size: var(--text-sm);
-      line-height: 1.5;
-      word-break: break-word;
     }
 
     .status-banner-success {
