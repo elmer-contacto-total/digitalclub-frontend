@@ -1,7 +1,9 @@
+const _env = (typeof window !== 'undefined' && (window as any).__env) || {};
+
 export const environment = {
   production: true,
-  apiUrl: '',  // Usar rutas relativas - nginx hace proxy de /api/ al backend
-  wsUrl: 'wss://cobranza.innovag.com.pe/websocket',
+  apiUrl: _env.apiUrl ?? '',
+  wsUrl: _env.wsUrl ?? '',
   appName: 'Holape',
   version: '1.0.0'
 };

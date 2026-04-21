@@ -1,11 +1,10 @@
-/**
- * Environment configuration for Electron app
- * Uses absolute URLs since Electron may load from file:// or remote URL
- */
+// window.__env is injected by electron/preload.ts from app-config.ts at runtime
+const _env = (typeof window !== 'undefined' && (window as any).__env) || {};
+
 export const environment = {
   production: true,
-  apiUrl: 'https://cobranza.innovag.com.pe',  // Backend absoluto para Electron
-  wsUrl: 'wss://cobranza.innovag.com.pe/websocket',
+  apiUrl: _env.apiUrl ?? '',
+  wsUrl: _env.wsUrl ?? '',
   appName: 'Holape',
   version: '1.0.0'
 };
