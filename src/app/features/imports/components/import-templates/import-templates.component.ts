@@ -259,11 +259,61 @@ interface FieldOption {
                   <td class="text-right">{{ tpl.headers.length }}</td>
                   <td class="text-nowrap">{{ formatDate(tpl.createdAt) }}</td>
                   <td class="col-actions">
+                    <button class="action-btn action-btn-edit" (click)="startEdit(tpl)" title="Editar">
+                      <i class="ph ph-pencil-simple"></i>
+                    </button>
                     <button class="action-btn action-btn-danger" (click)="confirmDelete(tpl)" title="Eliminar">
                       <i class="ph ph-trash"></i>
                     </button>
                   </td>
                 </tr>
+                @if (editingTemplateId === tpl.id) {
+                  <tr class="detail-row edit-row">
+                    <td [colSpan]="4">
+                      <div class="template-edit">
+                        <div class="edit-header-fields">
+                          <div class="edit-field">
+                            <label>Nombre del template</label>
+                            <input type="text" class="text-input" [(ngModel)]="editName" placeholder="Nombre del template..." />
+                          </div>
+                          <div class="edit-field edit-foh">
+                            <label class="checkbox-label">
+                              <input type="checkbox" [(ngModel)]="editIsFoh" />
+                              Template FOH
+                            </label>
+                          </div>
+                        </div>
+                        <div class="edit-mapping-header">
+                          <span>Columna CSV</span>
+                          <span>Campo del sistema</span>
+                        </div>
+                        <div class="edit-mapping-table">
+                          @for (header of editHeaders; track header) {
+                            <div class="edit-mapping-row">
+                              <span class="edit-csv-col">{{ header }}</span>
+                              <select class="mapping-select" [ngModel]="editMappings[header] || ''" (ngModelChange)="setEditMapping(header, $event)">
+                                <option value="">— Sin mapear —</option>
+                                @for (field of availableFields; track field.value) {
+                                  <option [value]="field.value">{{ field.label }}</option>
+                                }
+                              </select>
+                            </div>
+                          }
+                        </div>
+                        @if (editError) {
+                          <p class="edit-error">{{ editError }}</p>
+                        }
+                        <div class="edit-actions">
+                          <button class="btn-ghost" (click)="cancelEdit()">Cancelar</button>
+                          <button class="btn-primary" (click)="saveEdit()" [disabled]="!editName.trim() || isSavingEdit">
+                            @if (isSavingEdit) { <span class="spinner"></span> }
+                            Guardar cambios
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                }
                 @if (expandedTemplateId() === tpl.id) {
                   <tr class="detail-row">
                     <td [colSpan]="4">
@@ -679,7 +729,7 @@ interface FieldOption {
 
     .text-right { text-align: right; }
     .text-nowrap { white-space: nowrap; }
-    .col-actions { width: 60px; text-align: center; }
+    .col-actions { width: 88px; text-align: center; }
 
     .template-name-btn {
       display: inline-flex;
@@ -707,6 +757,7 @@ interface FieldOption {
       i { font-size: 18px; }
     }
     .action-btn-danger:hover { background: var(--error-subtle); color: var(--error-default); }
+    .action-btn-edit:hover { background: var(--accent-subtle); color: var(--accent-default); }
 
     /* Detail Row */
     .detail-row td {
@@ -740,6 +791,45 @@ interface FieldOption {
     }
     .detail-csv-col { font-family: monospace; color: var(--fg-muted); }
     .detail-field { font-weight: var(--font-medium); color: var(--fg-default); }
+
+    /* Edit Row */
+    .edit-row td { padding: 0 var(--space-4) var(--space-4) !important; background: var(--bg-subtle); }
+    .template-edit { padding: var(--space-4) 0; }
+    .edit-header-fields {
+      display: flex; gap: var(--space-4); margin-bottom: var(--space-4); align-items: flex-end;
+      @media (max-width: 600px) { flex-direction: column; }
+    }
+    .edit-field {
+      flex: 1;
+      label { display: block; font-size: var(--text-sm); font-weight: var(--font-medium); color: var(--fg-default); margin-bottom: var(--space-1); }
+    }
+    .edit-foh { flex: 0 0 auto; padding-bottom: var(--space-2); }
+    .checkbox-label {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-sm); color: var(--fg-default); cursor: pointer;
+      input[type="checkbox"] { margin: 0; width: 16px; height: 16px; cursor: pointer; }
+    }
+    .edit-mapping-header {
+      display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--text-xs); font-weight: var(--font-semibold); color: var(--fg-muted);
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .edit-mapping-table { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-4); }
+    .edit-mapping-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);
+      align-items: center; padding: var(--space-2) var(--space-3);
+      background: var(--card-bg); border-radius: var(--radius-sm);
+    }
+    .edit-csv-col { font-family: monospace; font-size: var(--text-sm); color: var(--fg-muted); }
+    .mapping-select {
+      width: 100%; padding: var(--space-1) var(--space-2);
+      border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+      font-size: var(--text-sm); color: var(--fg-default); background: var(--card-bg);
+      &:focus { outline: none; border-color: var(--accent-default); }
+    }
+    .edit-error { color: var(--error-default); font-size: var(--text-sm); margin: 0 0 var(--space-3); }
+    .edit-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 
     /* Buttons */
     .btn-primary {
@@ -814,6 +904,15 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
   customFieldDuplicates = signal<Set<number>>(new Set());
   templateName = signal('');
   isSaving = signal(false);
+
+  // Edit state
+  editingTemplateId: number | null = null;
+  editName: string = '';
+  editIsFoh: boolean = false;
+  editMappings: Record<string, string> = {};
+  editHeaders: string[] = [];
+  isSavingEdit: boolean = false;
+  editError: string | null = null;
 
   // Field options (same as import-mapping)
   availableFields: FieldOption[] = [
@@ -1067,6 +1166,56 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.isSaving.set(false);
         this.toast.error(err.error?.message || 'Error al guardar el template');
+      }
+    });
+  }
+
+  // ========== Edit Flow ==========
+
+  startEdit(tpl: MappingTemplate): void {
+    this.editingTemplateId = tpl.id;
+    this.editName = tpl.name;
+    this.editIsFoh = tpl.isFoh ?? false;
+    this.editMappings = { ...tpl.columnMapping };
+    this.editHeaders = [...tpl.headers];
+    this.editError = null;
+    this.isSavingEdit = false;
+    this.expandedTemplateId.set(null);
+  }
+
+  cancelEdit(): void {
+    this.editingTemplateId = null;
+    this.editName = '';
+    this.editIsFoh = false;
+    this.editMappings = {};
+    this.editHeaders = [];
+    this.isSavingEdit = false;
+    this.editError = null;
+  }
+
+  setEditMapping(header: string, fieldValue: string): void {
+    this.editMappings = { ...this.editMappings, [header]: fieldValue };
+  }
+
+  saveEdit(): void {
+    const name = this.editName.trim();
+    if (!name || this.editingTemplateId === null) return;
+
+    this.isSavingEdit = true;
+    this.editError = null;
+
+    this.importService.updateMappingTemplate(
+      this.editingTemplateId, name, this.editIsFoh, this.editMappings, this.editHeaders
+    ).pipe(takeUntil(this.destroy$)).subscribe({
+      next: () => {
+        this.isSavingEdit = false;
+        this.toast.success(`Template "${name}" actualizado correctamente`);
+        this.cancelEdit();
+        this.loadTemplates();
+      },
+      error: (err) => {
+        this.isSavingEdit = false;
+        this.editError = err.error?.message || 'Error al guardar los cambios';
       }
     });
   }
