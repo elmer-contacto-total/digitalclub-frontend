@@ -1176,11 +1176,21 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
     this.editingTemplateId = tpl.id;
     this.editName = tpl.name;
     this.editIsFoh = tpl.isFoh ?? false;
-    this.editMappings = { ...tpl.columnMapping };
     this.editHeaders = [...tpl.headers];
     this.editError = null;
     this.isSavingEdit = false;
     this.expandedTemplateId.set(null);
+
+    // Normalizar valores para que coincidan con las opciones del dropdown:
+    // "first_name+cf" → "first_name"  |  "custom_field:NOMBRE_COL" → "custom_field"
+    const normalized: Record<string, string> = {};
+    for (const [header, value] of Object.entries(tpl.columnMapping)) {
+      let v = value ?? '';
+      if (v.endsWith('+cf')) v = v.slice(0, -3);
+      if (v.startsWith('custom_field:')) v = 'custom_field';
+      normalized[header] = v;
+    }
+    this.editMappings = normalized;
   }
 
   cancelEdit(): void {
@@ -1204,8 +1214,17 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
     this.isSavingEdit = true;
     this.editError = null;
 
+    // Reconstruir columnMapping: "custom_field" → "custom_field:HEADER"
+    const columnMapping: Record<string, string> = {};
+    for (const header of this.editHeaders) {
+      const v = this.editMappings[header];
+      if (v && v !== '') {
+        columnMapping[header] = v === 'custom_field' ? `custom_field:${header}` : v;
+      }
+    }
+
     this.importService.updateMappingTemplate(
-      this.editingTemplateId, name, this.editIsFoh, this.editMappings, this.editHeaders
+      this.editingTemplateId, name, this.editIsFoh, columnMapping, this.editHeaders
     ).pipe(takeUntil(this.destroy$)).subscribe({
       next: () => {
         this.isSavingEdit = false;
