@@ -288,9 +288,15 @@ interface FieldOption {
                           <span>Campo del sistema</span>
                         </div>
                         <div class="edit-mapping-table">
-                          @for (header of editHeaders; track header) {
+                          @for (header of editHeaders; track $index; let i = $index) {
                             <div class="edit-mapping-row">
-                              <span class="edit-csv-col">{{ header }}</span>
+                              <input
+                                type="text"
+                                class="edit-csv-col-input"
+                                [value]="header"
+                                (blur)="renameEditHeader(i, header, $any($event.target).value)"
+                                (keydown.enter)="$any($event.target).blur()"
+                              />
                               <select class="mapping-select" [ngModel]="editMappings[header] || ''" (ngModelChange)="setEditMapping(header, $event)">
                                 <option value="">— Sin mapear —</option>
                                 @for (field of availableFields; track field.value) {
@@ -821,7 +827,12 @@ interface FieldOption {
       align-items: center; padding: var(--space-2) var(--space-3);
       background: var(--card-bg); border-radius: var(--radius-sm);
     }
-    .edit-csv-col { font-family: monospace; font-size: var(--text-sm); color: var(--fg-muted); }
+    .edit-csv-col-input {
+      font-family: monospace; font-size: var(--text-sm); color: var(--fg-default);
+      border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+      padding: 2px var(--space-2); background: var(--card-bg); width: 100%;
+      &:focus { outline: none; border-color: var(--accent-default); }
+    }
     .mapping-select {
       width: 100%; padding: var(--space-1) var(--space-2);
       border: 1px solid var(--border-default); border-radius: var(--radius-sm);
@@ -1205,6 +1216,18 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
 
   setEditMapping(header: string, fieldValue: string): void {
     this.editMappings = { ...this.editMappings, [header]: fieldValue };
+  }
+
+  renameEditHeader(index: number, oldHeader: string, newHeader: string): void {
+    newHeader = newHeader.trim();
+    if (!newHeader || newHeader === oldHeader) return;
+    const headers = [...this.editHeaders];
+    headers[index] = newHeader;
+    this.editHeaders = headers;
+    const mappings = { ...this.editMappings };
+    mappings[newHeader] = mappings[oldHeader] ?? '';
+    delete mappings[oldHeader];
+    this.editMappings = mappings;
   }
 
   saveEdit(): void {
