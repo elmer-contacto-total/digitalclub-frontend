@@ -18,6 +18,8 @@ const TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'current_user';
 const OTP_SESSION_KEY = 'otp_session';
+const OTP_CHANNEL_KEY = 'otp_channel';
+const OTP_DESTINATION_KEY = 'otp_destination';
 
 @Injectable({
   providedIn: 'root'
@@ -35,6 +37,8 @@ export class AuthService {
   private _isLoading = signal<boolean>(false);
   private _otpSessionId = signal<string | null>(this.storage.getString(OTP_SESSION_KEY));
   private _awaitingOtp = signal<boolean>(!!this.storage.getString(OTP_SESSION_KEY));
+  private _otpChannel = signal<string>(this.storage.getString(OTP_CHANNEL_KEY) || 'sms');
+  private _otpDestination = signal<string | null>(this.storage.getString(OTP_DESTINATION_KEY));
 
   // Token refresh state - prevents multiple simultaneous refresh attempts
   private _isRefreshing = new BehaviorSubject<boolean>(false);
@@ -45,6 +49,8 @@ export class AuthService {
   readonly token = this._token.asReadonly();
   readonly isLoading = this._isLoading.asReadonly();
   readonly awaitingOtp = this._awaitingOtp.asReadonly();
+  readonly otpChannel = this._otpChannel.asReadonly();
+  readonly otpDestination = this._otpDestination.asReadonly();
 
   readonly isAuthenticated = computed(() => {
     return !!this._token() && !!this._currentUser();
@@ -88,18 +94,23 @@ export class AuthService {
    * Web login with email and password (Stage 1 - Pre-login)
    * Returns response indicating OTP is required
    */
-  login(email: string, password: string): Observable<LoginResponse> {
+  login(email: string, password: string, otpChannel: string = 'sms'): Observable<LoginResponse> {
     this._isLoading.set(true);
 
-    return this.api.post<LoginResponse>('/api/v1/web/prelogin', { email, password }).pipe(
+    return this.api.post<LoginResponse>('/api/v1/web/prelogin', { email, password, otpChannel }).pipe(
       tap(response => {
         if (response.requires_otp) {
-          // Store OTP session for verification
           this._otpSessionId.set(response.otp_session_id || email);
           this._awaitingOtp.set(true);
           this.storage.setString(OTP_SESSION_KEY, response.otp_session_id || email);
+          const ch = response.otp_channel || otpChannel;
+          this._otpChannel.set(ch);
+          this.storage.setString(OTP_CHANNEL_KEY, ch);
+          if (response.otp_destination) {
+            this._otpDestination.set(response.otp_destination);
+            this.storage.setString(OTP_DESTINATION_KEY, response.otp_destination);
+          }
         } else if (response.token) {
-          // Direct login (no OTP required)
           this.handleLoginSuccess(response);
         }
         this._isLoading.set(false);
@@ -137,12 +148,23 @@ export class AuthService {
   /**
    * Resend OTP code
    */
-  resendOtp(): Observable<{ success: boolean }> {
+  resendOtp(otpChannel?: string): Observable<{ success: boolean; otp_channel?: string; otp_destination?: string }> {
     const sessionId = this._otpSessionId();
+    const channel = otpChannel || this._otpChannel();
 
-    return this.api.post<{ success: boolean }>('/api/v1/web/resend_otp', {
-      otpSessionId: sessionId
-    });
+    return this.api.post<{ success: boolean; otp_channel?: string; otp_destination?: string }>(
+      '/api/v1/web/resend_otp',
+      { otpSessionId: sessionId, otpChannel: channel }
+    ).pipe(tap(response => {
+      if (response.otp_channel) {
+        this._otpChannel.set(response.otp_channel);
+        this.storage.setString(OTP_CHANNEL_KEY, response.otp_channel);
+      }
+      if (response.otp_destination) {
+        this._otpDestination.set(response.otp_destination);
+        this.storage.setString(OTP_DESTINATION_KEY, response.otp_destination);
+      }
+    }));
   }
 
   /**
@@ -158,7 +180,11 @@ export class AuthService {
   private clearOtpSession(): void {
     this._otpSessionId.set(null);
     this._awaitingOtp.set(false);
+    this._otpChannel.set('sms');
+    this._otpDestination.set(null);
     this.storage.remove(OTP_SESSION_KEY);
+    this.storage.remove(OTP_CHANNEL_KEY);
+    this.storage.remove(OTP_DESTINATION_KEY);
   }
 
   /**
@@ -229,6 +255,8 @@ export class AuthService {
     this.storage.remove(REFRESH_TOKEN_KEY);
     this.storage.remove(USER_KEY);
     this.storage.remove(OTP_SESSION_KEY);
+    this.storage.remove(OTP_CHANNEL_KEY);
+    this.storage.remove(OTP_DESTINATION_KEY);
     this.storage.remove('active_client');
     this.storage.remove('original_user');
     this.storage.remove('original_token');
@@ -238,6 +266,8 @@ export class AuthService {
     this._token.set(null);
     this._otpSessionId.set(null);
     this._awaitingOtp.set(false);
+    this._otpChannel.set('sms');
+    this._otpDestination.set(null);
 
     // Clear user in Electron (for media capture) and trigger CRM reset
     if (this.electronService.isElectron) {

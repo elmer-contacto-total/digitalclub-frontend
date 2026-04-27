@@ -44,6 +44,9 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
     return this.otpDigits.every(digit => digit().length === 1);
   });
 
+  get otpChannel(): string { return this.authService.otpChannel(); }
+  get otpDestination(): string | null { return this.authService.otpDestination(); }
+
   // Get full OTP value
   private getOtpValue(): string {
     return this.otpDigits.map(d => d()).join('');

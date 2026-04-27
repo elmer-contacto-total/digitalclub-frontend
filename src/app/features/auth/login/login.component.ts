@@ -26,6 +26,7 @@ export class LoginComponent {
   isLoading = signal(false);
   showPassword = signal(false);
   errorMessage = signal<string | null>(null);
+  selectedChannel = signal<'sms' | 'email'>('sms');
 
   constructor() {
     this.loginForm = this.fb.group({
@@ -38,6 +39,10 @@ export class LoginComponent {
     this.showPassword.update(v => !v);
   }
 
+  selectChannel(ch: 'sms' | 'email'): void {
+    this.selectedChannel.set(ch);
+  }
+
   onSubmit(): void {
     if (this.loginForm.invalid) {
       this.loginForm.markAllAsTouched();
@@ -48,7 +53,7 @@ export class LoginComponent {
     this.errorMessage.set(null);
     const { email, password } = this.loginForm.value;
 
-    this.authService.login(email, password).subscribe({
+    this.authService.login(email, password, this.selectedChannel()).subscribe({
       next: (response) => {
         this.isLoading.set(false);
 

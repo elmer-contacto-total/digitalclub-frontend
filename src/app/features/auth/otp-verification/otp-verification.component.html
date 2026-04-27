@@ -8,7 +8,11 @@
     <!-- Header -->
     <div class="auth-header">
       <h1>Verificación de Seguridad</h1>
-      <p>Ingrese el código de 6 dígitos enviado a su dispositivo</p>
+      <p>
+        Ingrese el código de 6 dígitos enviado
+        @if (otpChannel === 'email') { por correo } @else { por SMS }
+        @if (otpDestination) { a <strong>{{ otpDestination }}</strong> }
+      </p>
     </div>
 
     <!-- OTP Form -->

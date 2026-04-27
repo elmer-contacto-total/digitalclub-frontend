@@ -26,6 +26,8 @@ export interface LoginResponse {
   // Stage 1: Pre-login - these are returned when OTP is required
   requires_otp?: boolean;
   otp_session_id?: string;
+  otp_channel?: 'sms' | 'email';
+  otp_destination?: string;
 
   // Stage 2 / Direct login - these are returned after successful auth
   user?: AuthUser;
