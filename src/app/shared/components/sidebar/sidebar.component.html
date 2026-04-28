@@ -15,7 +15,10 @@
     <!-- Brand -->
     <div class="sidebar-brand">
       <div class="brand-logo">
-        @if (clientLogoUrl()) {
+        @if (envLogoPath) {
+          <!-- Deploy-time logo override (e.g. logo-sip for infinance) -->
+          <img [src]="envLogoPath" alt="Logo" class="brand-logo-env" />
+        } @else if (clientLogoUrl()) {
           <img [src]="clientLogoUrl()" alt="Logo" />
         } @else {
           <!-- Custom 3D box icon fallback -->

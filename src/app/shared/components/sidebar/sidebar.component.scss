@@ -150,6 +150,13 @@
     object-fit: contain;
     border-radius: 6px;
   }
+
+  .brand-logo-env {
+    width: auto;
+    max-width: 120px;
+    height: 36px;
+    border-radius: 0;
+  }
 }
 
 .brand-info {
