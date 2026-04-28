@@ -266,6 +266,36 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Retry search for the current phone (useful when not-found but contact may have been registered)
+   */
+  retrySearch(): void {
+    const phone = this.currentPhone();
+    if (!phone) return;
+
+    this.viewState.set('loading');
+    this.contactsService.searchByPhone(phone).subscribe(result => {
+      if (result) {
+        this.contact.set(result);
+        this.viewState.set('contact');
+        if (result.type === 'local' && result.local) {
+          this.selectedLabel.set(result.local.label);
+          this.notesField.set(result.local.notes || '');
+        } else if (result.type === 'registered' && result.registered) {
+          this.notesField.set(result.registered.issueNotes || '');
+          this.selectedLabel.set(undefined);
+          this.requiresResponse.set(result.registered.requireResponse === true);
+          this.notifyElectronOfActiveClient(result);
+          if (result.registered.id) {
+            this.loadActionHistoryAuto(result.registered.id);
+          }
+        }
+      } else {
+        this.viewState.set('not-found');
+      }
+    });
+  }
+
+  /**
    * Format phone number for display
    */
   formatPhone(phone: string | null): string {
@@ -299,6 +329,10 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
             name: local.name || phone,
             local
           });
+          // Transition from not-found to contact view
+          if (this.viewState() === 'not-found') {
+            this.viewState.set('contact');
+          }
         }
       }
     }
@@ -541,18 +575,27 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
         if (this.currentPhone() !== phone) return;
 
         if (result?.type === 'registered' && result.registered) {
-          // Update ticket state from fresh API data
           const current = this.contact();
           if (current?.registered) {
+            // Already a registered contact — just refresh ticket/response state
             current.registered.hasOpenTicket = result.registered.hasOpenTicket;
             current.registered.openTicketId = result.registered.openTicketId;
             current.registered.requireResponse = result.registered.requireResponse;
-            // Re-set the signal to trigger change detection
             this.contact.set({ ...current });
             this.requiresResponse.set(result.registered.requireResponse === true);
 
-            // Reload action history if a new ticket appeared
             if (result.registered.hasOpenTicket && result.registered.id) {
+              this.loadActionHistoryAuto(result.registered.id);
+            }
+          } else {
+            // Was not-found or local — now the contact is registered in the backend
+            this.contact.set(result);
+            this.viewState.set('contact');
+            this.notesField.set(result.registered.issueNotes || '');
+            this.selectedLabel.set(undefined);
+            this.requiresResponse.set(result.registered.requireResponse === true);
+            this.notifyElectronOfActiveClient(result);
+            if (result.registered.id) {
               this.loadActionHistoryAuto(result.registered.id);
             }
           }

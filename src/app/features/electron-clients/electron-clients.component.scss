@@ -297,6 +297,11 @@
     background: var(--bg-muted);
     color: var(--fg-muted);
   }
+
+  &.unknown {
+    background: var(--warning-subtle, #fff3cd);
+    color: var(--warning-default, #856404);
+  }
 }
 
 // ===== SCROLLABLE CONTENT =====
