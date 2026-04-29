@@ -7,6 +7,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { ActiveClientService, ActiveClient } from '../../../core/services/active-client.service';
 import { NavSection, getNavigationForRole } from '../../../core/models/navigation.model';
 import { getInitials, RoleUtils, UserRole } from '../../../core/models/user.model';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-sidebar',
@@ -83,6 +84,9 @@ export class SidebarComponent implements OnInit, OnDestroy {
   // App info
   appName = 'MWS';
   appVersion = 'v. 1.0.2';
+
+  // Runtime logo override (set via window.__env.logoPath in env.js at deploy time)
+  readonly envLogoPath = environment.logoPath;
 
   ngOnInit(): void {
     // Load available clients if super admin

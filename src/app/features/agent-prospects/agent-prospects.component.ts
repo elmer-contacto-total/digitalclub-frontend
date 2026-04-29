@@ -32,6 +32,35 @@ interface Prospect {
   updatedAt: string;
 }
 
+// Conversion modal interfaces
+interface UserOption {
+  id: number;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  codigo?: string;
+}
+
+interface ImportTemplate {
+  id: number;
+  name: string;
+  isFoh: boolean;
+  headers: string[];
+}
+
+interface ConvGroupItem {
+  prospect: Prospect;
+  user: UserOption | null;
+  searchTerm: string;
+  searchResults: UserOption[];
+  showSearch: boolean;
+}
+
+interface ConvGroup {
+  templateId: number | null;
+  items: ConvGroupItem[];
+}
+
 interface ProspectsResponse {
   data: Prospect[];
   meta: {
@@ -55,16 +84,25 @@ interface ProspectsResponse {
         <div class="page-header">
           <div class="header-row">
             <h1>Prospectos</h1>
-            <button
-              class="btn btn-primary export-btn"
-              (click)="onExport()"
-              [disabled]="isExporting()"
-            >
-              @if (isExporting()) {
-                <span class="spinner-sm"></span>
-              }
-              Exportar CSV
-            </button>
+            <div class="header-actions">
+              <button
+                class="btn btn-secondary"
+                (click)="openConversionModal()"
+                [disabled]="prospects().length === 0"
+              >
+                Convertir a CSV
+              </button>
+              <button
+                class="btn btn-primary export-btn"
+                (click)="onExport()"
+                [disabled]="isExporting()"
+              >
+                @if (isExporting()) {
+                  <span class="spinner-sm"></span>
+                }
+                Exportar CSV
+              </button>
+            </div>
           </div>
         </div>
 
@@ -224,6 +262,127 @@ interface ProspectsResponse {
       </div>
     </div>
 
+    <!-- Conversion Modal -->
+    @if (showConversionModal()) {
+      <div class="modal-backdrop" (click)="closeConversionModal()"></div>
+      <div class="modal-container modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5>Convertir Prospectos a CSV de Importación</h5>
+            <button class="close-btn" (click)="closeConversionModal()">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            @for (group of convGroups; track $index; let gIdx = $index) {
+              <div class="conv-group">
+                <div class="conv-group-header">
+                  <div class="template-selector">
+                    <label>Template:</label>
+                    <select class="form-control" [(ngModel)]="group.templateId">
+                      <option [ngValue]="null">FOH (estándar)</option>
+                      @for (tpl of availableTemplates; track tpl.id) {
+                        <option [ngValue]="tpl.id">{{ tpl.name }}</option>
+                      }
+                    </select>
+                  </div>
+                  @if (convGroups.length > 1) {
+                    <button class="btn btn-sm btn-danger" (click)="removeConvGroup(gIdx)">
+                      <i class="ph ph-trash"></i> Eliminar grupo
+                    </button>
+                  }
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-sm conv-table">
+                    <thead>
+                      <tr>
+                        <th>Prospecto</th>
+                        <th>Teléfono</th>
+                        <th>Usuario Asociado</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (item of group.items; track item.prospect.id; let iIdx = $index) {
+                        <tr>
+                          <td>{{ item.prospect.name || 'Sin nombre' }}</td>
+                          <td>{{ item.prospect.phone }}</td>
+                          <td>
+                            @if (item.user) {
+                              <span class="user-badge">
+                                {{ item.user.firstName }} {{ item.user.lastName }}
+                                <small class="text-muted">({{ item.user.phone }})</small>
+                              </span>
+                            } @else {
+                              <span class="text-muted-sm">Sin asociar</span>
+                            }
+                          </td>
+                          <td class="conv-actions-cell">
+                            @if (item.user) {
+                              <button class="btn btn-sm btn-outline-danger" (click)="clearUser(gIdx, iIdx)" title="Quitar asociación">
+                                <i class="ph ph-x"></i>
+                              </button>
+                            }
+                            <button class="btn btn-sm btn-outline" (click)="toggleSearch(gIdx, iIdx)" title="Buscar usuario">
+                              <i class="ph ph-magnifying-glass"></i>
+                            </button>
+                            @if (item.showSearch) {
+                              <div class="user-search-panel" (click)="$event.stopPropagation()">
+                                <input
+                                  type="text"
+                                  class="form-control form-control-sm"
+                                  placeholder="Buscar por nombre, teléfono o código..."
+                                  [value]="item.searchTerm"
+                                  (input)="onUserSearchChange(gIdx, iIdx, $any($event.target).value)"
+                                  autofocus
+                                />
+                                @if (item.searchResults.length > 0) {
+                                  <div class="search-results-dropdown">
+                                    @for (u of item.searchResults; track u.id) {
+                                      <div class="search-result-item" (click)="selectUser(gIdx, iIdx, u)">
+                                        <strong>{{ u.firstName }} {{ u.lastName }}</strong>
+                                        <span class="result-phone">{{ u.phone }}</span>
+                                        @if (u.codigo) {
+                                          <span class="result-codigo">{{ u.codigo }}</span>
+                                        }
+                                      </div>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            }
+            <button class="btn btn-sm btn-outline add-group-btn" (click)="addConvGroup()">
+              <i class="ph ph-plus"></i> Agregar grupo de template
+            </button>
+          </div>
+          <div class="modal-footer">
+            <span class="assoc-count">{{ countTotalAssociations() }} de {{ conversionProspectsCount() }} prospectos asociados</span>
+            <div class="footer-actions">
+              <button class="btn btn-secondary" (click)="closeConversionModal()">Cancelar</button>
+              <button
+                class="btn btn-primary"
+                (click)="generateImportCsv()"
+                [disabled]="countTotalAssociations() === 0 || isGeneratingCsv()"
+              >
+                @if (isGeneratingCsv()) {
+                  <span class="spinner-sm"></span>
+                }
+                Generar CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
     <!-- Prospect Detail Modal (PARIDAD RAILS: panel styling) -->
     @if (showProspectDetailModal()) {
       <div class="modal-backdrop" (click)="closeProspectDetailModal()"></div>
@@ -297,6 +456,13 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
   // Prospect Detail Modal
   showProspectDetailModal = signal(false);
   selectedDetailProspect = signal<Prospect | null>(null);
+
+  // Conversion Modal
+  showConversionModal = signal(false);
+  isGeneratingCsv = signal(false);
+  availableTemplates: ImportTemplate[] = [];
+  convGroups: ConvGroup[] = [];
+  private searchTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   // Current user
   currentUser = this.authService.currentUser;
@@ -434,6 +600,155 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
   closeProspectDetailModal(): void {
     this.showProspectDetailModal.set(false);
     this.selectedDetailProspect.set(null);
+  }
+
+  // ======================== CONVERSION MODAL ========================
+
+  openConversionModal(): void {
+    const snapshot = [...this.prospects()];
+    const items: ConvGroupItem[] = snapshot.map(p => ({
+      prospect: p,
+      user: null,
+      searchTerm: '',
+      searchResults: [],
+      showSearch: false
+    }));
+    this.convGroups = [{ templateId: null, items }];
+    this.showConversionModal.set(true);
+
+    if (this.availableTemplates.length === 0) {
+      this.http.get<ImportTemplate[]>(`${environment.apiUrl}/app/imports/mapping_templates`)
+        .subscribe({ next: (tpls) => { this.availableTemplates = tpls; } });
+    }
+  }
+
+  closeConversionModal(): void {
+    this.showConversionModal.set(false);
+    this.searchTimers.forEach(t => clearTimeout(t));
+    this.searchTimers.clear();
+  }
+
+  addConvGroup(): void {
+    const snapshot = [...this.prospects()];
+    const items: ConvGroupItem[] = snapshot.map(p => ({
+      prospect: p,
+      user: null,
+      searchTerm: '',
+      searchResults: [],
+      showSearch: false
+    }));
+    this.convGroups = [...this.convGroups, { templateId: null, items }];
+  }
+
+  removeConvGroup(idx: number): void {
+    this.convGroups = this.convGroups.filter((_, i) => i !== idx);
+  }
+
+  toggleSearch(gIdx: number, iIdx: number): void {
+    const item = this.convGroups[gIdx].items[iIdx];
+    item.showSearch = !item.showSearch;
+    if (!item.showSearch) {
+      item.searchTerm = '';
+      item.searchResults = [];
+    }
+  }
+
+  onUserSearchChange(gIdx: number, iIdx: number, term: string): void {
+    const key = `${gIdx}-${iIdx}`;
+    const item = this.convGroups[gIdx].items[iIdx];
+    item.searchTerm = term;
+
+    const existing = this.searchTimers.get(key);
+    if (existing) clearTimeout(existing);
+
+    if (!term.trim()) {
+      item.searchResults = [];
+      return;
+    }
+
+    this.searchTimers.set(key, setTimeout(() => {
+      this.searchStandardUsers(gIdx, iIdx, term);
+      this.searchTimers.delete(key);
+    }, 300));
+  }
+
+  selectUser(gIdx: number, iIdx: number, user: UserOption): void {
+    const item = this.convGroups[gIdx].items[iIdx];
+    item.user = user;
+    item.showSearch = false;
+    item.searchTerm = '';
+    item.searchResults = [];
+  }
+
+  clearUser(gIdx: number, iIdx: number): void {
+    this.convGroups[gIdx].items[iIdx].user = null;
+  }
+
+  countTotalAssociations(): number {
+    return this.convGroups.reduce((sum, g) =>
+      sum + g.items.filter(i => i.user !== null).length, 0);
+  }
+
+  conversionProspectsCount(): number {
+    return this.convGroups.length > 0 ? this.convGroups[0].items.length : 0;
+  }
+
+  generateImportCsv(): void {
+    const groups = this.convGroups
+      .map(g => ({
+        templateId: g.templateId,
+        associations: g.items
+          .filter(i => i.user !== null)
+          .map(i => ({ prospectId: i.prospect.id, userId: i.user!.id }))
+      }))
+      .filter(g => g.associations.length > 0);
+
+    if (groups.length === 0) return;
+
+    this.isGeneratingCsv.set(true);
+
+    this.http.post<{ files: { filename: string; content: string }[] }>(
+      `${environment.apiUrl}/app/prospects/generate-import-csv`,
+      { groups }
+    ).subscribe({
+      next: (response) => {
+        this.isGeneratingCsv.set(false);
+        response.files.forEach(file => {
+          const bytes = Uint8Array.from(atob(file.content), c => c.charCodeAt(0));
+          const blob = new Blob([bytes], { type: 'text/csv;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = file.filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        });
+        this.closeConversionModal();
+      },
+      error: (err) => {
+        console.error('Error generando CSV:', err);
+        this.isGeneratingCsv.set(false);
+      }
+    });
+  }
+
+  private searchStandardUsers(gIdx: number, iIdx: number, term: string): void {
+    const params = new HttpParams().set('search', term).set('pageSize', '10');
+    this.http.get<any>(`${environment.apiUrl}/app/users`, { params }).subscribe({
+      next: (resp) => {
+        const raw: any[] = resp.data || resp.users || [];
+        this.convGroups[gIdx].items[iIdx].searchResults = raw.map(u => ({
+          id: u.id,
+          firstName: u.firstName || u.first_name || '',
+          lastName: u.lastName || u.last_name || '',
+          phone: u.phone || '',
+          codigo: u.codigo || ''
+        }));
+      },
+      error: () => { this.convGroups[gIdx].items[iIdx].searchResults = []; }
+    });
   }
 
   formatDate(dateStr: string): string {

@@ -18,7 +18,8 @@
     "dist": "npm run electron:build && electron-builder",
     "generate:installer-assets": "node scripts/generate-installer-bitmaps.js",
     "dist:win": "npm run generate:installer-assets && npm run electron:build && electron-builder --win",
-    "dist:win-mws": "npm run generate:installer-assets && npm run electron:build && electron-builder --win",
+    "dist:win-infinance": "node scripts/build-electron.js https://infinance.innovag.com.pe && npm run generate:installer-assets && npm run electron:build && electron-builder --win",
+    "dist:win-mws": "node scripts/build-electron.js https://mws.digitalclub.com.pe && npm run generate:installer-assets && npm run electron:build && electron-builder --win",
     "pack": "npm run electron:build && electron-builder --dir"
   },
   "build": {

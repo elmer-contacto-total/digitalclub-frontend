@@ -393,6 +393,16 @@ export class ImportService {
   }
 
   /**
+   * Update an existing mapping template
+   */
+  updateMappingTemplate(templateId: number, name: string, isFoh: boolean, columnMapping: Record<string, string>, headers: string[]): Observable<{ result: string; template: MappingTemplate }> {
+    return this.http.put<{ result: string; template: MappingTemplate }>(
+      `${this.baseUrl}/mapping_templates/${templateId}`,
+      { name, isFoh, columnMapping, headers }
+    );
+  }
+
+  /**
    * Delete a mapping template
    */
   deleteMappingTemplate(templateId: number): Observable<{ result: string; message: string }> {
