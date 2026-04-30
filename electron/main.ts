@@ -8,7 +8,6 @@ import {
   ipcMain,
   session
 } from 'electron';
-import { DEFAULT_BACKEND_URL, DEFAULT_ANGULAR_URL } from './app-config';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getOrCreateFingerprint, generateEvasionScript, UserFingerprint } from './fingerprint-generator';
@@ -39,7 +38,7 @@ app.setPath('userData', path.join(app.getPath('appData'), userDataName));
 let pendingUpdateInfo: any = null;
 
 // Bulk sender for mass messaging
-const BACKEND_BASE_URL = DEFAULT_BACKEND_URL;
+const BACKEND_BASE_URL = process.env.BACKEND_URL || 'https://mws.digitalclub.com.pe';
 const bulkSender = new BulkSender(BACKEND_BASE_URL);
 const BULK_SEND_STATE_FILE = path.join(app.getPath('userData'), 'bulk-send-state.json');
 bulkSender.setStateFile(BULK_SEND_STATE_FILE);
@@ -91,7 +90,7 @@ const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 56;
 
 // URL del backend para medios y auditoría
-const MEDIA_API_URL = process.env.MEDIA_API_URL || (DEFAULT_BACKEND_URL + '/api/v1/media');
+const MEDIA_API_URL = process.env.MEDIA_API_URL || 'https://mws.digitalclub.com.pe/api/v1/media';
 
 // Estado dinámico del layout
 let sidebarCollapsed = false;
@@ -649,7 +648,7 @@ function createWindow(): void {
   });
 
   // Cargar la UI de Angular desde URL (producción por defecto)
-  const ANGULAR_URL = DEFAULT_ANGULAR_URL;
+  const ANGULAR_URL = process.env.ANGULAR_URL || 'https://mws.digitalclub.com.pe/';
 
   // Flag para evitar mostrar overlays duplicados
   let appLoadedSuccessfully = false;
@@ -2848,7 +2847,7 @@ app.on('before-quit', (event) => {
 // Seguridad: Prevenir navegación a URLs externas en la ventana principal
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
-    const ANGULAR_URL = DEFAULT_ANGULAR_URL;
+    const ANGULAR_URL = process.env.ANGULAR_URL || 'https://mws.digitalclub.com.pe/';
     // Permitir WhatsApp Web, Angular URL y file://
     const isAllowed = url.includes('web.whatsapp.com') ||
                       url.startsWith(ANGULAR_URL) ||

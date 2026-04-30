@@ -1,11 +1,4 @@
 import { ipcRenderer } from 'electron';
-import { DEFAULT_BACKEND_URL } from './app-config';
-
-// Inject runtime config for Angular renderer before the app bootstraps
-(window as any).__env = {
-  apiUrl: DEFAULT_BACKEND_URL,
-  wsUrl: DEFAULT_BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://') + '/websocket'
-};
 
 // Interfaz para mensajes escaneados
 interface ScannedMessage {
