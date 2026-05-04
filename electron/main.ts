@@ -1107,13 +1107,17 @@ function createWhatsAppView(): void {
     (function() {
       const style = document.createElement('style');
       style.textContent = \`
-        /* Ocultar botón de adjuntar archivos (+) */
+        /* Ocultar botón de adjuntar archivos (+).
+           DOM nuevo (mayo 2026): plus-rounded.
+           DOM viejo: clip / attach-button. */
+        [data-testid="plus-rounded"],
         [data-testid="clip"],
         [data-testid="attach-button"],
         button[aria-label*="Adjuntar"],
         button[aria-label*="Attach"],
         span[data-testid="clip"],
-        div[data-testid="clip"] {
+        div[data-testid="clip"],
+        button[data-tab="10"][aria-label*="Adjuntar"] {
           display: none !important;
         }
       \`;
@@ -1730,12 +1734,25 @@ async function scanChat(): Promise<void> {
         }
 
         if (header) {
-          // Buscar el span con el título (generalmente tiene atributo title)
-          const titleSpan = header.querySelector('span[title]');
-          if (titleSpan) {
-            const rawName = titleSpan.getAttribute('title') || titleSpan.textContent?.trim();
+          // Selector primario (DOM nuevo de WA, mayo 2026): el título está en un span con
+          // data-testid="conversation-info-header-chat-title", el atributo title del header
+          // es "Detalles del perfil" (botón del avatar), no el nombre del chat.
+          const titleEl = header.querySelector('[data-testid="conversation-info-header-chat-title"]');
+          if (titleEl) {
+            const rawName = titleEl.textContent?.trim();
             if (isValidChatName(rawName)) {
               chatName = rawName;
+            }
+          }
+
+          // Fallback DOM anterior: span con atributo title
+          if (!chatName) {
+            const titleSpan = header.querySelector('span[title]');
+            if (titleSpan) {
+              const rawName = titleSpan.getAttribute('title') || titleSpan.textContent?.trim();
+              if (isValidChatName(rawName)) {
+                chatName = rawName;
+              }
             }
           }
 
@@ -2008,87 +2025,122 @@ async function scanChatMessages(telefono: string): Promise<ScannedMessage[]> {
     const messages = await whatsappView.webContents.executeJavaScript(`
       (function() {
         const messages = [];
-        // Buscar todos los mensajes en el chat actual
-        const messageElements = document.querySelectorAll('[data-id^="true_"], [data-id^="false_"]');
 
-        messageElements.forEach(el => {
-          try {
-            const dataId = el.getAttribute('data-id') || '';
-            if (!dataId) return;
+        // DOM nuevo de WA (mayo 2026):
+        //   - Cada mensaje vive como un nodo dentro de [data-testid="conversation-panel-messages"].
+        //   - El identificador único es [data-testid="conv-msg-XXXX"], y el "data-id" sin prefijo
+        //     true_/false_ vive en un descendiente.
+        //   - La dirección se infiere de la presencia de [data-testid="tail-in"] o "tail-out"
+        //     dentro del mensaje (en lugar de la clase .message-out).
+        //   - El texto está en [data-testid="selectable-text"] (ya no en .selectable-text span).
+        //   - El [data-pre-plain-text] desapareció; timestamp/sender no se extraen del DOM
+        //     (el backend pone su propio timestamp al recibir el mensaje).
+        //
+        // Fallback al DOM antiguo: si no encontramos el panel nuevo, usamos los selectores
+        // viejos (compatibilidad si WA revierte el cambio).
 
-            // Determinar dirección
-            const isOutgoing = el.classList.contains('message-out') ||
-                               dataId.startsWith('true_') ||
-                               el.closest('[class*="message-out"]') !== null;
+        const panel = document.querySelector('[data-testid="conversation-panel-messages"]');
 
-            // Obtener texto del mensaje
-            const textEl = el.querySelector('.selectable-text span, .copyable-text span, ._ao3e');
-            const content = textEl?.innerText || '';
-
-            // Obtener timestamp
-            const timeEl = el.querySelector('[data-pre-plain-text]');
-            const prePlainText = timeEl?.getAttribute('data-pre-plain-text') || '';
-            // Formato: "[HH:mm, DD/MM/YYYY] Nombre: "
-            const timeMatch = prePlainText.match(/\\[(\\d{1,2}:\\d{2}),\\s*(\\d{1,2}\\/\\d{1,2}\\/\\d{4})\\]/);
-            let timestamp = '';
-            let senderName = '';
-
-            if (timeMatch) {
-              const [, time, date] = timeMatch;
-              const [day, month, year] = date.split('/');
-              timestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + ' ' + time + ':00';
-
-              // Extraer nombre del remitente
-              const nameMatch = prePlainText.match(/\\]\\s*(.+?):\\s*$/);
-              if (nameMatch) {
-                senderName = nameMatch[1];
-              }
-            }
-
-            // Detectar tipo de media
-            let type = 'TEXT';
-            let hasMedia = false;
-            let mediaType = undefined;
-
-            if (el.querySelector('img[src*="blob:"]')) {
-              type = 'IMAGE';
-              hasMedia = true;
-              mediaType = 'image';
-            } else if (el.querySelector('audio')) {
-              type = 'AUDIO';
-              hasMedia = true;
-              mediaType = 'audio';
-            } else if (el.querySelector('video')) {
-              type = 'VIDEO';
-              hasMedia = true;
-              mediaType = 'video';
-            } else if (el.querySelector('[data-testid="document-thumb"]')) {
-              type = 'DOCUMENT';
-              hasMedia = true;
-              mediaType = 'document';
-            } else if (el.querySelector('[data-testid="sticker"]')) {
-              type = 'STICKER';
-              hasMedia = true;
-              mediaType = 'sticker';
-            }
-
-            // Solo agregar si tiene contenido o media
-            if (content || hasMedia) {
-              messages.push({
-                whatsappId: dataId,
-                content: content,
-                type: type,
-                direction: isOutgoing ? 'OUTGOING' : 'INCOMING',
-                timestamp: timestamp,
-                senderName: senderName || undefined,
-                hasMedia: hasMedia,
-                mediaType: mediaType
-              });
-            }
-          } catch (e) {
-            // Ignorar errores individuales
+        function detectMediaType(root) {
+          if (root.querySelector('img[src*="blob:"]')) return { type: 'IMAGE', mediaType: 'image' };
+          if (root.querySelector('audio')) return { type: 'AUDIO', mediaType: 'audio' };
+          if (root.querySelector('video')) return { type: 'VIDEO', mediaType: 'video' };
+          if (root.querySelector('[data-testid="document-thumb"], [data-testid="document-message"]')) {
+            return { type: 'DOCUMENT', mediaType: 'document' };
           }
-        });
+          if (root.querySelector('[data-testid="sticker"]')) return { type: 'STICKER', mediaType: 'sticker' };
+          return null;
+        }
+
+        if (panel) {
+          // Cada mensaje real: un descendiente con data-testid="conv-msg-XXX". Iterar esos.
+          const msgEls = panel.querySelectorAll('[data-testid^="conv-msg-"]');
+          msgEls.forEach(msg => {
+            try {
+              // ID único: el "data-id" sin prefijo, dentro del mensaje
+              const idEl = msg.querySelector('[data-id]');
+              const dataId = idEl ? (idEl.getAttribute('data-id') || '') : '';
+              if (!dataId) return;
+
+              // Dirección: tail-in = entrante, tail-out = saliente
+              const hasTailOut = !!msg.querySelector('[data-testid="tail-out"]');
+              const hasTailIn = !!msg.querySelector('[data-testid="tail-in"]');
+              // Si no hay tails (mensaje encadenado sin cola), heurística: buscar contenedor
+              // con clase _akbu/_akbv que WA usa para outgoing, sino default a INCOMING.
+              const isOutgoing = hasTailOut || (!hasTailIn && !!msg.closest('[class*="message-out"]'));
+
+              // Texto: el span con data-testid="selectable-text" tiene el contenido
+              const textEl = msg.querySelector('[data-testid="selectable-text"]') ||
+                             msg.querySelector('.selectable-text span, .copyable-text span, ._ao3e');
+              const content = textEl ? (textEl.innerText || '').trim() : '';
+
+              const media = detectMediaType(msg);
+              const type = media ? media.type : 'TEXT';
+              const hasMedia = !!media;
+              const mediaType = media ? media.mediaType : undefined;
+
+              if (content || hasMedia) {
+                messages.push({
+                  whatsappId: dataId,
+                  content: content,
+                  type: type,
+                  direction: isOutgoing ? 'OUTGOING' : 'INCOMING',
+                  timestamp: '',
+                  senderName: undefined,
+                  hasMedia: hasMedia,
+                  mediaType: mediaType
+                });
+              }
+            } catch (e) { /* ignorar mensajes individuales con errores */ }
+          });
+        } else {
+          // Fallback al DOM viejo
+          const messageElements = document.querySelectorAll('[data-id^="true_"], [data-id^="false_"]');
+          messageElements.forEach(el => {
+            try {
+              const dataId = el.getAttribute('data-id') || '';
+              if (!dataId) return;
+
+              const isOutgoing = el.classList.contains('message-out') ||
+                                 dataId.startsWith('true_') ||
+                                 el.closest('[class*="message-out"]') !== null;
+
+              const textEl = el.querySelector('.selectable-text span, .copyable-text span, ._ao3e');
+              const content = textEl ? (textEl.innerText || '').trim() : '';
+
+              const timeEl = el.querySelector('[data-pre-plain-text]');
+              const prePlainText = timeEl ? (timeEl.getAttribute('data-pre-plain-text') || '') : '';
+              const timeMatch = prePlainText.match(/\\[(\\d{1,2}:\\d{2}),\\s*(\\d{1,2}\\/\\d{1,2}\\/\\d{4})\\]/);
+              let timestamp = '';
+              let senderName = '';
+              if (timeMatch) {
+                const [, time, date] = timeMatch;
+                const [day, month, year] = date.split('/');
+                timestamp = year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0') + ' ' + time + ':00';
+                const nameMatch = prePlainText.match(/\\]\\s*(.+?):\\s*$/);
+                if (nameMatch) senderName = nameMatch[1];
+              }
+
+              const media = detectMediaType(el);
+              const type = media ? media.type : 'TEXT';
+              const hasMedia = !!media;
+              const mediaType = media ? media.mediaType : undefined;
+
+              if (content || hasMedia) {
+                messages.push({
+                  whatsappId: dataId,
+                  content: content,
+                  type: type,
+                  direction: isOutgoing ? 'OUTGOING' : 'INCOMING',
+                  timestamp: timestamp,
+                  senderName: senderName || undefined,
+                  hasMedia: hasMedia,
+                  mediaType: mediaType
+                });
+              }
+            } catch (e) { /* ignorar */ }
+          });
+        }
 
         return messages;
       })()
@@ -2506,16 +2558,12 @@ function setupIPC(): void {
             // Typing simulation delay
             await new Promise(r => setTimeout(r, ${500 + Math.random() * 1000}));
 
-            // Click send button or press Enter
-            const sendBtn = document.querySelector('[data-testid="send"]') ||
-                            document.querySelector('button[aria-label="Send"], button[aria-label="Enviar"]') ||
-                            document.querySelector('span[data-icon="send"]')?.closest('button');
-
-            if (sendBtn) {
-              sendBtn.click();
-            } else {
-              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-            }
+            // Submit con Enter. WA Web (DOM mayo 2026) ya no expone un botón send dedicado:
+            // el botón muta entre mic-outlined y send según el contenido del input. Disparar
+            // Enter sobre el input es la única forma fiable de enviar.
+            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+            input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+            input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
 
             await new Promise(r => setTimeout(r, 1000));
             return { success: true };
@@ -2543,31 +2591,53 @@ function setupIPC(): void {
       const result = await whatsappView.webContents.executeJavaScript(`
         (async function() {
           try {
-            const searchBox = document.querySelector('[data-testid="chat-list-search"]') ||
-                              document.querySelector('[data-icon="search"]')?.closest('button') ||
-                              document.querySelector('#side [contenteditable="true"]');
+            // DOM nuevo de WA (mayo 2026): el buscador es un <input> real con data-tab="3",
+            // no un div contenteditable. Setear .value y disparar 'input' es lo correcto.
+            // Fallback al DOM viejo (contenteditable) si no encontramos el input.
+            let searchInput = document.querySelector('input[data-tab="3"]');
+            let isNativeInput = !!searchInput;
 
-            if (!searchBox) {
-              return { success: false, error: 'search_not_found' };
+            if (!searchInput) {
+              searchInput = document.querySelector('[data-testid="chat-list-search-input"]') ||
+                            document.querySelector('#side div[contenteditable="true"]') ||
+                            document.querySelector('[data-testid="search-input"]');
             }
 
-            searchBox.click();
-            searchBox.focus();
-            await new Promise(r => setTimeout(r, 300));
-
-            const searchInput = document.querySelector('[data-testid="chat-list-search-input"]') ||
-                                document.querySelector('#side div[contenteditable="true"]') ||
-                                document.querySelector('[data-testid="search-input"]');
+            // Si todavía no aparece, intentar abrir el buscador (DOM antiguo)
+            if (!searchInput) {
+              const searchBox = document.querySelector('[data-testid="chat-list-search"]') ||
+                                document.querySelector('[data-icon="search"]')?.closest('button');
+              if (searchBox) {
+                searchBox.click();
+                await new Promise(r => setTimeout(r, 300));
+                searchInput = document.querySelector('input[data-tab="3"]') ||
+                              document.querySelector('[data-testid="chat-list-search-input"]') ||
+                              document.querySelector('#side div[contenteditable="true"]');
+                isNativeInput = searchInput && searchInput.tagName === 'INPUT';
+              }
+            }
 
             if (!searchInput) {
               return { success: false, error: 'search_input_not_found' };
             }
 
             searchInput.focus();
-            searchInput.textContent = '';
-            document.execCommand('selectAll');
-            document.execCommand('insertText', false, '${phone.replace(/'/g, "\\'")}');
-            searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            const phoneText = '${phone.replace(/'/g, "\\'")}';
+
+            if (isNativeInput) {
+              // Input nativo de React: setear via setter nativo para que React detecte el cambio
+              const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+              nativeSetter.call(searchInput, '');
+              searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+              nativeSetter.call(searchInput, phoneText);
+              searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+              // Contenteditable (DOM antiguo)
+              searchInput.textContent = '';
+              document.execCommand('selectAll');
+              document.execCommand('insertText', false, phoneText);
+              searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            }
 
             await new Promise(r => setTimeout(r, 1500));
 
@@ -2585,7 +2655,10 @@ function setupIPC(): void {
             const composeBox = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
                                document.querySelector('footer div[contenteditable="true"]');
 
-            const chatName = document.querySelector('#main header span[title]')?.getAttribute('title') || '';
+            // Nombre del chat: nuevo DOM usa data-testid, viejo usaba span[title]
+            const titleEl = document.querySelector('[data-testid="conversation-info-header-chat-title"]');
+            const chatName = (titleEl ? titleEl.textContent : null) ||
+                             document.querySelector('#main header span[title]')?.getAttribute('title') || '';
 
             return { success: !!composeBox, chatName, error: composeBox ? undefined : 'chat_not_loaded' };
           } catch(e) {

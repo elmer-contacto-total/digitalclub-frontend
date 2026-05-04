@@ -1210,7 +1210,10 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   function extractPhoneFromContactPanel() {
     // MÉTODO 1: Buscar panel por data-testid conocidos
-    let contactPanel = document.querySelector('[data-testid="contact-info-drawer"]') ||
+    // DOM mayo 2026: el header del drawer es conversation-info-header.
+    // DOM viejo: contact-info-drawer y variantes.
+    let contactPanel = document.querySelector('[data-testid="conversation-info-header"]') ||
+                       document.querySelector('[data-testid="contact-info-drawer"]') ||
                        document.querySelector('[data-testid="drawer_right"]') ||
                        document.querySelector('[data-testid="chat-info-drawer"]') ||
                        document.querySelector('[data-testid="side-drawer"]') ||

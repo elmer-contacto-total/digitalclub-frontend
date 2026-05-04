@@ -714,8 +714,11 @@ export class BulkSender {
     const phoneSuffix = expectedPhone.replace(/\D/g, '').slice(-8);
     const headerInfo = await this.whatsappView.webContents.executeJavaScript(`
       (function() {
+        // DOM nuevo: el título es un span con data-testid="conversation-info-header-chat-title"
+        var titleEl = document.querySelector('[data-testid="conversation-info-header-chat-title"]');
+        if (titleEl) return (titleEl.textContent || '').trim();
+        // Fallback DOM viejo
         var header = document.querySelector('#main header span[title]') ||
-                     document.querySelector('#main header [data-testid*="conversation-info-header"]') ||
                      document.querySelector('#main header span[dir="auto"]');
         if (!header) return '';
         return header.getAttribute('title') || header.textContent || '';
@@ -824,25 +827,26 @@ export class BulkSender {
         console.warn('[BulkSender] resetToMainScreen failed, continuing anyway...');
       }
 
-      // --- PHASE 2A: Click search box and focus the search input via JS ---
+      // --- PHASE 2A: Focus the search input via JS ---
+      // DOM nuevo de WA (mayo 2026): el buscador es <input data-tab="3"> visible siempre,
+      // no requiere click previo para abrirlo. Fallback al div contenteditable del DOM viejo.
       const searchFocus = await this.whatsappView.webContents.executeJavaScript(`
         (async function() {
           try {
-            // Click search box to open search
-            var searchBox = document.querySelector('[data-testid="chat-list-search"]');
-            if (!searchBox) {
-              searchBox = document.querySelector('[data-icon="search"]')?.closest('button') ||
-                          document.querySelector('#side [contenteditable="true"]');
-            }
-            if (!searchBox) return { success: false, error: 'Buscador no encontrado' };
-
-            searchBox.click();
-            await new Promise(function(r) { setTimeout(r, 400); });
-
-            // Find and focus the search input
-            var input = document.querySelector('[data-testid="chat-list-search-input"]');
+            // 1. Intentar el input nativo nuevo
+            var input = document.querySelector('input[data-tab="3"]');
             if (!input) {
-              input = document.querySelector('#side div[contenteditable="true"]') ||
+              // Fallback DOM viejo: requiere abrir el buscador con click
+              var searchBox = document.querySelector('[data-testid="chat-list-search"]') ||
+                              document.querySelector('[data-icon="search"]')?.closest('button') ||
+                              document.querySelector('#side [contenteditable="true"]');
+              if (searchBox) {
+                searchBox.click();
+                await new Promise(function(r) { setTimeout(r, 400); });
+              }
+              input = document.querySelector('input[data-tab="3"]') ||
+                      document.querySelector('[data-testid="chat-list-search-input"]') ||
+                      document.querySelector('#side div[contenteditable="true"]') ||
                       document.querySelector('[data-testid="search-input"]');
             }
             if (!input) return { success: false, error: 'Campo de búsqueda no encontrado' };
@@ -851,7 +855,7 @@ export class BulkSender {
             input.click();
 
             var focusInfo = document.activeElement ?
-              (document.activeElement.tagName + ' editable=' + document.activeElement.getAttribute('contenteditable') + ' testid=' + document.activeElement.getAttribute('data-testid')) : 'null';
+              (document.activeElement.tagName + ' editable=' + document.activeElement.getAttribute('contenteditable') + ' testid=' + document.activeElement.getAttribute('data-testid') + ' tab=' + document.activeElement.getAttribute('data-tab')) : 'null';
             return { success: true, focusInfo: focusInfo };
           } catch(e) {
             return { success: false, error: e.message || 'search_focus_error' };
@@ -880,9 +884,14 @@ export class BulkSender {
       // Verify text was typed
       const verifyResult = await this.whatsappView.webContents.executeJavaScript(`
         (function() {
-          var input = document.querySelector('[data-testid="chat-list-search-input"]') ||
+          var input = document.querySelector('input[data-tab="3"]') ||
+                      document.querySelector('[data-testid="chat-list-search-input"]') ||
                       document.querySelector('#side div[contenteditable="true"]');
-          var content = input ? (input.textContent || '').trim() : '';
+          var content = '';
+          if (input) {
+            // input nativo: leer .value; contenteditable: leer .textContent
+            content = input.tagName === 'INPUT' ? (input.value || '').trim() : (input.textContent || '').trim();
+          }
           return { content: content };
         })()
       `, true);
@@ -943,20 +952,26 @@ export class BulkSender {
           // Press Escape to exit search mode (CDP — focus-independent)
           await this.cdpKey('Escape', 'Escape', 27);
           await this.sleep(500);
-          // Re-click search box
+          // Re-focus input directamente (el input nativo nuevo no necesita re-click previo)
           await this.whatsappView.webContents.executeJavaScript(`
             (function() {
-              var searchBox = document.querySelector('[data-testid="chat-list-search"]') ||
-                              document.querySelector('[data-icon="search"]')?.closest('button') ||
-                              document.querySelector('#side [contenteditable="true"]');
-              if (searchBox) searchBox.click();
+              var input = document.querySelector('input[data-tab="3"]') ||
+                          document.querySelector('[data-testid="chat-list-search-input"]') ||
+                          document.querySelector('#side div[contenteditable="true"]');
+              if (!input) {
+                // DOM viejo: abrir el buscador con click
+                var searchBox = document.querySelector('[data-testid="chat-list-search"]') ||
+                                document.querySelector('[data-icon="search"]')?.closest('button');
+                if (searchBox) searchBox.click();
+              }
             })()
           `, true);
           await this.sleep(500);
           // Re-focus input and re-type
           await this.whatsappView.webContents.executeJavaScript(`
             (function() {
-              var input = document.querySelector('[data-testid="chat-list-search-input"]') ||
+              var input = document.querySelector('input[data-tab="3"]') ||
+                          document.querySelector('[data-testid="chat-list-search-input"]') ||
                           document.querySelector('#side div[contenteditable="true"]');
               if (input) { input.focus(); input.click(); }
             })()
@@ -1029,8 +1044,11 @@ export class BulkSender {
       // Verify header contains phone suffix (soft check — warning only)
       const headerCheck = await this.whatsappView.webContents.executeJavaScript(`
         (function() {
+          // DOM nuevo: data-testid="conversation-info-header-chat-title"
+          var titleEl = document.querySelector('[data-testid="conversation-info-header-chat-title"]');
+          if (titleEl) return (titleEl.textContent || '').trim() || 'no_header';
+          // Fallback DOM viejo
           var header = document.querySelector('#main header span[title]') ||
-                       document.querySelector('#main header [data-testid*="conversation-info-header"]') ||
                        document.querySelector('#main header span[dir="auto"]');
           if (!header) return 'no_header';
           return header.getAttribute('title') || header.textContent || '';
