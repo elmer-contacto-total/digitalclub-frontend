@@ -1019,7 +1019,7 @@ export class BulkSender {
         try {
           const diag = await this.whatsappView.webContents.executeJavaScript(`
             (function() {
-              var main = document.querySelector('#main');
+              var main = document.querySelector('div#main');
               if (!main) return { hasMain: false };
               var editables = main.querySelectorAll('[contenteditable="true"]');
               var info = [];
@@ -1536,7 +1536,7 @@ export class BulkSender {
             dt.items.add(file);
 
             var dropTarget = document.querySelector('#main .copyable-area') ||
-                             document.querySelector('#main') ||
+                             document.querySelector('div#main') ||
                              document.querySelector('[data-testid="conversation-panel-wrapper"]');
 
             if (!dropTarget) {

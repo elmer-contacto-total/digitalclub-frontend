@@ -936,7 +936,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // Anclaje: #main (DOM viejo y nuevo). Fallback: el panel de mensajes nuevo
       // o el contenedor del chat (por si WA renombra #main en el futuro).
-      const mainPane = document.querySelector('#main') ||
+      const mainPane = document.querySelector('div#main') ||
                        document.querySelector('[data-testid="conversation-panel-messages"]')?.closest('div[id]') ||
                        document.querySelector('[data-testid="conversation-header"]')?.closest('div[id]');
       if (!mainPane) {
@@ -1024,7 +1024,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       sessionId: blockSessionId,
       isVisible: isBlockerVisible,
       blockerExists: !!document.getElementById('hablape-chat-blocker'),
-      mainExists: !!document.querySelector('#main')
+      mainExists: !!document.querySelector('div#main')
     };
   };
 
@@ -1250,7 +1250,7 @@ const MEDIA_CAPTURE_SCRIPT = `
     if (!contactPanel) {
       const allPanels = document.querySelectorAll('[data-testid*="drawer"], [data-testid*="panel"], [data-testid*="info"]');
       for (const panel of allPanels) {
-        if (panel.closest('#main')) continue; // Skip elements inside chat/message area
+        if (panel.closest('div#main')) continue; // Skip elements inside chat/message area
         const text = panel.textContent || '';
         if (/\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/.test(text)) {
           contactPanel = panel;
@@ -1266,7 +1266,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       let bestScore = 0;
 
       for (const div of allDivs) {
-        if (div.closest('#main')) continue; // Skip message area divs
+        if (div.closest('div#main')) continue; // Skip message area divs
         const rect = div.getBoundingClientRect();
         const text = div.textContent || '';
 
@@ -1396,7 +1396,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       if (!blocker) return;
 
       // Verificar si el click fue en el área del header de #main
-      const mainPane = document.querySelector('#main');
+      const mainPane = document.querySelector('div#main');
       if (!mainPane || !mainPane.contains(e.target)) return;
 
       // El header ocupa los primeros ~60px de #main
@@ -1528,7 +1528,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       }
 
       // Método 4: Mensajes con data-id en el área principal
-      const mainPane = document.querySelector('#main');
+      const mainPane = document.querySelector('div#main');
       console.log('[MWS Debug] M4: #main encontrado:', !!mainPane);
 
       if (mainPane) {
@@ -1966,7 +1966,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // MÉTODO 1: Buscar en los mensajes del mismo chat (#main)
       // Los mensajes con formato @c.us contienen el teléfono real
-      const mainPane = document.querySelector('#main');
+      const mainPane = document.querySelector('div#main');
       if (mainPane) {
         // Buscar TODOS los mensajes con data-id que contengan @c.us
         const messagesWithPhone = mainPane.querySelectorAll('[data-id*="@c.us"]');
@@ -2290,7 +2290,7 @@ const MEDIA_CAPTURE_SCRIPT = `
                 notifiedIncomingIds.add(msgDataId);
 
                 // Solo detectar si es el último mensaje del chat (evita falsos por scroll-load)
-                var chatContainer = messageEl.closest('#main') || messageEl.closest('[data-testid="conversation-panel-body"]');
+                var chatContainer = messageEl.closest('div#main') || messageEl.closest('[data-testid="conversation-panel-body"]');
                 var allMsgs = chatContainer ? chatContainer.querySelectorAll('[data-id*="@"]') : [];
                 var isLastMessage = allMsgs.length > 0 && allMsgs[allMsgs.length - 1] === messageEl;
 
@@ -2372,7 +2372,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
             // Skip if view is hidden or no active chat (DOM may be in transition)
             if (window.__hablapeViewVisible === false) return;
-            if (!document.querySelector('#main')) return;
+            if (!document.querySelector('div#main')) return;
 
             // Verify we're still in the same chat (avoid false positives from chat switch)
             var capturedChat = messageChatName.get(dataId);
@@ -2414,7 +2414,7 @@ const MEDIA_CAPTURE_SCRIPT = `
   function checkLastMessageForIncoming() {
     console.log('[MWS CheckLast] === INICIO checkLastMessageForIncoming ===');
 
-    var mainPane = document.querySelector('#main') ||
+    var mainPane = document.querySelector('div#main') ||
                    document.querySelector('[data-testid="conversation-panel-body"]');
     if (!mainPane) {
       console.log('[MWS CheckLast] SALIDA: #main no encontrado');
@@ -2484,7 +2484,7 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   function startChatObserver() {
-    const mainPane = document.querySelector('#main') ||
+    const mainPane = document.querySelector('div#main') ||
                     document.querySelector('[data-testid="conversation-panel-body"]');
 
     if (mainPane) {
@@ -2521,7 +2521,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   // Re-attach chatObserver when WhatsApp destroys/re-creates #main (chat change)
   function ensureChatObserverAttached() {
-    const mainPane = document.querySelector('#main') ||
+    const mainPane = document.querySelector('div#main') ||
                      document.querySelector('[data-testid="conversation-panel-body"]');
 
     if (mainPane && mainPane !== currentMainPane) {
@@ -2848,11 +2848,11 @@ const MEDIA_CAPTURE_SCRIPT = `
         ' | tracked:' + messagesWithMedia.size +
         ' | chat:' + (currentChat || 'null') +
         ' | visible:' + viewVisible +
-        ' | #main:' + !!document.querySelector('#main'));
+        ' | #main:' + !!document.querySelector('div#main'));
     }
 
     // Guard 1: No chat open at all (no #main element)
-    if (!document.querySelector('#main')) {
+    if (!document.querySelector('div#main')) {
       previousChatName = null;
       messageNoMediaScans.clear();
       if (deletionScanCount % 20 === 0) {

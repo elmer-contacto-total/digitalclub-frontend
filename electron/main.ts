@@ -1916,7 +1916,7 @@ async function checkWhatsAppSessionState(): Promise<void> {
       (function() {
         // Indicadores de que está LOGUEADO
         const hasConversations = !!document.querySelector('#pane-side');
-        const hasMainPanel = !!document.querySelector('#main');
+        const hasMainPanel = !!document.querySelector('div#main');
         const hasSearchBox = !!document.querySelector('[data-testid="chat-list-search"]');
 
         // Indicadores de que NO está logueado (QR code visible)
