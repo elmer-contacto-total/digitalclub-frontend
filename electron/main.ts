@@ -21,6 +21,7 @@ import {
 } from './media-security';
 import { checkForUpdates, notifyUpdateAvailable, openDownloadUrl, downloadAndInstallUpdate } from './update-checker';
 import { BulkSender } from './bulk-sender';
+import { DEFAULT_BACKEND_URL, DEFAULT_ANGULAR_URL, PRODUCT_NAME } from './app-config';
 
 // App version - read from package.json via Electron's app.getVersion()
 // When building with electron-builder, this reflects the version in package.json
@@ -31,14 +32,14 @@ const APP_VERSION = app.getVersion();
 // Each profile gets its own userData directory (separate WhatsApp session, fingerprint, etc.)
 const profileArg = process.argv.find(a => a.startsWith('--profile='));
 const PROFILE_ID = profileArg ? profileArg.split('=')[1] : '';
-const userDataName = PROFILE_ID ? `MWS Desktop - Perfil ${PROFILE_ID}` : 'MWS Desktop';
+const userDataName = PROFILE_ID ? `${PRODUCT_NAME} - Perfil ${PROFILE_ID}` : PRODUCT_NAME;
 app.setPath('userData', path.join(app.getPath('appData'), userDataName));
 
 // Stored update info (so renderer can pull it if it missed the push)
 let pendingUpdateInfo: any = null;
 
 // Bulk sender for mass messaging
-const BACKEND_BASE_URL = process.env.BACKEND_URL || 'https://mws.digitalclub.com.pe';
+const BACKEND_BASE_URL = DEFAULT_BACKEND_URL;
 const bulkSender = new BulkSender(BACKEND_BASE_URL);
 const BULK_SEND_STATE_FILE = path.join(app.getPath('userData'), 'bulk-send-state.json');
 bulkSender.setStateFile(BULK_SEND_STATE_FILE);
@@ -90,7 +91,7 @@ const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 56;
 
 // URL del backend para medios y auditoría
-const MEDIA_API_URL = process.env.MEDIA_API_URL || 'https://mws.digitalclub.com.pe/api/v1/media';
+const MEDIA_API_URL = process.env.MEDIA_API_URL || `${BACKEND_BASE_URL}/api/v1/media`;
 
 // Estado dinámico del layout
 let sidebarCollapsed = false;
@@ -635,7 +636,7 @@ function createWindow(): void {
     height: 900,
     minWidth: 1400,
     minHeight: 700,
-    title: PROFILE_ID ? `MWS Desktop - Perfil ${PROFILE_ID}` : 'MWS Desktop',
+    title: PROFILE_ID ? `${PRODUCT_NAME} - Perfil ${PROFILE_ID}` : PRODUCT_NAME,
     icon: path.join(__dirname, '..', 'build', 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
@@ -648,7 +649,7 @@ function createWindow(): void {
   });
 
   // Cargar la UI de Angular desde URL (producción por defecto)
-  const ANGULAR_URL = process.env.ANGULAR_URL || 'https://mws.digitalclub.com.pe/';
+  const ANGULAR_URL = DEFAULT_ANGULAR_URL;
 
   // Flag para evitar mostrar overlays duplicados
   let appLoadedSuccessfully = false;
@@ -2847,7 +2848,7 @@ app.on('before-quit', (event) => {
 // Seguridad: Prevenir navegación a URLs externas en la ventana principal
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, url) => {
-    const ANGULAR_URL = process.env.ANGULAR_URL || 'https://mws.digitalclub.com.pe/';
+    const ANGULAR_URL = DEFAULT_ANGULAR_URL;
     // Permitir WhatsApp Web, Angular URL y file://
     const isAllowed = url.includes('web.whatsapp.com') ||
                       url.startsWith(ANGULAR_URL) ||

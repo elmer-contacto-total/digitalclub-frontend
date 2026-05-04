@@ -4,6 +4,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
+import { DEFAULT_BACKEND_URL } from './app-config';
 
 /**
  * Update information returned from the API
@@ -33,7 +34,7 @@ interface UpdateCheckerConfig {
 
 // Default configuration
 const DEFAULT_CONFIG: UpdateCheckerConfig = {
-  apiBaseUrl: process.env.API_BASE_URL || 'https://cobranza.innovag.com.pe',
+  apiBaseUrl: process.env.API_BASE_URL || DEFAULT_BACKEND_URL,
   platform: 'windows'
 };
 

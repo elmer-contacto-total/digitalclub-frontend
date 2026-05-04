@@ -1,0 +1,38 @@
+{
+  "appId": "com.innovag.infinance-desktop",
+  "productName": "InFinance Desktop",
+  "directories": {
+    "output": "release/infinance"
+  },
+  "files": [
+    "dist/**/*",
+    "node_modules/**/*",
+    "package.json"
+  ],
+  "artifactName": "InFinance-Desktop-${version}.${ext}",
+  "win": {
+    "icon": "build/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": false,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "InFinance Desktop",
+    "runAfterFinish": true,
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "installerSidebar": "build/installerSidebar.bmp",
+    "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+    "installerHeader": "build/installerHeader.bmp"
+  }
+}

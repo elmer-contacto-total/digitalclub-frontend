@@ -1,0 +1,38 @@
+{
+  "appId": "com.contactototal.mws-desktop",
+  "productName": "MWS Desktop",
+  "directories": {
+    "output": "release/mws"
+  },
+  "files": [
+    "dist/**/*",
+    "node_modules/**/*",
+    "package.json"
+  ],
+  "artifactName": "MWS-Desktop-${version}.${ext}",
+  "win": {
+    "icon": "build/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": false,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "MWS Desktop",
+    "runAfterFinish": true,
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "installerSidebar": "build/installerSidebar.bmp",
+    "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+    "installerHeader": "build/installerHeader.bmp"
+  }
+}
