@@ -81,8 +81,8 @@ export class SidebarComponent implements OnInit, OnDestroy {
     return this.currentUser()?.clientLogoUrl || null;
   });
 
-  // App info
-  appName = 'MWS';
+  // App info — appName configurable por dominio vía window.__env (env.js)
+  appName = environment.appName;
   appVersion = 'v. 1.0.2';
 
   // Runtime logo override (set via window.__env.logoPath in env.js at deploy time)

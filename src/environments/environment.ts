@@ -4,5 +4,6 @@ export const environment = {
   wsUrl: 'ws://localhost:8080/websocket',
   logoPath: null as string | null,
   appName: 'Holape',
+  title: 'Holape (dev)',
   version: '1.0.0'
 };

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>MWS Desktop</title>
+  <title>Holape</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
@@ -11,8 +11,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
-  <!-- Runtime config: overwrite public/env.js on each VM to set apiUrl and wsUrl -->
+  <!-- Runtime config: overwrite public/env.js on each VM to set apiUrl, wsUrl, title, etc. -->
   <script src="env.js"></script>
+  <script>
+    if (window.__env && window.__env.title) document.title = window.__env.title;
+  </script>
   <!-- Polyfill for Node.js globals required by SockJS/STOMP -->
   <script>
     var global = global || window;

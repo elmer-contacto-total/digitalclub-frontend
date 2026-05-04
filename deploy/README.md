@@ -1,128 +1,83 @@
-# Despliegue Holape - cobranza.innovag.com.pe
+# Deploy frontend (Holape — Angular)
 
-## Requisitos del Servidor
+Este directorio contiene los artefactos para desplegar el SPA en cualquiera de las dos VMs:
 
-```bash
-# Java 21 para Spring Boot
-sudo apt install openjdk-21-jdk -y
+- **mws.digitalclub.com.pe** — usa `nginx.mws.conf`, `env.mws.js`, `deploy-mws.sh`
+- **infinance.innovag.com.pe** — usa `nginx.infinance.conf`, `env.infinance.js`, `deploy-infinance.sh`
 
-# Node.js 20 LTS para Angular 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install nodejs -y
+El frontend es estático (`/var/www/holape-angular/`). Las URLs de API/WebSocket se inyectan en runtime vía `window.__env` desde `env.js` — el mismo bundle sirve para los dos dominios.
 
-# Maven, Nginx, Git, Certbot
-sudo apt install maven nginx git certbot -y
-```
-
-## Configuración de Puertos
-
-| Servicio | Puerto |
-|----------|--------|
-| Frontend (Nginx) | 80 |
-| Backend (Spring Boot) | 8443 |
-
-## Estructura en VM
-
-```
-~/digitalclub/
-├── digitalclub-frontend/        # Frontend Angular
-│   └── deploy/
-│       ├── deploy.sh
-│       ├── nginx.conf
-│       └── README.md
-└── digitalclub-backend/         # Backend Spring Boot
-    └── logs/app.log
-
-/var/www/holape-angular/         # Archivos Angular compilados
-```
-
-## Primer Despliegue (Servidor Nuevo)
+## Bootstrap (una sola vez por VM)
 
 ```bash
-# 1. Clonar repositorios
-mkdir -p ~/digitalclub
-cd ~/digitalclub
-git clone https://github.com/elmer-contacto-total/digitalclub-frontend.git
-git clone https://github.com/elmer-contacto-total/digitalclub-backend.git
+# 1. Carpeta web y permisos
+sudo mkdir -p /var/www/holape-angular
+sudo chown -R $USER:www-data /var/www/holape-angular
 
-# 2. Ejecutar script de despliegue
-cd ~/digitalclub/digitalclub-frontend/deploy
-chmod +x deploy.sh
-./deploy.sh
+# 2. nginx + certbot
+sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx
+
+# 3. Certificado TLS (Let's Encrypt)
+sudo certbot --nginx -d mws.digitalclub.com.pe          # en VM mws
+# o
+sudo certbot --nginx -d infinance.innovag.com.pe        # en VM infinance
+
+# 4. Sustituir el server block que generó certbot por el de este repo
+cd ~/digitalclub/digitalclub-frontend
+sudo cp deploy/nginx.mws.conf /etc/nginx/sites-available/mws            # VM mws
+sudo ln -sf /etc/nginx/sites-available/mws /etc/nginx/sites-enabled/mws
+# (idem para infinance con nginx.infinance.conf)
+
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-## Despliegue Completo (Actualización)
-
-```bash
-cd ~/digitalclub/digitalclub-frontend/deploy
-./deploy.sh
-```
-
-## Despliegue Solo Frontend
+## Deploy continuo
 
 ```bash
 cd ~/digitalclub/digitalclub-frontend
-git pull origin main
-npm install
-npm run build:prod
-sudo rm -rf /var/www/holape-angular/*
-sudo cp -r dist/holape-angular/browser/* /var/www/holape-angular/
-sudo systemctl reload nginx
+./deploy/deploy-mws.sh        # en VM mws
+./deploy/deploy-infinance.sh  # en VM infinance
 ```
 
-## Despliegue Solo Backend
+Cada script:
+1. `git fetch && git reset --hard origin/main`
+2. `npm ci && npm run build:prod`
+3. Copia `dist/holape-angular/browser/*` a `/var/www/holape-angular/`
+4. Copia `deploy/env.<dominio>.js` a `/var/www/holape-angular/env.js`
+5. `sudo nginx -t && sudo systemctl reload nginx`
+
+## Branding por dominio (vía `window.__env`)
+
+Cada `env.<dominio>.js` define en runtime:
+
+| Clave | mws | infinance |
+|---|---|---|
+| `apiUrl` | `''` (relativo, vía nginx proxy) | `''` |
+| `wsUrl` | `wss://mws.digitalclub.com.pe/websocket` | `wss://infinance.innovag.com.pe/websocket` |
+| `logoPath` | `null` (logo SVG por defecto) | `/assets/images/logo-sip.png` |
+| `appName` | `MWS` | `InFinance` |
+| `title` | `MWS Desktop` | `InFinance Cobranza` |
+
+Para cambiar branding (logo, título, nombre de la app), basta editar el `env.<dominio>.js` correspondiente y volver a correr `deploy-<dominio>.sh`. **No requiere rebuild del bundle.**
+
+## Operación
 
 ```bash
-cd ~/digitalclub/digitalclub-backend
-rm -rf target/
-git pull origin main
-mvn clean package -DskipTests
-
-# Detener proceso anterior
-kill $(pgrep -f "holape-1.0.0.jar")
-
-# Iniciar
-mkdir -p logs
-nohup java -jar target/holape-1.0.0.jar --spring.profiles.active=prod > logs/app.log 2>&1 &
+sudo nginx -t                                    # validar config
+sudo systemctl reload nginx                      # recargar (no corta conexiones)
+sudo systemctl restart nginx                     # reinicio completo
+sudo journalctl -u nginx -n 100 --no-pager       # logs del servicio
+sudo tail -f /var/log/nginx/access.log           # acceso en vivo
+sudo tail -f /var/log/nginx/error.log            # errores
+sudo certbot renew --dry-run                     # probar renovación TLS
 ```
 
-## URLs
+## Verificación post-deploy
 
-- **App**: https://cobranza.innovag.com.pe
-- **API**: https://cobranza.innovag.com.pe/api/
-- **WebSocket**: wss://cobranza.innovag.com.pe/ws/
-
-## Comandos Útiles
-
-```bash
-# Ver logs del backend
-tail -f ~/digitalclub/digitalclub-backend/logs/app.log
-
-# Ver proceso Java
-ps aux | grep java
-
-# Estado Nginx
-sudo systemctl status nginx
-
-# Reiniciar Nginx
-sudo systemctl reload nginx
-
-# Verificar certificado SSL
-sudo certbot certificates
-
-# Renovar certificado SSL
-sudo certbot renew
-```
-
-## Verificación
-
-```bash
-# Verificar versiones
-java -version      # Debe ser 21.x
-node -v            # Debe ser 20.x
-nginx -v
-
-# Verificar servicios
-curl http://localhost/          # Frontend
-curl http://localhost/api/health  # Backend API
-```
+Desde un browser, abrir `https://<dominio>/` y comprobar:
+- Título del browser tab (debe ser `MWS Desktop` o `InFinance Cobranza`)
+- Logo en sidebar (mws → SVG por defecto, infinance → logo-sip.png)
+- Nombre de la app en sidebar (`MWS` vs `InFinance`)
+- DevTools → Network → WS: la conexión STOMP debe ser `wss://<dominio>/websocket` (status `101 Switching Protocols`)
+- Login funcional (POST a `/api/v1/auth/login` debe pasar)
