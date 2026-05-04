@@ -930,17 +930,25 @@ const MEDIA_CAPTURE_SCRIPT = `
     function tryShowBlocker(attempt) {
       // Verificar que esta sesión siga siendo válida Y que el blocker deba mostrarse
       if (blockSessionId !== currentSession || !isBlockerVisible) {
-        console.log('[MWS] Sesión #' + currentSession + ' invalidada o blocker oculto, abortando');
+        console.log('[MWS Blocker] Sesión #' + currentSession + ' invalidada o blocker oculto, abortando (attempt=' + attempt + ')');
         return;
       }
 
-      const mainPane = document.querySelector('#main');
+      // Anclaje: #main (DOM viejo y nuevo). Fallback: el panel de mensajes nuevo
+      // o el contenedor del chat (por si WA renombra #main en el futuro).
+      const mainPane = document.querySelector('#main') ||
+                       document.querySelector('[data-testid="conversation-panel-messages"]')?.closest('div[id]') ||
+                       document.querySelector('[data-testid="conversation-header"]')?.closest('div[id]');
       if (!mainPane) {
+        console.log('[MWS Blocker] tryShowBlocker attempt=' + attempt + ': #main NO encontrado');
         if (attempt < 15) {
           setTimeout(() => tryShowBlocker(attempt + 1), 150);
+        } else {
+          console.warn('[MWS Blocker] DESISTIENDO tras 15 intentos sin #main');
         }
         return;
       }
+      console.log('[MWS Blocker] mainPane encontrado: id=' + mainPane.id + ' tag=' + mainPane.tagName);
 
       // Verificar de nuevo antes de crear (por si cambió durante el timeout)
       if (!isBlockerVisible) {
@@ -1057,11 +1065,26 @@ const MEDIA_CAPTURE_SCRIPT = `
       // Skip blocker during bulk send
       if (window.__hablapeBulkSendActive) return;
 
-      // Identificar el chat por nombre (span[title]) o data-id o posición
-      const chatId = chatElement.getAttribute('data-id') ||
-                     (chatElement.querySelector('span[title]')?.getAttribute('title')) ||
+      // Identificar el chat. Order de preferencia (DOM mayo 2026 primero, viejo después):
+      //   1. data-testid="list-item-N" del row → único por posición en la lista
+      //   2. data-testid="cell-frame-title" → texto del nombre del chat (estable mientras no cambien)
+      //   3. data-id del row (DOM viejo)
+      //   4. span[title] (DOM viejo)
+      //   5. transform CSS (último recurso)
+      const listItemTestid = chatElement.getAttribute('data-testid') ||
+                             (chatElement.querySelector('[data-testid^="list-item-"]')?.getAttribute('data-testid'));
+      const cellFrameTitle = chatElement.querySelector('[data-testid="cell-frame-title"]')?.textContent?.trim();
+      const dataIdAttr = chatElement.getAttribute('data-id');
+      const titleSpanText = chatElement.querySelector('span[title]')?.getAttribute('title');
+      const transformStr = chatElement.style?.transform || '';
+
+      const chatId = (listItemTestid && listItemTestid.startsWith('list-item-') ? listItemTestid : null) ||
+                     cellFrameTitle ||
+                     dataIdAttr ||
+                     titleSpanText ||
                      chatElement.getAttribute('aria-rowindex') ||
-                     ('row_' + chatElement.style?.transform);
+                     ('row_' + transformStr);
+      console.log('[MWS Click] chatId=' + chatId + ' (last=' + lastClickedChatId + ')');
       if (chatId && chatId !== lastClickedChatId) {
         lastClickedChatId = chatId;
 

@@ -2226,10 +2226,23 @@ function registerShortcuts(): void {
     }
   });
 
-  // F12 - Abrir DevTools para depuración
+  // F12 - Abrir DevTools para depuración (Angular)
   globalShortcut.register('F12', () => {
     if (mainWindow) {
       mainWindow.webContents.toggleDevTools();
+    }
+  });
+
+  // Ctrl+Shift+W - Abrir DevTools del BrowserView de WhatsApp Web
+  // Útil para diagnosticar selectores, scripts inyectados (__hablape*),
+  // y ver los console.log dentro del contexto de WA.
+  globalShortcut.register('CommandOrControl+Shift+W', () => {
+    if (whatsappView && whatsappView.webContents) {
+      if (whatsappView.webContents.isDevToolsOpened()) {
+        whatsappView.webContents.closeDevTools();
+      } else {
+        whatsappView.webContents.openDevTools({ mode: 'detach' });
+      }
     }
   });
 
