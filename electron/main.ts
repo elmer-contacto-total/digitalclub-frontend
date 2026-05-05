@@ -663,7 +663,12 @@ function createWindow(): void {
     icon: path.join(__dirname, '..', 'build', 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: false,  // Deshabilitado para permitir módulos ES6 de Angular
+      // El renderer carga la SPA Angular desde https://mws.digitalclub.com.pe.
+      // Con contextIsolation:false, ese sitio remoto tendría acceso directo a
+      // APIs de Electron — un XSS = ejecución nativa en la máquina del agente.
+      // El preload ya expone window.electronAPI vía contextBridge, así que
+      // habilitar contextIsolation no rompe el flujo Angular ↔ Electron.
+      contextIsolation: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
       preload: path.join(__dirname, 'preload.js')
@@ -1451,11 +1456,16 @@ let sessionCheckInterval: NodeJS.Timeout | null = null;
  */
 async function updateChatPhoneInWhatsApp(phone: string, name: string): Promise<void> {
   if (!whatsappView) return;
+  // Escapar para evitar inyección JS: phone es solo dígitos, name puede tener
+  // emojis/comillas/apóstrofes/backslashes/saltos de línea. JSON.stringify
+  // produce un literal válido y seguro.
+  const phoneLit = JSON.stringify((phone || '').replace(/\D/g, ''));
+  const nameLit = JSON.stringify(name || '');
   try {
     await whatsappView.webContents.executeJavaScript(`
-      window.__hablapeCurrentChatPhone = '${phone}';
-      window.__hablapeCurrentChatName = '${name || ''}';
-      console.log('[MWS Debug] Chat actualizado desde Electron:', '${phone}', '${name || ''}');
+      window.__hablapeCurrentChatPhone = ${phoneLit};
+      window.__hablapeCurrentChatName = ${nameLit};
+      console.log('[MWS Debug] Chat actualizado desde Electron:', ${phoneLit}, ${nameLit});
     `, true);
   } catch (err) {
     // Ignorar errores silenciosamente
@@ -1485,10 +1495,11 @@ async function clearExtractedPhoneInWhatsApp(): Promise<void> {
  */
 async function setCurrentChatNameInWhatsApp(name: string): Promise<void> {
   if (!whatsappView) return;
+  const nameLit = JSON.stringify(name || '');
   try {
     await whatsappView.webContents.executeJavaScript(`
       if (window.__hablapeSetCurrentChatName) {
-        window.__hablapeSetCurrentChatName('${name.replace(/'/g, "\\'")}');
+        window.__hablapeSetCurrentChatName(${nameLit});
       }
     `, true);
   } catch (err) {
@@ -2339,19 +2350,31 @@ function registerShortcuts(): void {
 function setupIPC(): void {
   // === User Login/Logout (para asociar medios capturados) ===
   ipcMain.on('set-logged-in-user', (_, data: { userId: number; userName: string; clientId?: number }) => {
+    if (!data || typeof data.userId !== 'number' || data.userId <= 0) {
+      console.warn('[MWS] set-logged-in-user payload inválido, ignorando:', data);
+      return;
+    }
+    if (typeof data.userName !== 'string' || data.userName.length === 0) {
+      console.warn('[MWS] set-logged-in-user userName inválido, ignorando');
+      return;
+    }
     loggedInUserId = data.userId;
     loggedInUserName = data.userName;
-    loggedInClientId = data.clientId ?? null;
+    loggedInClientId = (typeof data.clientId === 'number' && data.clientId > 0) ? data.clientId : null;
     console.log('[MWS] *** Usuario logueado recibido via IPC ***');
     console.log('[MWS] agentId:', loggedInUserId);
     console.log('[MWS] userName:', loggedInUserName);
   });
 
   ipcMain.on('set-auth-token', (_, token: string) => {
+    // Validación básica de JWT: 3 segmentos base64url separados por dots.
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) {
+      console.warn('[MWS] set-auth-token recibió string que no parece JWT — descartado');
+      return;
+    }
     mediaAuthToken = token;
     bulkSender.setAuthToken(token);
     console.log('[MWS] Auth token actualizado para API de media y bulk sender');
-    // Reintentar pending deletions inmediatamente con el nuevo token
     if (pendingDeletions.length > 0) {
       console.log(`[MWS Deleted] Auth token recibido, reintentando ${pendingDeletions.length} eliminaciones pendientes`);
       retryPendingDeletions();
@@ -2383,15 +2406,30 @@ function setupIPC(): void {
 
   // === Active Client (para asociar medios al cliente del chat) ===
   ipcMain.on('set-active-client', (_, data: { clientUserId: number | null; chatPhone: string; chatName: string }) => {
+    if (!data) {
+      console.warn('[MWS] set-active-client payload null, ignorando');
+      return;
+    }
+    // clientUserId: null o número entero positivo
+    if (data.clientUserId !== null && (typeof data.clientUserId !== 'number' || data.clientUserId <= 0 || !Number.isInteger(data.clientUserId))) {
+      console.warn('[MWS] set-active-client clientUserId inválido, ignorando:', data.clientUserId);
+      return;
+    }
+    // chatPhone: string sólo dígitos (entre 9 y 15)
+    const phoneStr = typeof data.chatPhone === 'string' ? data.chatPhone : '';
+    const phoneDigits = phoneStr.replace(/\D/g, '');
+    if (phoneStr && (phoneDigits.length < 9 || phoneDigits.length > 15)) {
+      console.warn('[MWS] set-active-client chatPhone inválido, ignorando:', phoneStr);
+      return;
+    }
     activeClientUserId = data.clientUserId;
-    activeClientPhone = data.chatPhone;
-    activeClientName = data.chatName;
+    activeClientPhone = phoneDigits || phoneStr;
+    activeClientName = typeof data.chatName === 'string' ? data.chatName : '';
     console.log('[MWS] *** Cliente activo establecido ***');
     console.log('[MWS] clientUserId:', activeClientUserId);
     console.log('[MWS] chatPhone:', activeClientPhone);
     console.log('[MWS] chatName:', activeClientName);
 
-    // También actualizar en WhatsApp BrowserView
     if (activeClientPhone) {
       updateChatPhoneInWhatsApp(activeClientPhone, activeClientName || '');
     }
