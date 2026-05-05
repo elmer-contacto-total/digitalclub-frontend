@@ -663,12 +663,12 @@ function createWindow(): void {
     icon: path.join(__dirname, '..', 'build', 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
-      // El renderer carga la SPA Angular desde https://mws.digitalclub.com.pe.
-      // Con contextIsolation:false, ese sitio remoto tendría acceso directo a
-      // APIs de Electron — un XSS = ejecución nativa en la máquina del agente.
-      // El preload ya expone window.electronAPI vía contextBridge, así que
-      // habilitar contextIsolation no rompe el flujo Angular ↔ Electron.
-      contextIsolation: true,
+      // PENDIENTE B1: contextIsolation:true rompe la BrowserView de WA.
+      // Probable: hay código en el renderer (o asignaciones fuera de
+      // contextBridge en preload) que asume window.process / window.require
+      // / process.versions.electron. Revertido a false hasta hacer un audit
+      // completo de todos los puntos de detección de Electron.
+      contextIsolation: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
       preload: path.join(__dirname, 'preload.js')
