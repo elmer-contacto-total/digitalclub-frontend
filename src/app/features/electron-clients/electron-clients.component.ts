@@ -216,24 +216,36 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           }
         }
       } else {
-        // No registrado en backend → estado vacío. La UI "no registrado /
-        // contacto local" se eliminó: si el cliente no está en BD, el panel
-        // muestra el placeholder y el agente registra el contacto desde otro
-        // flujo administrativo.
-        console.log('[CRM] → viewState=empty (sin contacto registrado)');
+        // No registrado en backend → estado vacío. El panel CRM muestra el
+        // placeholder y el agente debe registrar el contacto desde otro
+        // flujo administrativo. El overlay de WhatsApp permanece visible
+        // (no llamamos clearActiveClient ni notifyCrmClientReady) hasta que
+        // el cliente exista en BD.
+        console.log('[CRM] → viewState=empty (sin contacto registrado) — overlay permanece');
         this.contact.set(null);
         this.viewState.set('empty');
         this.notesField.set('');
-        this.electronService.clearActiveClient();
+
+        // Si NO hay phone (caso "chat sin nombre real, sin extracción aún"),
+        // limpiamos en Electron porque no hay nada que rastrear. Si SÍ hay
+        // phone (extraído pero no registrado), preservamos el bloqueo.
+        if (!processedPhone) {
+          this.electronService.clearActiveClient();
+        }
       }
 
       // Notificar al terminar de procesar (con el teléfono que procesamos)
-      // Electron verificará si coincide con el chat que está esperando
-      // Si el contacto está asignado a otro agente, NO notificar → el overlay de WhatsApp permanece
+      // Electron verificará si coincide con el chat que está esperando.
+      // No notificar cuando:
+      //   - el contacto está asignado a otro agente → overlay permanece
+      //   - no encontramos al contacto en BD → overlay permanece
+      const foundInBackend = !!result;
       if (!this.isAssignedToMe() && this.isRegistered()) {
-        console.log('[CRM] Contact assigned to another agent - keeping WhatsApp overlay');
-      } else {
+        console.log('[CRM] Contact assigned to another agent — overlay permanece');
+      } else if (foundInBackend) {
         this.electronService.notifyCrmClientReady(processedPhone);
+      } else {
+        console.log('[CRM] Contacto no registrado en BD — overlay permanece');
       }
     });
   }

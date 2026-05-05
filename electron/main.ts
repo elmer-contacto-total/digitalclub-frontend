@@ -1726,6 +1726,15 @@ function handlePhoneExtracted(phone: string): void {
 
   lastDetectedPhone = phone;
 
+  // Cancelar el timeout de 30s programado por showPhoneNeededInWhatsApp.
+  // Ya tenemos un teléfono confirmado: ahora esperamos al CRM, no a la
+  // extracción manual. El overlay debe permanecer indefinidamente si el
+  // contacto resulta no estar registrado en BD.
+  if (chatBlockState.timeoutHandle) {
+    clearTimeout(chatBlockState.timeoutHandle);
+    chatBlockState.timeoutHandle = null;
+  }
+
   // Solo actualizar estado — NO re-bloquear (el overlay ya está visible)
   chatBlockState.expectedPhone = phone;
   chatBlockState.waitingForManualExtraction = false;
