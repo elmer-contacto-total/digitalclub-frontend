@@ -261,12 +261,24 @@ async function notifyIncomingMessage(senderPhone: string, messageContent?: strin
 
     if (response.ok) {
       console.log('[MWS Incoming] Ticket activated for phone:', senderPhone);
-      // Notificar Angular para update inmediato de UI
       if (mainWindow) {
         mainWindow.webContents.send('incoming-message-detected', { phone: senderPhone });
       }
     } else {
       console.error('[MWS Incoming] Backend error:', response.status);
+      // 401/403: token expirado o inválido. Invalidamos para que la próxima
+      // señal entre por la rama "auth-incomplete" en lugar de fallar silenciosa.
+      if (response.status === 401 || response.status === 403) {
+        console.warn('[MWS Incoming] Token inválido — invalidando mediaAuthToken para forzar relogin');
+        mediaAuthToken = null;
+        if (mainWindow) {
+          mainWindow.webContents.send('whatsapp:auth-incomplete', {
+            missing: ['mediaAuthToken'],
+            droppedSignal: 'incoming-401',
+            phone: senderPhone
+          });
+        }
+      }
     }
   } catch (err) {
     console.error('[MWS Incoming] Network error:', err);
@@ -292,6 +304,17 @@ async function notifyOutgoingMessage(clientPhone: string): Promise<void> {
       console.log('[MWS Outgoing] Agent responded, requireResponse cleared for:', clientPhone);
     } else {
       console.error('[MWS Outgoing] Backend error:', response.status);
+      if (response.status === 401 || response.status === 403) {
+        console.warn('[MWS Outgoing] Token inválido — invalidando mediaAuthToken');
+        mediaAuthToken = null;
+        if (mainWindow) {
+          mainWindow.webContents.send('whatsapp:auth-incomplete', {
+            missing: ['mediaAuthToken'],
+            droppedSignal: 'outgoing-401',
+            phone: clientPhone
+          });
+        }
+      }
     }
   } catch (err) {
     console.error('[MWS Outgoing] Network error:', err);
@@ -2341,6 +2364,21 @@ function setupIPC(): void {
     loggedInUserName = null;
     loggedInClientId = null;
     mediaAuthToken = null;
+
+    // Limpiar también el estado de WhatsApp para que la próxima sesión
+    // no asocie capturas o tickets al cliente que estaba activo antes.
+    lastDetectedPhone = '';
+    lastDetectedName = '';
+    activeClientUserId = null;
+    activeClientPhone = null;
+    activeClientName = null;
+    if (chatBlockState.timeoutHandle) {
+      clearTimeout(chatBlockState.timeoutHandle);
+      chatBlockState.timeoutHandle = null;
+    }
+    chatBlockState.isBlocked = false;
+    chatBlockState.expectedPhone = null;
+    chatBlockState.waitingForManualExtraction = false;
   });
 
   // === Active Client (para asociar medios al cliente del chat) ===

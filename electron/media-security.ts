@@ -447,7 +447,9 @@ const BLOCK_DOWNLOAD_SCRIPT = `
     element.style.pointerEvents = 'none';
     element.style.opacity = '0.5';
 
-    const parent = element.closest('[data-testid="document-message"]') || element.parentElement;
+    const parent = element.closest('[data-testid="document-message"]') ||
+                   element.closest('[data-testid^="conv-msg-"]') ||
+                   element.parentElement;
     if (parent && !parent.querySelector('.hablape-doc-blocked')) {
       const overlay = document.createElement('div');
       overlay.className = 'hablape-doc-blocked';
@@ -458,17 +460,28 @@ const BLOCK_DOWNLOAD_SCRIPT = `
     }
   };
 
-  document.querySelectorAll('[data-testid="document-thumb"], [data-testid="document-message"]').forEach(blockDocument);
+  // Selectors que cubren DOM viejo + DOM mayo 2026 + i18n español.
+  // El flag i en aria-label hace match case-insensitive.
+  const DOC_SELECTORS = [
+    '[data-testid="document-thumb"]',
+    '[data-testid="document-message"]',
+    '[data-icon="document"]',
+    '[data-icon="document-refreshed"]',
+    '[aria-label*="document" i]',
+    '[aria-label*="documento" i]',
+    'a[download]'
+  ].join(', ');
+
+  document.querySelectorAll(DOC_SELECTORS).forEach(blockDocument);
 
   const docObserver = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       mutation.addedNodes.forEach((node) => {
         if (node.nodeType === 1) {
-          if (node.matches?.('[data-testid="document-thumb"]') ||
-              node.matches?.('[data-testid="document-message"]')) {
+          if (node.matches?.(DOC_SELECTORS)) {
             blockDocument(node);
           }
-          node.querySelectorAll?.('[data-testid="document-thumb"], [data-testid="document-message"]').forEach(blockDocument);
+          node.querySelectorAll?.(DOC_SELECTORS).forEach(blockDocument);
         }
       });
     });
@@ -477,8 +490,7 @@ const BLOCK_DOWNLOAD_SCRIPT = `
   docObserver.observe(document.body, { childList: true, subtree: true });
 
   document.addEventListener('click', (e) => {
-    const docElement = e.target.closest('[data-testid="document-thumb"]') ||
-                       e.target.closest('[data-testid="document-message"]') ||
+    const docElement = e.target.closest(DOC_SELECTORS) ||
                        e.target.closest('[data-testid="audio-downloadable"]');
     if (docElement) {
       e.preventDefault();
@@ -1224,9 +1236,10 @@ const MEDIA_CAPTURE_SCRIPT = `
       var overlays = document.querySelectorAll('.hablape-image-overlay');
       for (var j = 0; j < overlays.length; j++) {
         var ov = overlays[j];
-        var msgEl = ov.closest('[data-id]');
+        // DOM viejo: data-id; DOM mayo 2026: data-testid="conv-msg-...".
+        var msgEl = ov.closest('[data-id]') || ov.closest('[data-testid^="conv-msg-"]');
         if (!msgEl) continue;
-        var msgDataId = msgEl.getAttribute('data-id');
+        var msgDataId = msgEl.getAttribute('data-id') || msgEl.getAttribute('data-testid');
         if (msgDataId && processedMessageIds.has(msgDataId)) {
           // Quitar blur de la imagen
           var protectedImg = ov.parentElement ? ov.parentElement.querySelector('img.hablape-protected-image') : null;
@@ -1477,6 +1490,46 @@ const MEDIA_CAPTURE_SCRIPT = `
     return info;
   };
 
+  // Helper de debug para diagnosticar el media editor (vista previa al adjuntar
+  // archivo). Útil cuando bulk-sender falla al enviar imagen/documento.
+  // Uso: en DevTools de la WA BrowserView, adjuntar un archivo y ejecutar
+  //   __hablapeDebugMediaEditor()
+  window.__hablapeDebugMediaEditor = function() {
+    function describe(el) {
+      if (!el) return null;
+      var r = el.getBoundingClientRect();
+      return {
+        tag: el.tagName,
+        aria: el.getAttribute('aria-label'),
+        testid: el.getAttribute('data-testid'),
+        icon: el.querySelector('[data-icon]') ? el.querySelector('[data-icon]').getAttribute('data-icon') : null,
+        x: Math.round(r.x), y: Math.round(r.y),
+        w: Math.round(r.width), h: Math.round(r.height),
+        inFooter: !!el.closest('footer')
+      };
+    }
+    var caption = document.querySelector('[data-testid="media-caption-input-container"]');
+    var sendIcons = Array.prototype.slice.call(
+      document.querySelectorAll('span[data-icon="wds-ic-send-filled"], span[data-icon="wds-ic-send"], span[data-icon="send"]')
+    );
+    var sendButtons = Array.prototype.slice.call(
+      document.querySelectorAll('[aria-label*="send" i],[aria-label*="enviar" i]')
+    );
+    var removeButtons = Array.prototype.slice.call(
+      document.querySelectorAll('[aria-label*="remove" i],[aria-label*="eliminar" i],[aria-label*="quitar" i]')
+    );
+    var info = {
+      captionContainer: describe(caption),
+      sendIcons: sendIcons.map(function(n) {
+        return describe(n.closest('button') || n.closest('[role="button"]') || n.parentElement);
+      }),
+      sendButtons: sendButtons.slice(0, 6).map(describe),
+      removeButtons: removeButtons.slice(0, 4).map(describe)
+    };
+    console.log('[MWS DebugMediaEditor]', info);
+    return info;
+  };
+
   // MutationObserver ELIMINADO: disparaba extractPhoneFromContactPanel() en cada
   // cambio del DOM, lo que causaba el bug del "chat más reciente" via METHOD 2.
   //
@@ -1720,6 +1773,7 @@ const MEDIA_CAPTURE_SCRIPT = `
     try {
       // Navigate up to find the message container
       let messageEl = element.closest('[data-id]') ||
+                      element.closest('[data-testid^="conv-msg-"]') ||
                       element.closest('[data-testid="msg-container"]');
 
       if (!messageEl) {
@@ -1850,6 +1904,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
       // Buscar el contenedor del mensaje
       let messageEl = clickTarget.closest('[data-id]') ||
+                      clickTarget.closest('[data-testid^="conv-msg-"]') ||
                       clickTarget.closest('[data-testid="msg-container"]');
 
       if (!messageEl) {
@@ -2509,7 +2564,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
         // También buscar imágenes blob directamente agregadas
         if (node.tagName === 'IMG' && node.src?.startsWith('blob:')) {
-          const messageEl = node.closest('[data-id]');
+          const messageEl = node.closest('[data-id]') || node.closest('[data-testid^="conv-msg-"]');
           if (messageEl) {
             setTimeout(() => protectImage(node, messageEl), CAPTURE_DELAY);
           }
@@ -2519,7 +2574,7 @@ const MEDIA_CAPTURE_SCRIPT = `
         const blobImages = node.querySelectorAll?.('img[src^="blob:"]');
         if (blobImages?.length > 0) {
           blobImages.forEach(img => {
-            const messageEl = img.closest('[data-id]');
+            const messageEl = img.closest('[data-id]') || img.closest('[data-testid^="conv-msg-"]');
             if (messageEl) {
               setTimeout(() => protectImage(img, messageEl), CAPTURE_DELAY);
             }
@@ -2534,9 +2589,9 @@ const MEDIA_CAPTURE_SCRIPT = `
         // Check if the removed node was inside a message we captured
         // node.closest() fails on detached nodes, so also check mutation.target
         // (the node whose children changed — still in the DOM)
-        const parentMsg = (node.closest ? node.closest('[data-id]') : null)
-          || (mutation.target && mutation.target.closest ? mutation.target.closest('[data-id]') : null);
-        const dataId = parentMsg ? parentMsg.getAttribute('data-id') : node.getAttribute?.('data-id');
+        const findMsgAncestor = (el) => el && el.closest ? (el.closest('[data-id]') || el.closest('[data-testid^="conv-msg-"]')) : null;
+        const parentMsg = findMsgAncestor(node) || findMsgAncestor(mutation.target);
+        const dataId = parentMsg ? (parentMsg.getAttribute('data-id') || parentMsg.getAttribute('data-testid')) : (node.getAttribute?.('data-id') || node.getAttribute?.('data-testid'));
         if (dataId && messagesWithMedia.has(dataId) && !detectedDeletions.has(dataId)) {
           // A child was removed from a captured message - check if media is gone
           // Use 1500ms delay to survive WhatsApp re-renders during chat change/scroll
@@ -2724,7 +2779,7 @@ const MEDIA_CAPTURE_SCRIPT = `
         if (img.tagName === 'IMG' && img.src?.startsWith('blob:')) {
           // Solo proteger si no está ya protegida
           if (!img.__hablapeProtected && !img.classList.contains('revealed')) {
-            const messageEl = img.closest('[data-id]');
+            const messageEl = img.closest('[data-id]') || img.closest('[data-testid^="conv-msg-"]');
             if (messageEl) {
               setTimeout(() => protectImage(img, messageEl), CAPTURE_DELAY);
             }
@@ -2746,16 +2801,24 @@ const MEDIA_CAPTURE_SCRIPT = `
   document.addEventListener('click', (e) => {
     const target = e.target;
 
-    // Buscar si el click fue en un elemento de audio/voz
+    // Buscar si el click fue en un elemento de audio/voz.
+    // DOM viejo + DOM mayo 2026: ampliamos selectors para cubrir ambos.
     const audioContainer = target.closest('[data-testid*="audio"]') ||
                           target.closest('[data-testid*="ptt"]') ||
                           target.closest('[data-testid*="voice"]') ||
                           target.closest('[data-icon*="audio"]') ||
-                          target.closest('[data-icon*="ptt"]');
+                          target.closest('[data-icon*="ptt"]') ||
+                          target.closest('[data-icon="audio-play"]') ||
+                          target.closest('[data-icon="audio-pause"]') ||
+                          target.closest('[aria-label*="audio" i]') ||
+                          target.closest('[aria-label*="voz" i]') ||
+                          target.closest('[aria-label*="voice message" i]') ||
+                          target.closest('[aria-label*="mensaje de voz" i]');
 
     if (audioContainer) {
       // Buscar el contenedor del mensaje
       let messageEl = audioContainer.closest('[data-id]') ||
+                      audioContainer.closest('[data-testid^="conv-msg-"]') ||
                       audioContainer.closest('[data-testid="msg-container"]');
 
       if (!messageEl) {

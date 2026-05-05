@@ -1352,10 +1352,12 @@ export class BulkSender {
       rlog('Step 6: waiting for media preview...');
       const previewReady = await this.waitForCondition(`
         (function() {
-          var el = document.querySelector('button[aria-label="Remove attachment"], button[aria-label="Eliminar archivo adjunto"]') ||
-                   document.querySelector('button[aria-label="Add file"], button[aria-label="Agregar archivo"]') ||
-                   document.querySelector('button[aria-label="Crop and rotate"], button[aria-label="Recortar y rotar"]') ||
-                   document.querySelector('span[data-icon="wds-ic-send-filled"]');
+          // Aria-label flexibles (case-insensitive, español + inglés).
+          var el = document.querySelector('[aria-label*="remove" i],[aria-label*="eliminar" i],[aria-label*="quitar" i]') ||
+                   document.querySelector('[aria-label*="add file" i],[aria-label*="agregar archivo" i]') ||
+                   document.querySelector('[aria-label*="crop" i],[aria-label*="recortar" i]') ||
+                   document.querySelector('[data-testid="media-caption-input-container"]') ||
+                   document.querySelector('span[data-icon="wds-ic-send-filled"], span[data-icon="wds-ic-send"], span[data-icon="send"]');
           return el ? true : null;
         })()
       `, 10000, 300);
@@ -1397,15 +1399,20 @@ export class BulkSender {
             // Strategy: find "Remove attachment" button, walk up DOM to find a shared
             // container that also has a Send button.
             var sendBtn = null;
-            var removeBtn = document.querySelector('button[aria-label="Remove attachment"], button[aria-label="Eliminar archivo adjunto"]') ||
-                            document.querySelector('button[aria-label="Add file"], button[aria-label="Agregar archivo"]');
+            // Selectors aria-label flexibles (case-insensitive, español + inglés + variantes).
+            var REMOVE_BTN_SEL = '[aria-label*="remove" i],[aria-label*="eliminar" i],[aria-label*="quitar" i],[aria-label*="add file" i],[aria-label*="agregar archivo" i]';
+            var SEND_BTN_SEL = '[aria-label*="send" i],[aria-label*="enviar" i]';
+            var removeBtn = document.querySelector('button' + REMOVE_BTN_SEL.replace(/,/g, ',button')) ||
+                            document.querySelector(REMOVE_BTN_SEL);
 
             if (removeBtn) {
               console.log('[IMG] Found Remove/Add button, searching for Send in same container...');
               var container = removeBtn.parentElement;
               for (var depth = 0; depth < 10 && container; depth++) {
-                // Search for Send button (could be <button> or [role="button"])
-                var candidates = container.querySelectorAll('button[aria-label="Send"], button[aria-label="Enviar"], [role="button"][aria-label="Send"], [role="button"][aria-label="Enviar"]');
+                var candidates = container.querySelectorAll(
+                  'button' + SEND_BTN_SEL.replace(/,/g, ',button') + ',' +
+                  '[role="button"]' + SEND_BTN_SEL.replace(/,/g, ',[role="button"]')
+                );
                 if (candidates.length > 0) {
                   sendBtn = candidates[0];
                   console.log('[IMG] Found Send button at depth ' + depth + ' from Remove/Add button');
@@ -1415,14 +1422,14 @@ export class BulkSender {
               }
             }
 
-            // Fallback 1: wds-ic-send-filled icon (pick the one NOT in compose footer)
+            // Fallback 1: wds-ic-send-filled icon (pick the one NOT in compose footer).
+            // Acepta también wds-ic-send y data-icon="send" del DOM más viejo.
             if (!sendBtn) {
-              var icons = document.querySelectorAll('span[data-icon="wds-ic-send-filled"]');
-              console.log('[IMG] Fallback: found ' + icons.length + ' wds-ic-send-filled icons');
+              var icons = document.querySelectorAll('span[data-icon="wds-ic-send-filled"], span[data-icon="wds-ic-send"], span[data-icon="send"]');
+              console.log('[IMG] Fallback: found ' + icons.length + ' send icons');
               for (var i = 0; i < icons.length; i++) {
                 var btn = icons[i].closest('button') || icons[i].closest('[role="button"]') || icons[i].parentElement;
                 if (btn) {
-                  // Skip if it's inside footer (the compose send button)
                   var inFooter = btn.closest('footer');
                   var r = btn.getBoundingClientRect();
                   console.log('[IMG]   icon[' + i + ']: ' + Math.round(r.x) + ',' + Math.round(r.y) + ' inFooter=' + !!inFooter);
@@ -1435,14 +1442,17 @@ export class BulkSender {
               }
             }
 
-            // Fallback 2: all Send buttons/roles, pick the one NOT in footer
+            // Fallback 2: cualquier botón/role con aria-label send/enviar fuera del footer.
             if (!sendBtn) {
-              var allSends = document.querySelectorAll('button[aria-label="Send"], button[aria-label="Enviar"], [role="button"][aria-label="Send"], [role="button"][aria-label="Enviar"]');
+              var allSends = document.querySelectorAll(
+                'button' + SEND_BTN_SEL.replace(/,/g, ',button') + ',' +
+                '[role="button"]' + SEND_BTN_SEL.replace(/,/g, ',[role="button"]')
+              );
               console.log('[IMG] Fallback 2: found ' + allSends.length + ' Send buttons/roles');
               for (var i = 0; i < allSends.length; i++) {
                 var inFooter = allSends[i].closest('footer');
                 var r = allSends[i].getBoundingClientRect();
-                console.log('[IMG]   Send[' + i + ']: ' + Math.round(r.x) + ',' + Math.round(r.y) + ' inFooter=' + !!inFooter + ' tag=' + allSends[i].tagName + ' role=' + allSends[i].getAttribute('role'));
+                console.log('[IMG]   Send[' + i + ']: ' + Math.round(r.x) + ',' + Math.round(r.y) + ' inFooter=' + !!inFooter + ' aria=' + allSends[i].getAttribute('aria-label'));
                 if (!inFooter && r.width > 0 && r.height > 0) {
                   sendBtn = allSends[i];
                   break;
@@ -1451,7 +1461,7 @@ export class BulkSender {
             }
 
             if (!sendBtn) {
-              console.error('[IMG] Step 7 FAIL: NO media editor send button found');
+              console.error('[IMG] Step 7 FAIL: NO media editor send button found. Ejecuta __hablapeDebugMediaEditor() para diagnóstico.');
               return { success: false, error: 'Botón de enviar no encontrado en media preview' };
             }
 
@@ -1460,12 +1470,14 @@ export class BulkSender {
             sendBtn.click();
             console.log('[IMG] Step 7: click() dispatched');
 
-            // Wait for media editor to close (Remove attachment button disappears)
+            // Wait for media editor to close: el "Remove attachment" desaparece
+            // o el caption-input-container ya no existe.
             var timeout = 8000;
             var start = Date.now();
             while (Date.now() - start < timeout) {
-              var removeBtn = document.querySelector('button[aria-label="Remove attachment"], button[aria-label="Eliminar archivo adjunto"]');
-              if (!removeBtn) {
+              var stillOpen = document.querySelector(REMOVE_BTN_SEL) ||
+                              document.querySelector('[data-testid="media-caption-input-container"]');
+              if (!stillOpen) {
                 console.log('[IMG] Step 7 OK: media editor closed after ' + (Date.now() - start) + 'ms');
                 return { success: true };
               }
