@@ -5,7 +5,7 @@
  */
 import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { UserService, UserDetailResponse } from '../../../../core/services/user.service';
@@ -14,6 +14,7 @@ import { LoginAsService } from '../../../../core/services/login-as.service';
 import { User, UserRole, UserStatus, RoleUtils, getFullName, getInitials } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
+import { ModalComponent } from '../../../../shared/components/modal/modal.component';
 
 @Component({
   selector: 'app-user-detail',
@@ -21,9 +22,11 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
   imports: [
     CommonModule,
     FormsModule,
+    ReactiveFormsModule,
     RouterLink,
     LoadingSpinnerComponent,
-    ConfirmDialogComponent
+    ConfirmDialogComponent,
+    ModalComponent
   ],
   template: `
     <div class="user-detail-container">
@@ -70,6 +73,12 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
                 <button class="btn btn-secondary" (click)="confirmLoginAs()">
                   <i class="ph ph-sign-in"></i>
                   Iniciar como
+                </button>
+              }
+              @if (canChangePassword()) {
+                <button class="btn btn-secondary" (click)="openChangePasswordModal()">
+                  <i class="ph ph-lock-key"></i>
+                  Cambiar contraseña
                 </button>
               }
               @if (canSendResetPassword()) {
@@ -294,6 +303,90 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
           (cancelled)="showLoginAsConfirm.set(false)"
         />
       }
+
+      <!-- Change Password Modal -->
+      <app-modal
+        [isOpen]="showChangePasswordModal()"
+        title="Cambiar contraseña"
+        size="sm"
+        [showFooter]="true"
+        (closed)="showChangePasswordModal.set(false)"
+      >
+        <form [formGroup]="changePasswordForm" (ngSubmit)="submitChangePassword()" class="change-password-form">
+          <p class="form-intro">
+            Establece una nueva contraseña para
+            <strong>{{ user() ? getFullName(user()!) : '' }}</strong>.
+          </p>
+
+          <div class="form-field">
+            <label for="newPassword">Nueva contraseña <span class="required">*</span></label>
+            <div class="password-input">
+              <input
+                id="newPassword"
+                [type]="showPassword() ? 'text' : 'password'"
+                formControlName="password"
+                autocomplete="new-password"
+                [class.invalid]="isPasswordFieldInvalid('password')"
+              />
+              <button type="button" class="toggle-password" (click)="togglePassword()" tabindex="-1">
+                <i class="ph" [class.ph-eye]="!showPassword()" [class.ph-eye-slash]="showPassword()"></i>
+              </button>
+            </div>
+            @if (isPasswordFieldInvalid('password')) {
+              <div class="error-message">
+                @if (changePasswordForm.get('password')?.errors?.['required']) {
+                  La contraseña es requerida
+                } @else if (changePasswordForm.get('password')?.errors?.['minlength']) {
+                  Mínimo 8 caracteres
+                }
+              </div>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="passwordConfirmation">Confirmar contraseña <span class="required">*</span></label>
+            <input
+              id="passwordConfirmation"
+              [type]="showPassword() ? 'text' : 'password'"
+              formControlName="passwordConfirmation"
+              autocomplete="new-password"
+              [class.invalid]="isPasswordFieldInvalid('passwordConfirmation')"
+            />
+            @if (isPasswordFieldInvalid('passwordConfirmation')) {
+              <div class="error-message">
+                @if (changePasswordForm.get('passwordConfirmation')?.errors?.['required']) {
+                  La confirmación es requerida
+                } @else if (changePasswordForm.get('passwordConfirmation')?.errors?.['mismatch']) {
+                  Las contraseñas no coinciden
+                }
+              </div>
+            }
+          </div>
+        </form>
+
+        <div modal-footer class="modal-footer-actions">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            (click)="showChangePasswordModal.set(false)"
+            [disabled]="isChangingPassword()"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            (click)="submitChangePassword()"
+            [disabled]="changePasswordForm.invalid || isChangingPassword()"
+          >
+            @if (isChangingPassword()) {
+              Guardando...
+            } @else {
+              Guardar
+            }
+          </button>
+        </div>
+      </app-modal>
     </div>
   `,
   styles: [`
@@ -691,6 +784,82 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
         color: var(--fg-muted);
       }
     }
+
+    .change-password-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .form-intro {
+      margin: 0;
+      font-size: 14px;
+      color: var(--fg-muted);
+    }
+
+    .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+
+      label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--fg-default);
+      }
+
+      .required {
+        color: var(--danger, #d32f2f);
+      }
+
+      input {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--input-border);
+        border-radius: 6px;
+        font-size: 14px;
+        background: var(--input-bg);
+        color: var(--fg-default);
+
+        &.invalid {
+          border-color: var(--danger, #d32f2f);
+        }
+      }
+    }
+
+    .password-input {
+      position: relative;
+
+      input {
+        padding-right: 36px;
+      }
+
+      .toggle-password {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--fg-muted);
+        padding: 4px;
+        font-size: 16px;
+        line-height: 1;
+      }
+    }
+
+    .error-message {
+      font-size: 12px;
+      color: var(--danger, #d32f2f);
+    }
+
+    .modal-footer-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      width: 100%;
+    }
   `]
 })
 export class UserDetailComponent implements OnInit, OnDestroy {
@@ -699,6 +868,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   private userService = inject(UserService);
   private authService = inject(AuthService);
   private loginAsService = inject(LoginAsService);
+  private fb = inject(FormBuilder);
 
   // Navigation
   backUrl = signal('/app/users');
@@ -711,6 +881,14 @@ export class UserDetailComponent implements OnInit, OnDestroy {
   managerName = signal<string | null>(null);
   showDeleteConfirm = signal(false);
   showLoginAsConfirm = signal(false);
+  showChangePasswordModal = signal(false);
+  isChangingPassword = signal(false);
+  showPassword = signal(false);
+
+  changePasswordForm: FormGroup = this.fb.group({
+    password: ['', [Validators.required, Validators.minLength(8)]],
+    passwordConfirmation: ['', Validators.required]
+  }, { validators: this.passwordMatchValidator });
 
   // Subordinates pagination & search
   hasSubordinates = signal(false);
@@ -859,6 +1037,18 @@ export class UserDetailComponent implements OnInit, OnDestroy {
     return current.role === UserRole.SUPER_ADMIN || current.role === UserRole.ADMIN;
   }
 
+  canChangePassword(): boolean {
+    const current = this.currentUser();
+    const user = this.user();
+    if (!current || !user) return false;
+
+    if (current.role === UserRole.SUPER_ADMIN) return true;
+    if (current.role === UserRole.ADMIN) return true;
+    if (RoleUtils.isManager(current.role) && user.managerId === current.id) return true;
+
+    return false;
+  }
+
   confirmDelete(): void {
     this.showDeleteConfirm.set(true);
   }
@@ -910,6 +1100,61 @@ export class UserDetailComponent implements OnInit, OnDestroy {
         alert('Error al enviar instrucciones');
       }
     });
+  }
+
+  openChangePasswordModal(): void {
+    this.changePasswordForm.reset({ password: '', passwordConfirmation: '' });
+    this.showPassword.set(false);
+    this.showChangePasswordModal.set(true);
+  }
+
+  submitChangePassword(): void {
+    if (this.changePasswordForm.invalid || this.isChangingPassword()) return;
+    const user = this.user();
+    if (!user) return;
+
+    this.isChangingPassword.set(true);
+    this.userService.updateUserPassword(user.id, {
+      password: this.changePasswordForm.value.password,
+      passwordConfirmation: this.changePasswordForm.value.passwordConfirmation
+    }).subscribe({
+      next: () => {
+        this.isChangingPassword.set(false);
+        this.showChangePasswordModal.set(false);
+        alert('Contraseña actualizada correctamente');
+      },
+      error: (err) => {
+        this.isChangingPassword.set(false);
+        console.error('Error updating password:', err);
+        alert(err?.error?.message ?? 'Error al actualizar la contraseña');
+      }
+    });
+  }
+
+  togglePassword(): void {
+    this.showPassword.update((v) => !v);
+  }
+
+  isPasswordFieldInvalid(field: 'password' | 'passwordConfirmation'): boolean {
+    const control = this.changePasswordForm.get(field);
+    return !!control && control.invalid && (control.touched || control.dirty);
+  }
+
+  private passwordMatchValidator(form: FormGroup) {
+    const password = form.get('password')?.value;
+    const confirmation = form.get('passwordConfirmation')?.value;
+
+    if (password && confirmation && password !== confirmation) {
+      form.get('passwordConfirmation')?.setErrors({ mismatch: true });
+    } else {
+      const confirmCtrl = form.get('passwordConfirmation');
+      if (confirmCtrl?.errors?.['mismatch']) {
+        const { mismatch, ...rest } = confirmCtrl.errors;
+        const remaining = Object.keys(rest).length ? rest : null;
+        confirmCtrl.setErrors(remaining);
+      }
+    }
+    return null;
   }
 
   getFullName(user: User): string {

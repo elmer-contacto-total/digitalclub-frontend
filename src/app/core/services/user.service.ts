@@ -386,4 +386,15 @@ export class UserService {
       ...request
     });
   }
+
+  /**
+   * Admin: set password for any user
+   * PARIDAD: UserAdminController.updateUserPassword (PUT /app/users/{id}/password)
+   */
+  updateUserPassword(userId: number, request: UpdateTempPasswordRequest): Observable<{ result: string; message: string }> {
+    return this.http.put<{ result: string; message: string }>(
+      `${this.baseUrl}/${userId}/password`,
+      request
+    );
+  }
 }
