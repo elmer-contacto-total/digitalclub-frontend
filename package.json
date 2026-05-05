@@ -17,9 +17,9 @@
     "electron": "npm run electron:dev",
     "dist": "npm run electron:build && electron-builder",
     "generate:installer-assets": "node scripts/generate-installer-bitmaps.js",
-    "dist:win": "npm run generate:installer-assets && npm run electron:build && electron-builder --win",
-    "dist:win-infinance": "node scripts/build-electron.js infinance && npm run generate:installer-assets && npm run electron:build && electron-builder --win --config electron-builder.infinance.json",
-    "dist:win-mws": "node scripts/build-electron.js mws && npm run generate:installer-assets && npm run electron:build && electron-builder --win --config electron-builder.mws.json",
+    "dist:win": "npm run build:prod && npm run generate:installer-assets && npm run electron:build && electron-builder --win",
+    "dist:win-infinance": "node scripts/build-electron.js infinance && npm run build:prod && npm run generate:installer-assets && npm run electron:build && electron-builder --win --config electron-builder.infinance.json",
+    "dist:win-mws": "node scripts/build-electron.js mws && npm run build:prod && npm run generate:installer-assets && npm run electron:build && electron-builder --win --config electron-builder.mws.json",
     "pack": "npm run electron:build && electron-builder --dir"
   },
   "build": {

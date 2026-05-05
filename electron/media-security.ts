@@ -725,7 +725,24 @@ const MEDIA_CAPTURE_SCRIPT = `
   const auditedVideoUrls = new Set();    // Para evitar auditar el mismo video múltiples veces
 
   // === INCOMING MESSAGE DETECTION (ticket activation) ===
-  const notifiedIncomingIds = new Set();
+  // LRU bounded para evitar crecimiento ilimitado en sesiones largas (cientos
+  // de chats abiertos = miles de keys). Conserva las 500 entradas más
+  // recientes y descarta las más viejas. Implementado con Map (mantiene orden
+  // de inserción).
+  var INCOMING_LRU_MAX = 500;
+  const notifiedIncomingIds = {
+    _map: new Map(),
+    has: function(key) { return this._map.has(key); },
+    add: function(key) {
+      if (this._map.has(key)) this._map.delete(key); // re-inserta al final
+      this._map.set(key, 1);
+      while (this._map.size > INCOMING_LRU_MAX) {
+        var oldest = this._map.keys().next().value;
+        this._map.delete(oldest);
+      }
+    },
+    clear: function() { this._map.clear(); }
+  };
   var incomingDebounceTimer = null;
   var INCOMING_DEBOUNCE_MS = 3000; // 3s trailing debounce
 
@@ -1232,19 +1249,33 @@ const MEDIA_CAPTURE_SCRIPT = `
   };
 
   function extractPhoneFromContactPanel() {
-    // MÉTODO 1: Buscar panel por data-testid conocidos
-    // DOM mayo 2026: el header del drawer es conversation-info-header.
-    // DOM viejo: contact-info-drawer y variantes.
-    let contactPanel = document.querySelector('[data-testid="conversation-info-header"]') ||
+    // Acepta: "+51 999 999 999", "51 999 999 999", "999 999 999", con o sin
+    // guiones / paréntesis. La validación cleanNumber.length 9..15 filtra ruido.
+    const PHONE_RE = /(?:\\+?\\d{1,3}[\\s\\-().]*)?\\d{2,3}[\\s\\-().]*\\d{3}[\\s\\-().]*\\d{3,4}/;
+
+    console.log('[MWS Extract] Buscando drawer del contacto...');
+
+    // Trackeamos cómo se encontró el panel: 'testid' / 'testid_text' / 'heuristic'.
+    // La verificación de nombre solo aplica al método heurístico — los testid
+    // específicos ya identifican unívocamente el drawer del chat actual.
+    let panelSource = 'none';
+
+    // MÉTODO 1: Buscar panel por data-testid conocidos.
+    // Confirmado por logs en runtime (mayo 2026): "chat-info-drawer".
+    // Otros testids son fallbacks por si WA cambia el naming en otro release.
+    let contactPanel = document.querySelector('[data-testid="chat-info-drawer"]') ||
+                       document.querySelector('[data-testid="conversation-info-drawer"]') ||
                        document.querySelector('[data-testid="contact-info-drawer"]') ||
-                       document.querySelector('[data-testid="drawer_right"]') ||
-                       document.querySelector('[data-testid="chat-info-drawer"]') ||
-                       document.querySelector('[data-testid="side-drawer"]') ||
-                       document.querySelector('[data-testid="contact-drawer"]') ||
-                       document.querySelector('[data-testid="chat-drawer"]') ||
-                       document.querySelector('[data-testid="drawer"]') ||
-                       document.querySelector('[data-testid="info-drawer-body"]') ||
-                       document.querySelector('[data-testid="drawer-body"]');
+                       document.querySelector('[data-testid="profile-drawer"]') ||
+                       document.querySelector('[data-testid="info-drawer"]') ||
+                       document.querySelector('div[role="dialog"]') ||
+                       document.querySelector('div[role="complementary"]') ||
+                       document.querySelector('aside');
+
+    if (contactPanel) panelSource = 'testid';
+
+    console.log('[MWS Extract] Método 1 (testids/role):',
+      contactPanel ? 'encontrado testid=' + contactPanel.getAttribute('data-testid') + ' role=' + contactPanel.getAttribute('role') + ' tag=' + contactPanel.tagName : 'no encontrado');
 
     // MÉTODO 1.5: Buscar por cualquier drawer/panel que contenga teléfono
     if (!contactPanel) {
@@ -1252,8 +1283,11 @@ const MEDIA_CAPTURE_SCRIPT = `
       for (const panel of allPanels) {
         if (panel.closest('div#main')) continue; // Skip elements inside chat/message area
         const text = panel.textContent || '';
-        if (/\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/.test(text)) {
+        const hit = PHONE_RE.test(text);
+        console.log('[MWS Extract] Panel candidato:', panel.getAttribute('data-testid'), 'tiene teléfono:', hit);
+        if (hit) {
           contactPanel = panel;
+          panelSource = 'testid_text';
           break;
         }
       }
@@ -1270,7 +1304,7 @@ const MEDIA_CAPTURE_SCRIPT = `
         const rect = div.getBoundingClientRect();
         const text = div.textContent || '';
 
-        const hasPhone = /\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/.test(text);
+        const hasPhone = PHONE_RE.test(text);
         if (!hasPhone) continue;
 
         const isVisible = rect.width > 0 && rect.height > 0;
@@ -1299,46 +1333,54 @@ const MEDIA_CAPTURE_SCRIPT = `
         }
       }
 
+      console.log('[MWS Extract] Método 2 heurística: bestScore=', bestScore,
+        'bestCandidate=', bestCandidate ? bestCandidate.tagName + '.' + (bestCandidate.className || '').toString().substring(0, 40) : 'null');
+
       if (bestCandidate) {
         contactPanel = bestCandidate;
+        panelSource = 'heuristic';
       }
     }
 
     // Si no hay panel abierto, no extraer nada
     if (!contactPanel) {
+      console.warn('[MWS Extract] ❌ Ningún drawer encontrado tras los 3 métodos.');
       return null;
     }
 
-    // Verificar que el panel corresponde al chat actual (si podemos leer el nombre)
-    const panelName = contactPanel.querySelector('span[title]')?.getAttribute('title') ||
-                     contactPanel.querySelector('h2')?.textContent?.trim() ||
-                     contactPanel.querySelector('header span')?.textContent?.trim();
+    // Verificación de nombre: SOLO para el fallback heurístico (Método 2),
+    // que es propenso a matchear el sidebar izquierdo u otros paneles.
+    // Cuando el panel se encontró por testid específico (Método 1/1.5),
+    // WhatsApp ya garantiza que es el drawer del chat actual — el "panelName"
+    // que se lee en el DOM nuevo suele ser el título del header del drawer
+    // ("Info. del contacto", "Tecnología") y no el nombre del contacto.
+    if (panelSource === 'heuristic') {
+      const panelName = contactPanel.querySelector('span[title]')?.getAttribute('title') ||
+                       contactPanel.querySelector('h2')?.textContent?.trim() ||
+                       contactPanel.querySelector('header span')?.textContent?.trim();
 
-    if (panelName) {
-      const normalize = (s) => (s || '').toLowerCase().trim().substring(0, 20);
-      const normalizedPanelName = normalize(panelName);
-      const normalizedChatName = normalize(currentChatNameForExtraction);
+      if (panelName) {
+        const normalize = (s) => (s || '').toLowerCase().trim().substring(0, 20);
+        const normalizedPanelName = normalize(panelName);
+        const normalizedChatName = normalize(currentChatNameForExtraction);
 
-      if (normalizedPanelName !== normalizedChatName &&
-          !normalizedPanelName.includes(normalizedChatName) &&
-          !normalizedChatName.includes(normalizedPanelName)) {
-        return null; // Panel no coincide con chat actual
+        if (normalizedPanelName !== normalizedChatName &&
+            !normalizedPanelName.includes(normalizedChatName) &&
+            !normalizedChatName.includes(normalizedPanelName)) {
+          console.log('[MWS Extract] (heurística) Panel encontrado pero nombre no coincide. panelName=', panelName, 'chatName=', currentChatNameForExtraction);
+          return null;
+        }
       }
     }
-    // Si no se puede leer panelName, seguir adelante — el panel fue encontrado
-    // por METHOD 1/1.5 (selectores específicos de drawer), así que es confiable
 
-    // Buscar teléfono en el panel
-    const phoneRegex = /\\+\\d{1,3}[\\s]?\\d{3}[\\s]?\\d{3}[\\s]?\\d{3,4}/;
     const searchRoot = contactPanel;
 
     // Buscar en spans
     const allSpans = searchRoot.querySelectorAll('span');
     for (const span of allSpans) {
       const text = span.textContent?.trim() || '';
-      if (phoneRegex.test(text)) {
-        // Extraer solo el número usando el regex, luego limpiar a solo dígitos
-        const match = text.match(phoneRegex);
+      if (PHONE_RE.test(text)) {
+        const match = text.match(PHONE_RE);
         if (match) {
           const cleanNumber = match[0].replace(/[^\\d]/g, '');
           if (cleanNumber.length >= 9 && cleanNumber.length <= 15) {
@@ -1352,9 +1394,8 @@ const MEDIA_CAPTURE_SCRIPT = `
     const buttons = searchRoot.querySelectorAll('[role="button"], button');
     for (const btn of buttons) {
       const text = btn.textContent?.trim() || '';
-      if (phoneRegex.test(text)) {
-        // Extraer solo el número usando el regex, luego limpiar a solo dígitos
-        const match = text.match(phoneRegex);
+      if (PHONE_RE.test(text)) {
+        const match = text.match(PHONE_RE);
         if (match) {
           const cleanNumber = match[0].replace(/[^\\d]/g, '');
           if (cleanNumber.length >= 9 && cleanNumber.length <= 15) {
@@ -1364,8 +1405,77 @@ const MEDIA_CAPTURE_SCRIPT = `
       }
     }
 
+    console.warn('[MWS Extract] ❌ Panel encontrado pero ningún teléfono dentro. Texto (300):',
+      (searchRoot.textContent || '').substring(0, 300));
     return null;
   }
+
+  // Helper de debug para diagnosticar el DOM del drawer en runtime.
+  // Uso: abrir un chat, hacer click en el nombre del contacto, abrir DevTools
+  // de la BrowserView (Ctrl+Shift+W) y ejecutar __hablapeDebugContactPanel().
+  window.__hablapeDebugContactPanel = function() {
+    const allTestids = new Set();
+    document.querySelectorAll('[data-testid]').forEach(el => {
+      const t = el.getAttribute('data-testid');
+      if (t) allTestids.add(t);
+    });
+
+    const candidates = [];
+    document.querySelectorAll('div, aside').forEach(el => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 200 || rect.width > 700) return;
+      if (rect.left < window.innerWidth * 0.4) return;
+      if (!/\\d{9}/.test((el.textContent || '').replace(/\\D/g, ''))) return;
+      candidates.push({
+        tag: el.tagName,
+        testid: el.getAttribute('data-testid'),
+        role: el.getAttribute('role'),
+        cls: (el.className || '').toString().substring(0, 60),
+        width: Math.round(rect.width),
+        left: Math.round(rect.left),
+        text: (el.textContent || '').substring(0, 150)
+      });
+    });
+
+    console.log('[MWS Debug] testids visibles (' + allTestids.size + '):', [...allTestids].sort());
+    console.log('[MWS Debug] candidatos drawer (' + candidates.length + '):', candidates);
+    return { testids: [...allTestids], candidates: candidates };
+  };
+
+  // Helper de debug para diagnosticar el DOM de mensajes en runtime.
+  // Uso: en DevTools de la BrowserView de WA (Ctrl+Shift+W), ejecutar:
+  //   __hablapeDebugMessages()
+  // Devuelve conteos y atributos del último mensaje. Útil cuando la apertura
+  // automática de tickets falla (no se emite [HABLAPE_INCOMING_DETECTED]).
+  window.__hablapeDebugMessages = function() {
+    var mainPane = document.querySelector('div#main') ||
+                   document.querySelector('[data-testid="conversation-panel-body"]');
+    if (!mainPane) return { error: 'no main pane (ni div#main ni conversation-panel-body)' };
+    var byDataId = Array.prototype.slice.call(mainPane.querySelectorAll('[data-id*="@"]'));
+    var byConvMsg = Array.prototype.slice.call(mainPane.querySelectorAll('[data-testid^="conv-msg-"]'));
+    var sample = byDataId[byDataId.length - 1] || byConvMsg[byConvMsg.length - 1];
+    var info = {
+      mainPaneTag: mainPane.tagName,
+      mainPaneId: mainPane.id,
+      countDataId: byDataId.length,
+      countConvMsg: byConvMsg.length,
+      currentChatPhone: window.__hablapeCurrentChatPhone || null,
+      currentChatName: window.__hablapeCurrentChatName || null
+    };
+    if (sample) {
+      info.sampleAttrs = Array.prototype.map.call(sample.attributes, function(a) {
+        return a.name + '=' + (a.value || '').substring(0, 40);
+      });
+      info.sampleClass = (sample.className || '').toString().substring(0, 80);
+      info.sampleHasTailOut = !!sample.querySelector('[data-testid="tail-out"]');
+      info.sampleHasTailIn = !!sample.querySelector('[data-testid="tail-in"]');
+      info.sampleSelectableText = sample.querySelector('.selectable-text') ?
+        sample.querySelector('.selectable-text').textContent.substring(0, 80) : null;
+      info.sampleTextContent = (sample.textContent || '').substring(0, 120);
+    }
+    console.log('[MWS DebugMsg]', info);
+    return info;
+  };
 
   // MutationObserver ELIMINADO: disparaba extractPhoneFromContactPanel() en cada
   // cambio del DOM, lo que causaba el bug del "chat más reciente" via METHOD 2.
@@ -2256,6 +2366,83 @@ const MEDIA_CAPTURE_SCRIPT = `
   }
 
   // ==========================================================================
+  // Helpers para detección de mensajes (DOM viejo + DOM mayo 2026)
+  // ==========================================================================
+  function getMessageNodes(root) {
+    // DOM viejo: data-id con @c.us/@lid
+    var byDataId = root.querySelectorAll('[data-id*="@"]');
+    if (byDataId.length > 0) return byDataId;
+    // DOM mayo 2026: data-testid="conv-msg-..."
+    return root.querySelectorAll('[data-testid^="conv-msg-"]');
+  }
+
+  function getMessageKey(msgEl) {
+    // Clave única para deduplicación. Prefiere data-id si existe (DOM viejo),
+    // fallback a data-testid (DOM mayo 2026).
+    return msgEl.getAttribute('data-id') ||
+           msgEl.getAttribute('data-testid') ||
+           '';
+  }
+
+  function isMessageOutgoing(msgEl) {
+    var dataId = msgEl.getAttribute('data-id') || '';
+    var testid = msgEl.getAttribute('data-testid') || '';
+    // Señales tradicionales (DOM viejo)
+    if (dataId.startsWith('true_')) return true;
+    if (msgEl.classList.contains('message-out')) return true;
+    if (msgEl.closest('[class*="message-out"]')) return true;
+    // DOM mayo 2026: tail-out / tail-in (cola del bocadillo)
+    if (msgEl.querySelector('[data-testid="tail-out"]')) return true;
+    if (msgEl.querySelector('[data-testid="tail-in"]')) return false;
+    // Algunos releases prefijan "true_" en el testid
+    if (testid.indexOf('true_') > -1) return true;
+    return false;
+  }
+
+  function detectMessageText(msgEl) {
+    // Texto del mensaje. Si no hay texto (caso media), retorna un placeholder
+    // por tipo (ej: "[imagen]", "[audio]") para que el ticket creado en backend
+    // tenga un subject útil en vez de "Mensaje de +5199...".
+    var text = '';
+    var selectableEl = msgEl.querySelector('.selectable-text');
+    if (selectableEl) {
+      text = (selectableEl.innerText || selectableEl.textContent || '').trim();
+    }
+    if (!text) {
+      var spans = msgEl.querySelectorAll('span[dir="ltr"], span[dir="rtl"], span.selectable-text, span[title]');
+      for (var si = 0; si < spans.length && !text; si++) {
+        var spanText = (spans[si].innerText || spans[si].textContent || '').trim();
+        if (spanText && spanText.length > 1) text = spanText;
+      }
+    }
+    if (text) return text;
+
+    // Sin texto → detectar tipo de media para subject útil
+    if (msgEl.querySelector('[data-icon="audio-play"], [data-icon="ptt"], audio')) return '[audio]';
+    if (msgEl.querySelector('[data-icon="sticker"], [data-testid*="sticker"]')) return '[sticker]';
+    if (msgEl.querySelector('video, [data-icon="video"], [data-testid*="video"]')) return '[video]';
+    if (msgEl.querySelector('[data-icon="document"], [data-testid*="document"]')) return '[documento]';
+    if (msgEl.querySelector('[data-icon="gif"]')) return '[gif]';
+    if (msgEl.querySelector('img[src^="blob:"], img[src^="data:"], [data-testid*="image"]')) return '[imagen]';
+    if (msgEl.querySelector('[data-testid="poll-message"]')) return '[encuesta]';
+    if (msgEl.querySelector('[data-icon="contact"]')) return '[contacto]';
+    if (msgEl.querySelector('[data-icon="location"]')) return '[ubicación]';
+    return '[mensaje]';
+  }
+
+  function isOneOnOneMessage(msgEl) {
+    // 1:1 si data-id contiene @c.us o @lid (DOM viejo).
+    // Para DOM nuevo (sin @ en data-id), aceptamos como 1:1 si tampoco tiene
+    // marca de grupo (@g.us). Es decir: por defecto 1:1 a menos que sea grupo.
+    var dataId = msgEl.getAttribute('data-id') || '';
+    if (dataId.includes('@g.us')) return false;
+    if (dataId.includes('@c.us') || dataId.includes('@lid')) return true;
+    // DOM nuevo sin @ — confiar y permitir; el chat de grupo se filtra arriba
+    // por el contexto del chat actual.
+    return true;
+  }
+
+  // ==========================================================================
   // MutationObserver para detectar nuevos mensajes en el chat
   // ==========================================================================
   const chatObserver = new MutationObserver((mutations) => {
@@ -2263,14 +2450,16 @@ const MEDIA_CAPTURE_SCRIPT = `
       for (const node of mutation.addedNodes) {
         if (node.nodeType !== 1) continue; // Solo elementos
 
-        // Verificar si es un mensaje (tiene data-id con @c.us o @lid)
-        const isMessage = node.getAttribute?.('data-id')?.includes?.('@') ||
-                         node.querySelector?.('[data-id*="@"]');
+        // Verificar si es un mensaje (data-id con @ ó testid conv-msg-)
+        const nodeIsMessage = (node.getAttribute?.('data-id')?.includes?.('@')) ||
+                              (node.getAttribute?.('data-testid')?.startsWith?.('conv-msg-'));
+        const innerMessageEl = !nodeIsMessage ? (
+          node.querySelector?.('[data-id*="@"]') ||
+          node.querySelector?.('[data-testid^="conv-msg-"]')
+        ) : null;
 
-        if (isMessage) {
-          // Es un mensaje, buscar imágenes
-          const messageEl = node.getAttribute?.('data-id')?.includes?.('@') ? node :
-                           node.querySelector?.('[data-id*="@"]');
+        if (nodeIsMessage || innerMessageEl) {
+          const messageEl = nodeIsMessage ? node : innerMessageEl;
 
           if (messageEl) {
             // Delay para que las imágenes blob se carguen
@@ -2279,23 +2468,21 @@ const MEDIA_CAPTURE_SCRIPT = `
 
           // === INCOMING MESSAGE DETECTION ===
           if (messageEl) {
-            var msgDataId = messageEl.getAttribute('data-id') || '';
-            if (msgDataId && !notifiedIncomingIds.has(msgDataId)) {
-              var isOutgoing = msgDataId.startsWith('true_') ||
-                               messageEl.classList.contains('message-out') ||
-                               messageEl.closest('[class*="message-out"]');
+            var msgKey = getMessageKey(messageEl);
+            if (msgKey && !notifiedIncomingIds.has(msgKey)) {
+              var isOutgoing = isMessageOutgoing(messageEl);
 
-              // Solo chats 1:1 (@c.us o @lid), no grupos (@g.us)
-              if (!isOutgoing && (msgDataId.includes('@c.us') || msgDataId.includes('@lid'))) {
-                notifiedIncomingIds.add(msgDataId);
+              // Solo chats 1:1 (excluir grupos @g.us)
+              if (!isOutgoing && isOneOnOneMessage(messageEl)) {
+                notifiedIncomingIds.add(msgKey);
 
                 // Solo detectar si es el último mensaje del chat (evita falsos por scroll-load)
                 var chatContainer = messageEl.closest('div#main') || messageEl.closest('[data-testid="conversation-panel-body"]');
-                var allMsgs = chatContainer ? chatContainer.querySelectorAll('[data-id*="@"]') : [];
+                var allMsgs = chatContainer ? getMessageNodes(chatContainer) : [];
                 var isLastMessage = allMsgs.length > 0 && allMsgs[allMsgs.length - 1] === messageEl;
 
                 if (!isLastMessage) {
-                  console.log('[MWS Incoming] Ignorado (no es último msg, probable scroll-load):', msgDataId.substring(0, 30));
+                  console.log('[MWS Incoming] Ignorado (no es último msg, probable scroll-load):', msgKey.substring(0, 30));
                 } else {
                   // Capturar phone AHORA (evitar race con cambio de chat), pero leer texto DENTRO del timer
                   // porque WhatsApp renderiza .selectable-text en un ciclo posterior al nodo del mensaje
@@ -2305,28 +2492,15 @@ const MEDIA_CAPTURE_SCRIPT = `
                   if (incomingDebounceTimer) clearTimeout(incomingDebounceTimer);
                   incomingDebounceTimer = setTimeout(function() {
                     incomingDebounceTimer = null;
-                    var detectedMsgText = '';
-                    var selectableEl = detectedMsgEl.querySelector('.selectable-text');
-                    if (selectableEl) {
-                      detectedMsgText = (selectableEl.innerText || selectableEl.textContent || '').trim();
-                    }
-                    if (!detectedMsgText) {
-                      // Fallback: buscar span con texto si .selectable-text no existe aún
-                      var spans = detectedMsgEl.querySelectorAll('span[dir="ltr"], span[dir="rtl"], span.selectable-text, span[title]');
-                      for (var si = 0; si < spans.length && !detectedMsgText; si++) {
-                        var spanText = (spans[si].innerText || spans[si].textContent || '').trim();
-                        if (spanText && spanText.length > 1) {
-                          detectedMsgText = spanText;
-                        }
-                      }
-                    }
+                    var detectedMsgText = detectMessageText(detectedMsgEl);
                     if (detectedPhone) {
                       console.log('[HABLAPE_INCOMING_DETECTED]' + detectedPhone + '|||' + detectedMsgText);
                     }
                   }, INCOMING_DEBOUNCE_MS);
                 }
-              } else if (isOutgoing && (msgDataId.includes('@c.us') || msgDataId.includes('@lid'))) {
+              } else if (isOutgoing && isOneOnOneMessage(messageEl)) {
                 // Mensaje saliente del agente — emitir señal para habilitar botones de cierre
+                notifiedIncomingIds.add(msgKey);
                 console.log('[HABLAPE_OUTGOING_DETECTED]' + (window.__hablapeCurrentChatPhone || ''));
               }
             }
@@ -2421,31 +2595,32 @@ const MEDIA_CAPTURE_SCRIPT = `
       return;
     }
 
-    var allMessages = mainPane.querySelectorAll('[data-id*="@"]');
-    console.log('[MWS CheckLast] Total mensajes encontrados:', allMessages.length);
+    var allMessages = getMessageNodes(mainPane);
+    console.log('[MWS CheckLast] Total mensajes encontrados:', allMessages.length,
+      '| via data-id*="@":', mainPane.querySelectorAll('[data-id*="@"]').length,
+      '| via [data-testid^="conv-msg-"]:', mainPane.querySelectorAll('[data-testid^="conv-msg-"]').length);
     if (allMessages.length === 0) {
-      console.log('[MWS CheckLast] SALIDA: 0 mensajes');
+      console.log('[MWS CheckLast] SALIDA: 0 mensajes (DOM no usa ni data-id ni conv-msg testid). Ejecuta __hablapeDebugMessages() para diagnóstico.');
       return;
     }
 
     var lastMsg = allMessages[allMessages.length - 1];
     var dataId = lastMsg.getAttribute('data-id') || '';
-    console.log('[MWS CheckLast] Último mensaje data-id:', dataId);
+    var lastTestid = lastMsg.getAttribute('data-testid') || '';
+    console.log('[MWS CheckLast] Último mensaje data-id:', dataId, 'testid:', lastTestid);
 
-    // Solo chats 1:1 (@c.us o @lid), no grupos (@g.us)
-    var is1to1 = dataId.includes('@c.us') || dataId.includes('@lid');
-    if (!is1to1) {
-      console.log('[MWS CheckLast] SALIDA: no es @c.us ni @lid (posible grupo @g.us)');
+    // Excluir grupos (@g.us). DOM nuevo sin @ se acepta como 1:1.
+    if (!isOneOnOneMessage(lastMsg)) {
+      console.log('[MWS CheckLast] SALIDA: es chat de grupo (@g.us)');
       return;
     }
 
-    var startsWithTrue = dataId.startsWith('true_');
-    var hasClassOut = lastMsg.classList.contains('message-out');
-    var closestOut = lastMsg.closest('[class*="message-out"]');
-    var isOutgoing = startsWithTrue || hasClassOut || !!closestOut;
-
+    var isOutgoing = isMessageOutgoing(lastMsg);
     console.log('[MWS CheckLast] isOutgoing:', isOutgoing,
-      '(true_:', startsWithTrue, ', class message-out:', hasClassOut, ', closest:', !!closestOut, ')');
+      '(testid tail-out:', !!lastMsg.querySelector('[data-testid="tail-out"]'),
+      ', tail-in:', !!lastMsg.querySelector('[data-testid="tail-in"]'),
+      ', class message-out:', lastMsg.classList.contains('message-out'),
+      ', dataId true_:', dataId.startsWith('true_'), ')');
 
     if (!isOutgoing) {
       var checkLastPhone = window.__hablapeCurrentChatPhone || '';
@@ -2453,23 +2628,9 @@ const MEDIA_CAPTURE_SCRIPT = `
       console.log('[MWS CheckLast] Último msg es ENTRANTE. phone:', checkLastPhone || '(vacío)');
       if (checkLastPhone) {
         setTimeout(function() {
-          var lastMsgText = '';
-          var lastMsgSelectable = checkLastMsgEl.querySelector('.selectable-text');
-          if (lastMsgSelectable) {
-            lastMsgText = (lastMsgSelectable.innerText || lastMsgSelectable.textContent || '').trim();
-          }
-          if (!lastMsgText) {
-            // Fallback: buscar span con texto si .selectable-text no existe aún
-            var spans = checkLastMsgEl.querySelectorAll('span[dir="ltr"], span[dir="rtl"], span.selectable-text, span[title]');
-            for (var si = 0; si < spans.length && !lastMsgText; si++) {
-              var spanText = (spans[si].innerText || spans[si].textContent || '').trim();
-              if (spanText && spanText.length > 1) {
-                lastMsgText = spanText;
-              }
-            }
-          }
+          var lastMsgText = detectMessageText(checkLastMsgEl);
           console.log('[HABLAPE_INCOMING_DETECTED]' + checkLastPhone + '|||' + lastMsgText);
-          console.log('[MWS CheckLast] ✓ Señal emitida para:', checkLastPhone);
+          console.log('[MWS CheckLast] ✓ Señal emitida para:', checkLastPhone, 'subject:', lastMsgText);
         }, 500);
       } else {
         console.log('[MWS CheckLast] ✗ No hay phone disponible, no se emite señal');
@@ -2496,15 +2657,15 @@ const MEDIA_CAPTURE_SCRIPT = `
       console.log('[MWS Auto] ✓ Observer iniciado en área de chat');
 
       // Escanear mensajes existentes con imágenes
-      const existingMessages = mainPane.querySelectorAll('[data-id*="@"]');
+      const existingMessages = getMessageNodes(mainPane);
       console.log('[MWS Auto] Escaneando', existingMessages.length, 'mensajes existentes...');
 
       // Pre-populate incoming IDs to avoid false positives from existing messages
       notifiedIncomingIds.clear();
       if (incomingDebounceTimer) { clearTimeout(incomingDebounceTimer); incomingDebounceTimer = null; }
       existingMessages.forEach(function(el) {
-        var id = el.getAttribute('data-id');
-        if (id) notifiedIncomingIds.add(id);
+        var key = getMessageKey(el);
+        if (key) notifiedIncomingIds.add(key);
       });
 
       existingMessages.forEach((messageEl, idx) => {
@@ -2531,13 +2692,13 @@ const MEDIA_CAPTURE_SCRIPT = `
       console.log('[MWS Auto] Observer re-attached a nuevo #main');
 
       // Re-scan existing messages for images in the new chat
-      const existingMessages = mainPane.querySelectorAll('[data-id*="@"]');
+      const existingMessages = getMessageNodes(mainPane);
 
       // Add existing message IDs to tracking (don't clear — prevents false re-detection on re-render)
       // Don't clear incomingDebounceTimer — phone is captured in closure, let it fire for previous chat
       existingMessages.forEach(function(el) {
-        var id = el.getAttribute('data-id');
-        if (id) notifiedIncomingIds.add(id);
+        var key = getMessageKey(el);
+        if (key) notifiedIncomingIds.add(key);
       });
 
       existingMessages.forEach((messageEl, idx) => {

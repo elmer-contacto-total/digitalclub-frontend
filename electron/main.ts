@@ -1197,7 +1197,22 @@ function createWhatsAppView(): void {
         console.log('[MWS] ✓ Llamando notifyIncomingMessage para:', phone);
         notifyIncomingMessage(phone, messageContent || undefined);
       } else {
-        console.log('[MWS] ✗ Condición no cumplida, no se llama notifyIncomingMessage');
+        // Loguear explícito qué falta y notificar al renderer para que muestre
+        // un banner — antes era un fallo silencioso que dejaba al cliente sin
+        // ticket creado y al agente sin saber por qué.
+        const missing = [];
+        if (!phone) missing.push('phone');
+        if (!loggedInUserId) missing.push('loggedInUserId');
+        if (!loggedInClientId) missing.push('loggedInClientId');
+        if (!mediaAuthToken) missing.push('mediaAuthToken');
+        console.warn('[MWS] ✗ INCOMING ignorado — falta:', missing.join(', '), '— banner enviado al renderer');
+        if (mainWindow) {
+          mainWindow.webContents.send('whatsapp:auth-incomplete', {
+            missing,
+            droppedSignal: 'incoming',
+            phone
+          });
+        }
       }
     }
     // Mensaje saliente del agente detectado - habilitar botones de cierre
@@ -1630,7 +1645,18 @@ async function showPhoneNeededInWhatsApp(): Promise<void> {
     // Ignorar errores
   }
 
-  // Sin timeout - el blocker permanece hasta que el CRM cargue la info del cliente
+  // Timeout de seguridad para extracción manual: 30 segundos. Si pasa sin
+  // que el usuario haga click en el nombre del contacto y se extraiga el
+  // teléfono, desbloqueamos para que la app no quede inutilizable.
+  chatBlockState.timeoutHandle = setTimeout(() => {
+    if (chatBlockState.isBlocked && chatBlockState.waitingForManualExtraction) {
+      console.warn('[MWS] ⚠️ TIMEOUT extracción manual (30s) — desbloqueando');
+      forceUnblockWhatsAppChat();
+      if (mainWindow) {
+        mainWindow.webContents.send('whatsapp:phone-extraction-timeout');
+      }
+    }
+  }, 30000);
 }
 
 /**
@@ -1668,8 +1694,33 @@ async function checkForExtractedPhone(): Promise<void> {
 function handlePhoneExtracted(phone: string): void {
   if (!phone || !mainWindow) return;
 
+  // Normalizar a 9 dígitos: el backend almacena los teléfonos en formato local
+  // (sin prefijo país). Si el panel de WA entrega "+51 9XX XXX XXX" → 51XXXXXXXXX
+  // (11 dígitos), recortamos al sufijo de 9 dígitos para mantener paridad con
+  // el resto del frontend y la BD.
+  const onlyDigits = (s: string | null) => (s ? s.replace(/\D/g, '').slice(-9) : '');
+  phone = onlyDigits(phone);
+
   // Guard: si ya se procesó este teléfono, ignorar duplicados
   if (phone === chatBlockState.expectedPhone) return;
+
+  // Guard: contacto sin nombre real en WA (header == teléfono).
+  // Cuando el contacto no está guardado en la agenda de WA, el header del chat
+  // muestra el número como "nombre" y el panel de contacto extrae ese mismo
+  // número. Detección estricta: el "nombre" debe quedar como puros dígitos
+  // tras quitar separadores telefónicos (+, espacios, guiones, paréntesis).
+  // Ejemplos:
+  //   "+51 999 123 456" → "51999123456" → puro dígito → SÍ es phone-as-name
+  //   "Juan 999 123 456" → "Juan999123456" → contiene letras → NO
+  //   "Pedro" → "Pedro" → contiene letras → NO
+  if (lastDetectedName) {
+    const nameStripped = lastDetectedName.replace(/[+\s\-().]/g, '');
+    const isPureDigitName = nameStripped.length >= 9 && /^\d+$/.test(nameStripped);
+    if (isPureDigitName && phone === nameStripped.slice(-9)) {
+      console.log('[MWS] Contacto sin nombre real (header == teléfono):', phone, '— overlay permanece, panel CRM en placeholder');
+      return;
+    }
+  }
 
   console.log('[MWS] ✓ Número extraído por usuario:', phone);
 
@@ -1683,8 +1734,7 @@ function handlePhoneExtracted(phone: string): void {
 
   mainWindow.webContents.send('chat-selected', {
     phone,
-    name: lastDetectedName || null,
-    isPhone: true
+    name: lastDetectedName || null
   });
 }
 
@@ -1773,13 +1823,8 @@ async function scanChat(): Promise<void> {
           return { debug: 'no_chat_open' };
         }
 
-        // PASOS 2-5 ELIMINADOS: Toda extracción automática de teléfono desde
-        // sidebar, header, mensajes y nombre causaba el bug del "chat más reciente"
-        // (recogía teléfonos de chats anteriores aún en el DOM).
-        //
-        // ÚNICO MÉTODO: El usuario hace click en el nombre del contacto →
-        // Contact Info se abre → extractPhoneFromContactPanel() extrae el número.
-
+        // El teléfono se extrae sólo cuando el usuario hace click en el nombre
+        // del contacto y se abre el drawer (extractPhoneFromContactPanel).
         return { debug: 'no_phone_found', chatName };
       })()
     `, true);
@@ -1828,8 +1873,7 @@ async function scanChat(): Promise<void> {
             // Enviar evento a Angular con solo el nombre (sin teléfono)
             mainWindow.webContents.send('chat-selected', {
               phone: null,
-              name: result.chatName,
-              isPhone: false
+              name: result.chatName
             });
           }
         }
@@ -1861,8 +1905,7 @@ async function scanChat(): Promise<void> {
 
         mainWindow.webContents.send('chat-selected', {
           phone,
-          name: name || null,
-          isPhone: true
+          name: name || null
         });
       }
     }
@@ -1970,8 +2013,7 @@ async function checkWhatsAppSessionState(): Promise<void> {
         // Notificar que no hay chat seleccionado
         mainWindow.webContents.send('chat-selected', {
           phone: null,
-          name: null,
-          isPhone: false
+          name: null
         });
       }
     }

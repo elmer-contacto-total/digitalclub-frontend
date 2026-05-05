@@ -58,7 +58,7 @@ const electronAPI = {
   },
 
   // Evento de chat seleccionado (teléfono o nombre)
-  onChatSelected: (callback: (data: { phone: string | null; name: string | null; isPhone: boolean }) => void) => {
+  onChatSelected: (callback: (data: { phone: string | null; name: string | null }) => void) => {
     ipcRenderer.on('chat-selected', (_, data) => callback(data));
   },
 
@@ -168,6 +168,18 @@ const electronAPI = {
   // Evento cuando se detecta un mensaje saliente del agente
   onOutgoingMessageDetected: (callback: (data: { phone: string }) => void) => {
     ipcRenderer.on('outgoing-message-detected', (_, data) => callback(data));
+  },
+
+  // Evento cuando una señal se descarta por falta de credenciales (token, userId, etc.)
+  // Permite al renderer mostrar un banner "reloguéate" en lugar de fallar silencioso.
+  onAuthIncomplete: (callback: (data: { missing: string[]; droppedSignal: string; phone?: string }) => void) => {
+    ipcRenderer.on('whatsapp:auth-incomplete', (_, data) => callback(data));
+  },
+
+  // Evento cuando el overlay de extracción manual expira tras 30s sin que el
+  // usuario pueda revelar el teléfono. El overlay ya se desbloqueó.
+  onPhoneExtractionTimeout: (callback: () => void) => {
+    ipcRenderer.on('whatsapp:phone-extraction-timeout', () => callback());
   },
 
   // Notificar estado de impersonation (ajusta bounds de WhatsApp view)
@@ -318,7 +330,7 @@ declare global {
       // Eventos
       onPhoneDetected: (callback: (data: { phone: string; original: string }) => void) => void;
       onPhoneCaptured: (callback: (data: { phone: string; original: string }) => void) => void;
-      onChatSelected: (callback: (data: { phone: string | null; name: string | null; isPhone: boolean }) => void) => void;
+      onChatSelected: (callback: (data: { phone: string | null; name: string | null }) => void) => void;
       onToggleCrmPanel: (callback: () => void) => void;
       // Eventos de seguridad de medios
       onDownloadBlocked: (callback: (data: { filename: string; mimeType: string; size: number; url: string; timestamp: string }) => void) => void;

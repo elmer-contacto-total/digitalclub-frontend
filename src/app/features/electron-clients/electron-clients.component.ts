@@ -16,19 +16,15 @@ import { AuthService } from '../../core/services/auth.service';
 import { MessageDirection } from '../../core/models/message.model';
 import {
   CrmContact,
-  LocalContact,
-  PersonalLabel,
-  PERSONAL_LABELS,
   PhoneUtils,
   getContactInitials,
-  getLabelConfig,
   ChatSelectedEvent,
   UserActionHistory
 } from '../../core/models/crm-contact.model';
 import { TicketCloseType } from '../../core/models/ticket.model';
 import { CannedMessageService, CannedMessage } from '../../core/services/canned-message.service';
 
-type ViewState = 'empty' | 'loading' | 'contact' | 'not-found';
+type ViewState = 'empty' | 'loading' | 'contact';
 
 @Component({
   selector: 'app-electron-clients',
@@ -53,7 +49,6 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   isElectron = signal(false);
 
   // Form fields
-  selectedLabel = signal<PersonalLabel | undefined>(undefined);
   notesField = signal('');
   isSavingNotes = signal(false);
 
@@ -86,12 +81,8 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   requiresResponse = signal(false);
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Label options
-  readonly labelOptions = PERSONAL_LABELS;
-
   // Computed
   isRegistered = computed(() => this.contact()?.type === 'registered');
-  isLocal = computed(() => this.contact()?.type === 'local');
   isAssignedToMe = computed(() => {
     const managerId = this.contact()?.registered?.managerId;
     if (managerId == null) return true; // no manager assigned → accessible
@@ -104,7 +95,6 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   });
   displayPhone = computed(() => this.formatPhone(this.currentPhone()));
   initials = computed(() => getContactInitials(this.displayName()));
-  currentLabelConfig = computed(() => getLabelConfig(this.selectedLabel()));
   canCloseTicket = computed(() => this.hasOpenTicket() && !this.requiresResponse());
 
   ngOnInit(): void {
@@ -166,7 +156,10 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     this.electronService.chatSelected$.pipe(
       takeUntil(this.destroy$),
       switchMap((event: ChatSelectedEvent | null) => {
+        console.log('[CRM] chatSelected$ recibido:', event);
+
         if (!event) {
+          console.log('[CRM] event=null → resetState');
           this.resetState();
           return of({ event: null, result: null });
         }
@@ -175,40 +168,41 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
 
         // Sin teléfono = estado vacío, limpiar todo
         if (!event.phone) {
+          console.log('[CRM] event.phone=null → viewState=empty');
           this.currentPhone.set(null);
           this.contact.set(null);
-          this.selectedLabel.set(undefined);
           this.notesField.set('');
           this.viewState.set('empty');
           return of({ event, result: null });
         }
 
+        console.log('[CRM] viewState=loading, llamando searchByPhone(', event.phone, ')');
         this.viewState.set('loading');
         this.currentPhone.set(event.phone);
         return this.contactsService.searchByPhone(event.phone).pipe(
-          switchMap(result => of({ event, result }))
+          switchMap(result => {
+            console.log('[CRM] searchByPhone resolvió:', result);
+            return of({ event, result });
+          })
         );
       })
     ).subscribe(({ event, result }) => {
       // Determinar el teléfono que procesamos
       const processedPhone = event?.phone || '';
+      console.log('[CRM] subscribe ejecutándose. processedPhone=', processedPhone, 'result=', result);
 
       if (result) {
+        console.log('[CRM] → viewState=contact (type=', result.type, ')');
         this.contact.set(result);
         this.viewState.set('contact');
 
         // Check if this registered contact belongs to another agent
-        const assignedToOther = result.type === 'registered'
-          && result.registered?.managerId != null
+        const assignedToOther = result.registered?.managerId != null
           && result.registered.managerId !== this.authService.currentUser()?.id;
 
         // Initialize form fields
-        if (result.type === 'local' && result.local) {
-          this.selectedLabel.set(result.local.label);
-          this.notesField.set(result.local.notes || '');
-        } else if (result.type === 'registered' && result.registered) {
+        if (result.registered) {
           this.notesField.set(result.registered.issueNotes || '');
-          this.selectedLabel.set(undefined);
           this.requiresResponse.set(result.registered.requireResponse === true);
         }
 
@@ -217,28 +211,18 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
           this.notifyElectronOfActiveClient(result);
 
           // Auto-load action history for registered contacts
-          if (result.type === 'registered' && result.registered?.id) {
+          if (result.registered?.id) {
             this.loadActionHistoryAuto(result.registered.id);
           }
         }
-      } else if (processedPhone) {
-        // No contact found in backend - show info message
-        this.contact.set(null);
-        this.viewState.set('not-found');
-        this.selectedLabel.set(undefined);
-        this.notesField.set('');
-
-        // Notificar a Electron con solo el teléfono (sin clientUserId)
-        this.electronService.setActiveClient(
-          null,
-          processedPhone,
-          this.currentName() || ''
-        );
       } else {
-        // No phone - show empty state and clear all contact data
+        // No registrado en backend → estado vacío. La UI "no registrado /
+        // contacto local" se eliminó: si el cliente no está en BD, el panel
+        // muestra el placeholder y el agente registra el contacto desde otro
+        // flujo administrativo.
+        console.log('[CRM] → viewState=empty (sin contacto registrado)');
         this.contact.set(null);
         this.viewState.set('empty');
-        this.selectedLabel.set(undefined);
         this.notesField.set('');
         this.electronService.clearActiveClient();
       }
@@ -266,36 +250,6 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Retry search for the current phone (useful when not-found but contact may have been registered)
-   */
-  retrySearch(): void {
-    const phone = this.currentPhone();
-    if (!phone) return;
-
-    this.viewState.set('loading');
-    this.contactsService.searchByPhone(phone).subscribe(result => {
-      if (result) {
-        this.contact.set(result);
-        this.viewState.set('contact');
-        if (result.type === 'local' && result.local) {
-          this.selectedLabel.set(result.local.label);
-          this.notesField.set(result.local.notes || '');
-        } else if (result.type === 'registered' && result.registered) {
-          this.notesField.set(result.registered.issueNotes || '');
-          this.selectedLabel.set(undefined);
-          this.requiresResponse.set(result.registered.requireResponse === true);
-          this.notifyElectronOfActiveClient(result);
-          if (result.registered.id) {
-            this.loadActionHistoryAuto(result.registered.id);
-          }
-        }
-      } else {
-        this.viewState.set('not-found');
-      }
-    });
-  }
-
-  /**
    * Format phone number for display
    */
   formatPhone(phone: string | null): string {
@@ -304,83 +258,27 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle label selection change
-   */
-  onLabelChange(labelValue: string): void {
-    const label = labelValue as PersonalLabel || undefined;
-    this.selectedLabel.set(label);
-
-    const phone = this.currentPhone();
-    if (phone) {
-      // Save to local storage
-      this.contactsService.saveLocalContact(phone, {
-        name: this.currentName() || undefined,
-        label
-      });
-
-      // Update local contact in state if applicable
-      const current = this.contact();
-      if (!current || current.type === 'local') {
-        const local = this.contactsService.getLocalContact(phone);
-        if (local) {
-          this.contact.set({
-            type: 'local',
-            phone,
-            name: local.name || phone,
-            local
-          });
-          // Transition from not-found to contact view
-          if (this.viewState() === 'not-found') {
-            this.viewState.set('contact');
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * Save notes (local or to backend)
+   * Save notes to backend (only available for registered contacts)
    */
   saveNotes(): void {
-    const phone = this.currentPhone();
-    const notes = this.notesField();
     const c = this.contact();
+    if (!c?.registered) return;
 
-    if (!phone) return;
-
+    const notes = this.notesField();
     this.isSavingNotes.set(true);
 
-    if (c?.type === 'registered' && c.registered) {
-      // Save to backend
-      this.contactsService.updateIssueNotes(c.registered.id, notes).subscribe({
-        next: () => {
-          this.isSavingNotes.set(false);
-          // Update local state
-          if (c.registered) {
-            c.registered.issueNotes = notes;
-          }
-        },
-        error: (err) => {
-          console.error('Error saving notes:', err);
-          this.isSavingNotes.set(false);
+    this.contactsService.updateIssueNotes(c.registered.id, notes).subscribe({
+      next: () => {
+        this.isSavingNotes.set(false);
+        if (c.registered) {
+          c.registered.issueNotes = notes;
         }
-      });
-    } else {
-      // Save to local storage
-      this.contactsService.saveLocalContact(phone, { notes });
-      this.isSavingNotes.set(false);
-
-      // Update local contact in state
-      const local = this.contactsService.getLocalContact(phone);
-      if (local) {
-        this.contact.set({
-          type: 'local',
-          phone,
-          name: local.name || phone,
-          local
-        });
+      },
+      error: (err) => {
+        console.error('Error saving notes:', err);
+        this.isSavingNotes.set(false);
       }
-    }
+    });
   }
 
   /**
@@ -392,19 +290,12 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     const phone = contact.phone || this.currentPhone() || '';
     const name = contact.name || this.currentName() || '';
 
-    if (contact.type === 'registered' && contact.registered) {
-      // Registered contact - pass the client user ID
-      this.electronService.setActiveClient(
-        contact.registered.id,
-        phone,
-        name
-      );
-      console.log('[CRM] Active client set:', contact.registered.id, phone, name);
-    } else {
-      // Local contact - no client user ID
-      this.electronService.setActiveClient(null, phone, name);
-      console.log('[CRM] Active client set (local):', phone, name);
-    }
+    this.electronService.setActiveClient(
+      contact.registered.id,
+      phone,
+      name
+    );
+    console.log('[CRM] Active client set:', contact.registered.id, phone, name);
   }
 
   /**
@@ -415,7 +306,6 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     this.currentPhone.set(null);
     this.currentName.set(null);
     this.contact.set(null);
-    this.selectedLabel.set(undefined);
     this.notesField.set('');
     this.requiresResponse.set(false);
     this.cancelRefreshTimer();
@@ -434,7 +324,6 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     this.currentPhone.set(null);
     this.currentName.set(null);
     this.contact.set(null);
-    this.selectedLabel.set(undefined);
     this.notesField.set('');
     this.isSavingNotes.set(false);
 
@@ -588,11 +477,10 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
               this.loadActionHistoryAuto(result.registered.id);
             }
           } else {
-            // Was not-found or local — now the contact is registered in the backend
+            // Antes era 'empty' (no registrado) — ahora aparece en backend
             this.contact.set(result);
             this.viewState.set('contact');
             this.notesField.set(result.registered.issueNotes || '');
-            this.selectedLabel.set(undefined);
             this.requiresResponse.set(result.registered.requireResponse === true);
             this.notifyElectronOfActiveClient(result);
             if (result.registered.id) {

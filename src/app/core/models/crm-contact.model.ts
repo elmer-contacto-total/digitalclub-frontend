@@ -4,46 +4,6 @@
  */
 
 /**
- * Personal labels for local contacts (stored in localStorage)
- */
-export type PersonalLabel =
-  | 'jefe'
-  | 'rrhh'
-  | 'companero'
-  | 'cliente'
-  | 'proveedor'
-  | 'amigo'
-  | 'familia'
-  | 'otro';
-
-/**
- * Label configuration with display names
- */
-export const PERSONAL_LABELS: { value: PersonalLabel; label: string; icon: string }[] = [
-  { value: 'jefe', label: 'Jefe', icon: 'ph-crown' },
-  { value: 'rrhh', label: 'RRHH', icon: 'ph-identification-badge' },
-  { value: 'companero', label: 'Compañero', icon: 'ph-users' },
-  { value: 'cliente', label: 'Cliente', icon: 'ph-storefront' },
-  { value: 'proveedor', label: 'Proveedor', icon: 'ph-truck' },
-  { value: 'amigo', label: 'Amigo', icon: 'ph-heart' },
-  { value: 'familia', label: 'Familia', icon: 'ph-house-line' },
-  { value: 'otro', label: 'Otro', icon: 'ph-tag' }
-];
-
-/**
- * Local contact stored in localStorage
- * For contacts not registered in the system
- */
-export interface LocalContact {
-  phone: string;
-  name?: string;
-  label?: PersonalLabel;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
  * Registered contact from the backend API
  */
 export interface RegisteredContact {
@@ -80,14 +40,13 @@ export interface UserActionHistory {
 }
 
 /**
- * Combined CRM contact (can be local or registered)
+ * Combined CRM contact (registered in backend)
  */
 export interface CrmContact {
-  type: 'local' | 'registered';
+  type: 'registered';
   phone: string;
   name: string;
-  local?: LocalContact;
-  registered?: RegisteredContact;
+  registered: RegisteredContact;
 }
 
 /**
@@ -96,7 +55,6 @@ export interface CrmContact {
 export interface ChatSelectedEvent {
   phone: string | null;
   name: string | null;
-  isPhone: boolean;
 }
 
 /**
@@ -165,14 +123,6 @@ export const PhoneUtils = {
     return PhoneUtils.normalize(phone);
   }
 };
-
-/**
- * Get label configuration by value
- */
-export function getLabelConfig(value: PersonalLabel | undefined): typeof PERSONAL_LABELS[0] | undefined {
-  if (!value) return undefined;
-  return PERSONAL_LABELS.find(l => l.value === value);
-}
 
 /**
  * Get initials from name

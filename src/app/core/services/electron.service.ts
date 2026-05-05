@@ -50,6 +50,8 @@ interface ElectronAPI {
   setLoggedInUser?(userId: number, userName: string, clientId?: number): void;
   onIncomingMessageDetected?(callback: (data: { phone: string }) => void): void;
   onOutgoingMessageDetected?(callback: (data: { phone: string }) => void): void;
+  onAuthIncomplete?(callback: (data: { missing: string[]; droppedSignal: string; phone?: string }) => void): void;
+  onPhoneExtractionTimeout?(callback: () => void): void;
   setAuthToken?(token: string): void;
   clearLoggedInUser?(): void;
 
@@ -239,6 +241,32 @@ export class ElectronService {
       window.electronAPI.onOutgoingMessageDetected((data: { phone: string }) => {
         this.ngZone.run(() => {
           this.outgoingMessageSubject.next(data);
+        });
+      });
+    }
+
+    // Auth incomplete: una señal (incoming/outgoing/etc.) se descartó por
+    // falta de credenciales. Lo dejamos visible en consola para que el agente
+    // sepa que tiene que reloguearse — antes era fallo silencioso.
+    if (window.electronAPI.onAuthIncomplete) {
+      window.electronAPI.onAuthIncomplete((data) => {
+        this.ngZone.run(() => {
+          console.warn(
+            '[ElectronService] ⚠️ Señal "' + data.droppedSignal +
+            '" descartada — faltan credenciales: ' + data.missing.join(', ') +
+            (data.phone ? ' (phone=' + data.phone + ')' : '') +
+            '. Vuelve a iniciar sesión.'
+          );
+        });
+      });
+    }
+
+    // Phone extraction timeout: el overlay manual expiró sin que el usuario
+    // pueda revelar el teléfono. Ya se desbloqueó en Electron.
+    if (window.electronAPI.onPhoneExtractionTimeout) {
+      window.electronAPI.onPhoneExtractionTimeout(() => {
+        this.ngZone.run(() => {
+          console.warn('[ElectronService] ⚠️ Timeout (30s) extrayendo teléfono — overlay desbloqueado.');
         });
       });
     }

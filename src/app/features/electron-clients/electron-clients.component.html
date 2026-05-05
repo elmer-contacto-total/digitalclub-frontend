@@ -48,83 +48,6 @@
         </div>
       }
 
-      <!-- Not Found State -->
-      @if (viewState() === 'not-found') {
-        <div class="contact-info">
-          <!-- Header mínimo -->
-          <div class="contact-card">
-            <div class="contact-avatar">
-              <div class="avatar-placeholder">{{ initials() }}</div>
-            </div>
-            <div class="contact-main">
-              <h2 class="contact-name">{{ displayName() }}</h2>
-              <div class="contact-phone">
-                <i class="ph ph-phone"></i>
-                <span>{{ displayPhone() }}</span>
-              </div>
-            </div>
-            <div class="contact-type">
-              <span class="type-badge unknown">
-                <i class="ph ph-user-minus"></i>
-                No registrado
-              </span>
-            </div>
-          </div>
-
-          <div class="scrollable-content">
-            <!-- Reintentar búsqueda -->
-            <div class="section">
-              <button class="action-btn" (click)="retrySearch()">
-                <i class="ph ph-arrows-clockwise"></i>
-                <span>Buscar de nuevo</span>
-              </button>
-            </div>
-
-            <!-- Etiqueta personal -->
-            <div class="section">
-              <div class="section-header">
-                <i class="ph ph-tag"></i>
-                <span>Etiqueta</span>
-              </div>
-              <div class="label-chips">
-                @for (option of labelOptions; track option.value) {
-                  <button
-                    class="label-chip"
-                    [class.selected]="selectedLabel() === option.value"
-                    (click)="onLabelChange(option.value)"
-                  >
-                    <i [class]="option.icon"></i>
-                    <span>{{ option.label }}</span>
-                  </button>
-                }
-              </div>
-              @if (selectedLabel()) {
-                <button class="clear-label-btn" (click)="onLabelChange('')">
-                  <i class="ph ph-x"></i>
-                  <span>Quitar etiqueta</span>
-                </button>
-              }
-            </div>
-
-            <!-- Notas personales -->
-            <div class="section">
-              <div class="section-header">
-                <i class="ph ph-note-pencil"></i>
-                <span>Notas Personales</span>
-              </div>
-              <textarea
-                class="notes-input"
-                [ngModel]="notesField()"
-                (ngModelChange)="notesField.set($event)"
-                (blur)="saveNotes()"
-                placeholder="Escribe notas sobre este contacto..."
-                rows="3"
-              ></textarea>
-            </div>
-          </div>
-        </div>
-      }
-
       <!-- Contact Info -->
       @if (viewState() === 'contact') {
         @if (isRegistered() && !isAssignedToMe()) {
@@ -276,39 +199,11 @@
               </div>
             }
 
-            <!-- Personal Label (for non-registered contacts) -->
-            @if (!isRegistered()) {
-              <div class="section">
-                <div class="section-header">
-                  <i class="ph ph-tag"></i>
-                  <span>Etiqueta</span>
-                </div>
-                <div class="label-chips">
-                  @for (option of labelOptions; track option.value) {
-                    <button
-                      class="label-chip"
-                      [class.selected]="selectedLabel() === option.value"
-                      (click)="onLabelChange(option.value)"
-                    >
-                      <i [class]="option.icon"></i>
-                      <span>{{ option.label }}</span>
-                    </button>
-                  }
-                </div>
-                @if (selectedLabel()) {
-                  <button class="clear-label-btn" (click)="onLabelChange('')">
-                    <i class="ph ph-x"></i>
-                    <span>Quitar etiqueta</span>
-                  </button>
-                }
-              </div>
-            }
-
             <!-- Notes Section -->
             <div class="section">
               <div class="section-header">
                 <i class="ph ph-note-pencil"></i>
-                <span>{{ isRegistered() ? 'Notas del Cliente' : 'Notas Personales' }}</span>
+                <span>Notas del Cliente</span>
               </div>
               <textarea
                 class="notes-input"
