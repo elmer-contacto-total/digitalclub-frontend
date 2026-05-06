@@ -4,7 +4,7 @@
  * and reports result. Respects configurable rate limiting and pauses.
  */
 
-import { app, BrowserView, clipboard, net, nativeImage } from 'electron';
+import { app, BrowserView, BrowserWindow, clipboard, net, nativeImage } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -162,6 +162,21 @@ export class BulkSender {
 
   setWhatsAppView(view: BrowserView | null): void {
     this.whatsappView = view;
+  }
+
+  // Para reenviar logs de diagnóstico al renderer Angular (DevTools de la
+  // ventana principal con Ctrl+Shift+I). El main process no tiene DevTools,
+  // así que sin esto los logs se pierden.
+  private mainWindow: BrowserWindow | null = null;
+  setMainWindow(win: BrowserWindow | null): void {
+    this.mainWindow = win;
+  }
+  private sendDiagToRenderer(payload: unknown): void {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      try {
+        this.mainWindow.webContents.send('bulk:diag-log', payload);
+      } catch { /* ignore */ }
+    }
   }
 
   setAuthToken(token: string): void {
@@ -990,6 +1005,9 @@ export class BulkSender {
             })()
           `, true);
           console.log('[BulkSender] Diag filter fail:', JSON.stringify(diag));
+          // Reenviar al renderer Angular (DevTools de la ventana principal con
+          // F12 / Ctrl+Shift+I). El log del main process no se ve sin esto.
+          this.sendDiagToRenderer(diag);
         } catch (diagErr) {
           console.warn('[BulkSender] Diag filter fail: error capturando estado:', diagErr);
         }

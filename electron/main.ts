@@ -2311,12 +2311,14 @@ function registerShortcuts(): void {
     }
   });
 
-  // F12 - Abrir DevTools para depuración (Angular)
-  globalShortcut.register('F12', () => {
+  // F12 / Ctrl+Shift+I - Abrir DevTools para depuración (Angular)
+  const toggleAngularDevTools = () => {
     if (mainWindow) {
       mainWindow.webContents.toggleDevTools();
     }
-  });
+  };
+  globalShortcut.register('F12', toggleAngularDevTools);
+  globalShortcut.register('CommandOrControl+Shift+I', toggleAngularDevTools);
 
   // Ctrl+Shift+W - Abrir DevTools del BrowserView de WhatsApp Web
   // Útil para diagnosticar selectores, scripts inyectados (__hablape*),
@@ -2825,6 +2827,7 @@ function setupIPC(): void {
         });
       }
       bulkSender.setWhatsAppView(whatsappView);
+      bulkSender.setMainWindow(mainWindow);
       bulkSender.setAuthToken(authToken);
       const result = await bulkSender.start(bulkSendId);
       return result;
@@ -2857,6 +2860,7 @@ function setupIPC(): void {
   // Resume bulk send
   ipcMain.handle('bulk-send:resume', async () => {
     bulkSender.setWhatsAppView(whatsappView);
+    bulkSender.setMainWindow(mainWindow);
     const result = await bulkSender.resume();
     if (mainWindow) {
       const s = bulkSender.getStatus();

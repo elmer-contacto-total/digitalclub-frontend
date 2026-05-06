@@ -182,6 +182,13 @@ const electronAPI = {
     ipcRenderer.on('whatsapp:phone-extraction-timeout', () => callback());
   },
 
+  // Diagnóstico del bulk sender — el main process loguea cuando el filter
+  // de búsqueda no aplica. Se reenvía al renderer para que aparezca en
+  // DevTools (F12 / Ctrl+Shift+I).
+  onBulkDiagLog: (callback: (data: unknown) => void) => {
+    ipcRenderer.on('bulk:diag-log', (_, data) => callback(data));
+  },
+
   // Notificar estado de impersonation (ajusta bounds de WhatsApp view)
   setImpersonation: (active: boolean) => {
     ipcRenderer.send('set-impersonation', active);

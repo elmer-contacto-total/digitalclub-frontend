@@ -52,6 +52,7 @@ interface ElectronAPI {
   onOutgoingMessageDetected?(callback: (data: { phone: string }) => void): void;
   onAuthIncomplete?(callback: (data: { missing: string[]; droppedSignal: string; phone?: string }) => void): void;
   onPhoneExtractionTimeout?(callback: () => void): void;
+  onBulkDiagLog?(callback: (data: unknown) => void): void;
   setAuthToken?(token: string): void;
   clearLoggedInUser?(): void;
 
@@ -267,6 +268,17 @@ export class ElectronService {
       window.electronAPI.onPhoneExtractionTimeout(() => {
         this.ngZone.run(() => {
           console.warn('[ElectronService] ⚠️ Timeout (30s) extrayendo teléfono — overlay desbloqueado.');
+        });
+      });
+    }
+
+    // Diagnóstico del bulk sender: cuando el filter de búsqueda no aplica,
+    // el main process volcará el estado del DOM. Lo logueamos para que sea
+    // visible en DevTools (F12 / Ctrl+Shift+I).
+    if (window.electronAPI.onBulkDiagLog) {
+      window.electronAPI.onBulkDiagLog((data) => {
+        this.ngZone.run(() => {
+          console.log('[BulkSender Diag]', data);
         });
       });
     }
