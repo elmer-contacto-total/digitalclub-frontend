@@ -1,4 +1,5 @@
 import { Injectable, NgZone, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { ChatSelectedEvent, PhoneDetectedEvent } from '../models/crm-contact.model';
 
@@ -53,6 +54,7 @@ interface ElectronAPI {
   onAuthIncomplete?(callback: (data: { missing: string[]; droppedSignal: string; phone?: string }) => void): void;
   onPhoneExtractionTimeout?(callback: () => void): void;
   onBulkDiagLog?(callback: (data: unknown) => void): void;
+  onBulkResumedFromPause?(callback: () => void): void;
   setAuthToken?(token: string): void;
   clearLoggedInUser?(): void;
 
@@ -100,6 +102,7 @@ declare global {
 })
 export class ElectronService {
   private ngZone = inject(NgZone);
+  private router = inject(Router);
 
   // State subjects
   private chatSelectedSubject = new BehaviorSubject<ChatSelectedEvent | null>(null);
@@ -285,6 +288,24 @@ export class ElectronService {
       window.electronAPI.onBulkDiagLog((data) => {
         this.ngZone.run(() => {
           console.log('[BulkSender Diag]', data);
+        });
+      });
+    }
+
+    // Bulk reanudó tras pausa anti-ban: si el agente está en otra ruta,
+    // redirigirlo a /app/electron_clients para que ElectronClientsComponent
+    // se monte de nuevo. Esto restablece el ciclo show/hide de WA cuando
+    // se entra/sale del módulo, que de otra forma queda "atrapado" mostrando
+    // WA flotante sobre cualquier página hasta que el agente vuelva manual
+    // a Clientes (new).
+    if (window.electronAPI.onBulkResumedFromPause) {
+      window.electronAPI.onBulkResumedFromPause(() => {
+        this.ngZone.run(() => {
+          const currentUrl = this.router.url;
+          if (!currentUrl.startsWith('/app/electron_clients')) {
+            console.log('[ElectronService] Pausa anti-ban terminó — redirigiendo a Clientes (new) desde', currentUrl);
+            this.router.navigateByUrl('/app/electron_clients');
+          }
         });
       });
     }

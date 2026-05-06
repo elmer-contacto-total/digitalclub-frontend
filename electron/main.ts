@@ -57,10 +57,19 @@ bulkSender.setOverlayCallback((data) => {
   const nowInPause = remaining > 0;
   lastBulkPeriodicPauseRemaining = remaining;
 
-  // Pausa terminó y el bulk vuelve a enviar → asegurar WA visible.
-  if (wasInPause && !nowInPause && data.state === 'running' && !whatsappVisible) {
-    console.log('[MWS] Pausa anti-ban terminó — restaurando WhatsApp view para que cdpType funcione');
-    showWhatsAppView();
+  // Pausa terminó y el bulk vuelve a enviar → asegurar WA visible y, si el
+  // agente está en otra opción, redirigirlo a Clientes (new) para que el
+  // ciclo "navegar fuera durante pausa = ocultar WA" siga funcionando en
+  // futuras pausas. Sin la redirección, electron-clients.ngOnDestroy nunca
+  // se vuelve a disparar y la WA queda flotando sobre cualquier página.
+  if (wasInPause && !nowInPause && data.state === 'running') {
+    if (!whatsappVisible) {
+      console.log('[MWS] Pausa anti-ban terminó — restaurando WhatsApp view');
+      showWhatsAppView();
+    }
+    if (mainWindow) {
+      mainWindow.webContents.send('bulk:resumed-from-pause');
+    }
   }
 
   if (mainWindow) {

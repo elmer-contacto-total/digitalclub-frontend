@@ -189,6 +189,13 @@ const electronAPI = {
     ipcRenderer.on('bulk:diag-log', (_, data) => callback(data));
   },
 
+  // Bulk reanuda envíos tras una pausa anti-ban. El renderer redirige al
+  // módulo Clientes (new) para que el ciclo de mostrar/ocultar WA en cada
+  // pausa subsiguiente siga funcionando.
+  onBulkResumedFromPause: (callback: () => void) => {
+    ipcRenderer.on('bulk:resumed-from-pause', () => callback());
+  },
+
   // Notificar estado de impersonation (ajusta bounds de WhatsApp view)
   setImpersonation: (active: boolean) => {
     ipcRenderer.send('set-impersonation', active);
