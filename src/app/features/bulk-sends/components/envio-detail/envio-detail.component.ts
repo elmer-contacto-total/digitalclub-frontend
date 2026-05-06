@@ -1,6 +1,6 @@
 import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, interval, takeUntil, switchMap, filter } from 'rxjs';
 import { BulkSendService, BulkSendDetail, BulkSendRecipient } from '../../../../core/services/bulk-send.service';
 import { ElectronService } from '../../../../core/services/electron.service';
@@ -290,6 +290,7 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
   private wsService = inject(WebSocketService);
   private toast = inject(ToastService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private destroy$ = new Subject<void>();
   private unsubBulkSendWs: (() => void) | null = null;
 
@@ -406,8 +407,12 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
     });
   }
 
-  resume(): void {
+  async resume(): Promise<void> {
     if (this.electronService.isElectron) {
+      // Redirigir a Clientes (new) para que la WhatsApp BrowserView esté
+      // visible cuando el bulk reanude. Si no, las operaciones CDP fallan.
+      await this.router.navigate(['/app/electron_clients']);
+      await new Promise(resolve => setTimeout(resolve, 500));
       this.electronService.resumeBulkSend();
       this.toast.success('Envío reanudado');
       this.loadDetail();
@@ -445,6 +450,13 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
 
     this.isStarting.set(true);
     try {
+      // Redirigir a Clientes (new) antes de iniciar: el bulk-sender requiere
+      // que la WhatsApp BrowserView esté visible (montada en el window) para
+      // que cdpType y dispatchKeyEvent funcionen. Si arrancamos desde el
+      // detalle sin redirigir, los envíos fallan.
+      await this.router.navigate(['/app/electron_clients']);
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const ok = await this.electronService.startBulkSend(this.bulkSendId, token);
       if (ok) {
         this.toast.success('Envío masivo iniciado');
