@@ -1530,6 +1530,48 @@ const MEDIA_CAPTURE_SCRIPT = `
     return info;
   };
 
+  // Helper de debug para diagnosticar el filtro de búsqueda del sidebar
+  // (caso bulk-sender que reporta "Búsqueda no filtró tras 3 intentos").
+  // Uso: en DevTools de WA, escribir el número en el search manualmente y
+  // luego ejecutar __hablapeDebugSearch('913254120').
+  window.__hablapeDebugSearch = function(phone) {
+    var input = document.querySelector('input[data-tab="3"]') ||
+                document.querySelector('[data-testid="chat-list-search-input"]') ||
+                document.querySelector('#side div[contenteditable="true"]');
+    var inputInfo = input ? {
+      tag: input.tagName,
+      testid: input.getAttribute('data-testid'),
+      tab: input.getAttribute('data-tab'),
+      value: input.tagName === 'INPUT' ? input.value : input.textContent
+    } : null;
+    var cells = Array.prototype.slice.call(
+      document.querySelectorAll('[data-testid="cell-frame-container"]')
+    ).slice(0, 10).map(function(el) {
+      var titleEl = el.querySelector('[data-testid="cell-frame-title"]') || el.querySelector('span[title]');
+      return {
+        title: titleEl ? ((titleEl.textContent || titleEl.getAttribute('title') || '')) : null,
+        excerpt: (el.textContent || '').substring(0, 80)
+      };
+    });
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'))
+      .map(function(t) { return t.textContent && t.textContent.trim(); }).filter(Boolean);
+    var activeTabEl = document.querySelector('[role="tab"][aria-selected="true"]');
+    var info = {
+      input: inputInfo,
+      cellCount: document.querySelectorAll('[data-testid="cell-frame-container"]').length,
+      listItemCount: document.querySelectorAll('#pane-side [role="listitem"]').length,
+      rowCount: document.querySelectorAll('#pane-side [role="row"]').length,
+      cells: cells,
+      tabs: tabs,
+      activeTab: activeTabEl ? activeTabEl.textContent.trim() : null,
+      matchByPhone: phone ? cells.filter(function(c) {
+        return c.excerpt && c.excerpt.indexOf(phone) > -1;
+      }).length : null
+    };
+    console.log('[MWS DebugSearch]', info);
+    return info;
+  };
+
   // MutationObserver ELIMINADO: disparaba extractPhoneFromContactPanel() en cada
   // cambio del DOM, lo que causaba el bug del "chat más reciente" via METHOD 2.
   //

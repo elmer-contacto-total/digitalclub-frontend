@@ -944,6 +944,56 @@ export class BulkSender {
         if (searchCheck.status === 'no_results') break;
         if (searchCheck.count <= 15) break; // Filtered OK
 
+        // Diagnóstico: volcar estado real del DOM cuando el filter falla.
+        // Útil para saber si el typing llegó al input, si hay pestañas
+        // (Chats/Contactos), y si el target aparece entre los resultados.
+        try {
+          const diag = await this.whatsappView.webContents.executeJavaScript(`
+            (function() {
+              var input = document.querySelector('input[data-tab="3"]') ||
+                          document.querySelector('[data-testid="chat-list-search-input"]') ||
+                          document.querySelector('#side div[contenteditable="true"]');
+              var inputContent = input ? (input.tagName === 'INPUT' ? (input.value || '') : (input.textContent || '')).trim() : '';
+              var ae = document.activeElement;
+              var cells = Array.prototype.slice.call(
+                document.querySelectorAll('[data-testid="cell-frame-container"]')
+              );
+              var firstResults = cells.slice(0, 5).map(function(el) {
+                var titleEl = el.querySelector('[data-testid="cell-frame-title"]') || el.querySelector('span[title]');
+                return {
+                  title: titleEl ? ((titleEl.textContent || titleEl.getAttribute('title') || '')).substring(0, 60) : null,
+                  excerpt: (el.textContent || '').substring(0, 80)
+                };
+              });
+              var phoneSuffix = ${JSON.stringify(normalizedPhone.slice(-7))};
+              var matchByPhone = cells.filter(function(el) {
+                return (el.textContent || '').indexOf(phoneSuffix) > -1;
+              }).length;
+              var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'))
+                .map(function(t) { return t.textContent && t.textContent.trim(); })
+                .filter(Boolean);
+              var activeTab = document.querySelector('[role="tab"][aria-selected="true"]');
+              return {
+                attempt: ${attempt},
+                inputContent: inputContent,
+                expected: ${JSON.stringify(normalizedPhone)},
+                contentMatches: inputContent === ${JSON.stringify(normalizedPhone)},
+                activeElementTag: ae ? ae.tagName : null,
+                activeElementTestid: ae ? ae.getAttribute('data-testid') : null,
+                activeElementTab: ae ? ae.getAttribute('data-tab') : null,
+                cellCount: cells.length,
+                firstResults: firstResults,
+                tabs: tabs,
+                activeTab: activeTab ? activeTab.textContent.trim() : null,
+                matchByPhoneSuffix: matchByPhone
+              };
+            })()
+          `, true);
+          console.log('[BulkSender] Diag filter fail:', JSON.stringify(diag));
+        } catch (diagErr) {
+          console.warn('[BulkSender] Diag filter fail: error capturando estado:', diagErr);
+        }
+
         // Too many results — search didn't filter. Retry: clear, escape, re-enter search
         if (attempt < 2) {
           console.warn(`[BulkSender] Búsqueda no filtró (${searchCheck.count} items), reintentando (${attempt + 1}/2)...`);
