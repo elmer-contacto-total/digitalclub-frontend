@@ -1886,32 +1886,6 @@ const MEDIA_CAPTURE_SCRIPT = `
     }
   }
 
-  // Comprime imágenes >maxSizeMB usando OffscreenCanvas. Reduce dimensiones
-  // a max 1920px y re-encoda como JPEG calidad 0.7. Esto evita que imágenes
-  // de 8MB+ inflen a 11MB+ en base64 y tumben el endpoint del backend.
-  // Si la compresión falla por cualquier motivo, retorna el blob original.
-  async function compressImageIfLarge(blob, maxSizeMB) {
-    maxSizeMB = maxSizeMB || 2;
-    if (!blob || blob.size <= maxSizeMB * 1024 * 1024) return blob;
-    try {
-      var bitmap = await createImageBitmap(blob);
-      var maxDim = 1920;
-      var scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
-      var w = Math.max(1, Math.round(bitmap.width * scale));
-      var h = Math.max(1, Math.round(bitmap.height * scale));
-      var canvas = new OffscreenCanvas(w, h);
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(bitmap, 0, 0, w, h);
-      var compressed = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
-      console.log('[MWS Compress] ' + Math.round(blob.size / 1024) + 'KB → ' +
-        Math.round(compressed.size / 1024) + 'KB (' + bitmap.width + 'x' + bitmap.height +
-        ' → ' + w + 'x' + h + ')');
-      return compressed.size < blob.size ? compressed : blob;
-    } catch (err) {
-      console.warn('[MWS Compress] Falló, usando blob original:', (err && err.message) || err);
-      return blob;
-    }
-  }
 
   // Helper: Format local datetime components as ISO string (no UTC conversion)
   // WhatsApp shows times in local timezone; DB column is TIMESTAMP without timezone
@@ -2402,9 +2376,7 @@ const MEDIA_CAPTURE_SCRIPT = `
       saveRevealedMessage(messageId);
 
       // Descargar la imagen (con timeout para no colgar si el blob expira)
-      const rawBlob = await fetchBlobWithTimeout(blobUrl, 10000);
-      // Comprimir si es >2MB para no inflar el payload base64 al backend.
-      const blob = await compressImageIfLarge(rawBlob, 2);
+      const blob = await fetchBlobWithTimeout(blobUrl, 10000);
       const mimeType = blob.type || 'image/jpeg';
       const size = blob.size;
 
