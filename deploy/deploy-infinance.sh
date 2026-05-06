@@ -2,6 +2,9 @@
 # Deploy del frontend Angular a la VM de infinance.innovag.com.pe
 set -euo pipefail
 
+# Silenciar el prompt de telemetría de Angular CLI (no interactivo).
+export NG_CLI_ANALYTICS=false
+
 REPO_DIR="${REPO_DIR:-$HOME/digitalclub/digitalclub-frontend}"
 WEB_ROOT="/var/www/holape-angular"
 DOMAIN_ENV="deploy/env.infinance.js"
