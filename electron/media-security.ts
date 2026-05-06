@@ -447,15 +447,27 @@ const BLOCK_DOWNLOAD_SCRIPT = `
     element.style.pointerEvents = 'none';
     element.style.opacity = '0.5';
 
-    const parent = element.closest('[data-testid="document-message"]') ||
-                   element.closest('[data-testid^="conv-msg-"]') ||
+    // Buscar el CARD del documento (no la burbuja completa del mensaje).
+    // Prioridad:
+    //   1. <a> envolvente — los documentos en WA están dentro de un anchor con
+    //      href/download que ES la card clickeable.
+    //   2. [data-testid="document-message"] del DOM viejo.
+    //   3. closest [role="button"] — algunos releases envuelven la card así.
+    //   4. parentElement directo (último recurso).
+    // NO usar closest [data-testid^="conv-msg-"] aquí: matchea toda la burbuja
+    // del mensaje y el overlay se desborda con "Política de seguridad" fuera
+    // del card.
+    const parent = element.closest('a') ||
+                   element.closest('[data-testid="document-message"]') ||
+                   element.closest('[role="button"]') ||
                    element.parentElement;
     if (parent && !parent.querySelector('.hablape-doc-blocked')) {
       const overlay = document.createElement('div');
       overlay.className = 'hablape-doc-blocked';
-      overlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:100;color:#f59e0b;font-size:12px;text-align:center;padding:10px;border-radius:8px;';
-      overlay.innerHTML = '🚫 Documento bloqueado<br><small>Política de seguridad</small>';
+      overlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:100;color:#f59e0b;font-size:11px;line-height:1.2;text-align:center;padding:6px;border-radius:8px;overflow:hidden;box-sizing:border-box;';
+      overlay.innerHTML = '<span style="white-space:nowrap;">🚫 Documento bloqueado</span><br><small style="font-size:10px;opacity:0.85;">Política de seguridad</small>';
       parent.style.position = 'relative';
+      parent.style.overflow = 'hidden';
       parent.appendChild(overlay);
     }
   };
