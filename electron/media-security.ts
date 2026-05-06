@@ -464,8 +464,8 @@ const BLOCK_DOWNLOAD_SCRIPT = `
     if (parent && !parent.querySelector('.hablape-doc-blocked')) {
       const overlay = document.createElement('div');
       overlay.className = 'hablape-doc-blocked';
-      overlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:100;color:#f59e0b;font-size:11px;line-height:1.2;text-align:center;padding:6px;border-radius:8px;overflow:hidden;box-sizing:border-box;';
-      overlay.innerHTML = '<span style="white-space:nowrap;">🚫 Documento bloqueado</span><br><small style="font-size:10px;opacity:0.85;">Política de seguridad</small>';
+      overlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;color:rgba(255,255,255,0.85);font-size:11px;line-height:1.3;text-align:center;padding:6px;border-radius:8px;overflow:hidden;box-sizing:border-box;font-weight:500;';
+      overlay.innerHTML = '<span style="white-space:nowrap;">Archivo no disponible</span><span style="font-size:10px;opacity:0.6;margin-top:2px;">Política interna</span>';
       parent.style.position = 'relative';
       parent.style.overflow = 'hidden';
       parent.appendChild(overlay);
