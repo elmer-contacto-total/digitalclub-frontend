@@ -440,6 +440,11 @@ const BLOCK_DOWNLOAD_SCRIPT = `
   };
 
   // ===== BLOQUEAR DOCUMENTOS (PDF, WORD, EXCEL, ETC) =====
+  // Limpieza inicial: eliminar overlays que pudo haber dejado una versión
+  // anterior del script (texto/estilo distintos) o un re-render. Si ambos
+  // coexisten se ven dos textos superpuestos.
+  document.querySelectorAll('.hablape-doc-blocked').forEach(function(o) { o.remove(); });
+
   const blockDocument = (element) => {
     if (!element || element.__hablapeDocBlocked) return;
     element.__hablapeDocBlocked = true;
@@ -461,15 +466,35 @@ const BLOCK_DOWNLOAD_SCRIPT = `
                    element.closest('[data-testid="document-message"]') ||
                    element.closest('[role="button"]') ||
                    element.parentElement;
-    if (parent && !parent.querySelector('.hablape-doc-blocked')) {
-      const overlay = document.createElement('div');
-      overlay.className = 'hablape-doc-blocked';
-      overlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;color:rgba(255,255,255,0.85);font-size:11px;line-height:1.3;text-align:center;padding:6px;border-radius:8px;overflow:hidden;box-sizing:border-box;font-weight:500;';
-      overlay.innerHTML = '<span style="white-space:nowrap;">Archivo no disponible</span><span style="font-size:10px;opacity:0.6;margin-top:2px;">Política interna</span>';
-      parent.style.position = 'relative';
-      parent.style.overflow = 'hidden';
-      parent.appendChild(overlay);
+    if (!parent) return;
+
+    // Si ya hay un overlay en este parent o en cualquier ancestor del element,
+    // no crear otro. Cubre el caso donde la versión anterior del script puso
+    // el overlay en un ancestor distinto (ej. conv-msg-) y ahora el script
+    // nuevo lo pondría en el <a>.
+    let ancestor = element;
+    while (ancestor) {
+      if (ancestor.querySelector && ancestor.querySelector('.hablape-doc-blocked')) {
+        // Encontramos un overlay existente en el subtree del ancestor.
+        // Si está fuera del parent que vamos a usar, lo movemos/borramos.
+        const existing = ancestor.querySelector('.hablape-doc-blocked');
+        if (existing && existing.parentElement !== parent) {
+          existing.remove();
+        } else {
+          return; // ya existe en el sitio correcto, no duplicar
+        }
+        break;
+      }
+      ancestor = ancestor.parentElement;
     }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'hablape-doc-blocked';
+    overlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;color:rgba(255,255,255,0.85);font-size:11px;line-height:1.3;text-align:center;padding:6px;border-radius:8px;overflow:hidden;box-sizing:border-box;font-weight:500;';
+    overlay.innerHTML = '<span style="white-space:nowrap;">Archivo no disponible</span><span style="font-size:10px;opacity:0.6;margin-top:2px;">Política interna</span>';
+    parent.style.position = 'relative';
+    parent.style.overflow = 'hidden';
+    parent.appendChild(overlay);
   };
 
   // Selectors que cubren DOM viejo + DOM mayo 2026 + i18n español.
