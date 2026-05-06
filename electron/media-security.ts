@@ -439,33 +439,15 @@ const BLOCK_DOWNLOAD_SCRIPT = `
     return originalWindowOpen.call(this, url, ...args);
   };
 
-  // ===== BLOQUEAR INPUT DEL USUARIO DURANTE BULK SEND ACTIVO =====
-  // Cuando el bulk-sender está enviando activamente, los eventos físicos
-  // del usuario (teclado/mouse) se mezclan con los CDP del bulk y producen
-  // texto corrupto en el input de WA (ej. "978dskd51jdd1hd383" si el
-  // agente teclea mientras el bulk escribe "978511383"). Distinguimos
-  // eventos físicos (isTrusted=true) de los sintéticos del CDP/click()
-  // (isTrusted=false) y descartamos los físicos cuando el flag está activo.
+  // ===== BANNER INFORMATIVO DURANTE BULK SEND =====
+  // El intento anterior de bloquear inputs físicos por e.isTrusted fue
+  // erróneo: los eventos CDP del propio bulk-sender también tienen
+  // isTrusted=true (vienen del proceso main, no del JS del renderer), así
+  // que el bloqueo afectaba también al bulk → todos los envíos fallaban.
+  // Por ahora solo mostramos el banner como advertencia visual y
+  // dejaremos el bloqueo real para una iteración con flag CDP-aware.
   window.__hablapeBulkSendActive = false;
 
-  const BULK_BLOCKED_EVENTS = [
-    'keydown', 'keypress', 'keyup',
-    'click', 'mousedown', 'mouseup', 'dblclick',
-    'pointerdown', 'pointerup',
-    'paste', 'cut'
-  ];
-  BULK_BLOCKED_EVENTS.forEach(function(evt) {
-    document.addEventListener(evt, function(e) {
-      if (window.__hablapeBulkSendActive && e.isTrusted) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
-    }, true); // capture phase para llegar antes que React
-  });
-
-  // Banner visual en la esquina superior. Se crea on-demand y se oculta
-  // cuando el flag baja. No bloquea visualmente — solo informa.
   function ensureBulkBanner() {
     var existing = document.getElementById('hablape-bulk-banner');
     if (existing) return existing;
@@ -478,7 +460,7 @@ const BLOCK_DOWNLOAD_SCRIPT = `
       'font-family:system-ui,sans-serif;font-size:12px;font-weight:600;' +
       'box-shadow:0 4px 12px rgba(0,0,0,0.25);pointer-events:none;' +
       'display:flex;align-items:center;gap:6px;letter-spacing:0.2px;';
-    banner.innerHTML = '<span>🔒</span><span>Envío masivo en curso — no interactúes con WhatsApp</span>';
+    banner.innerHTML = '<span>🔒</span><span>Envío masivo en curso — no toques teclado/mouse en WhatsApp</span>';
     document.body.appendChild(banner);
     return banner;
   }
@@ -487,14 +469,10 @@ const BLOCK_DOWNLOAD_SCRIPT = `
     if (existing) existing.remove();
   }
 
-  // Setter expuesto para que main.ts active/desactive el bloqueo.
   window.__hablapeSetBulkSendActive = function(active) {
     window.__hablapeBulkSendActive = !!active;
-    if (active) {
-      ensureBulkBanner();
-    } else {
-      removeBulkBanner();
-    }
+    if (active) ensureBulkBanner();
+    else removeBulkBanner();
   };
 
   // ===== BLOQUEAR DOCUMENTOS (PDF, WORD, EXCEL, ETC) =====
