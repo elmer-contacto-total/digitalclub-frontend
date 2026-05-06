@@ -976,7 +976,7 @@ const MEDIA_CAPTURE_SCRIPT = `
         // Persistir de vuelta a localStorage
         try {
           var revArr = Array.from(processedMessageIds);
-          var revToSave = revArr.slice(-500);
+          var revToSave = revArr.slice(-2000);
           localStorage.setItem('__hablapeRevealedMessages', JSON.stringify(revToSave));
         } catch (e2) {}
       }
@@ -989,8 +989,11 @@ const MEDIA_CAPTURE_SCRIPT = `
     processedMessageIds.add(messageId);
     try {
       const arr = Array.from(processedMessageIds);
-      // Limitar a últimos 500 para evitar crecimiento infinito
-      const toSave = arr.slice(-500);
+      // Limitar a últimos 2000 (antes 500). Sesiones largas con mucho
+      // tráfico llegaban al límite y al reiniciar la app reaparecía el
+      // overlay sobre imágenes ya reveladas. 2000 cubre días de uso
+      // intensivo y sigue cabiendo holgado en localStorage (~200KB).
+      const toSave = arr.slice(-2000);
       localStorage.setItem('__hablapeRevealedMessages', JSON.stringify(toSave));
     } catch (e) {}
     // Push to dedicated queue for main process disk persistence
@@ -1294,7 +1297,7 @@ const MEDIA_CAPTURE_SCRIPT = `
     if (seededProcessed > 0) {
       try {
         var arr = Array.from(processedMessageIds);
-        var toSave = arr.slice(-500);
+        var toSave = arr.slice(-2000);
         localStorage.setItem('__hablapeRevealedMessages', JSON.stringify(toSave));
       } catch (e) {}
     }
@@ -1868,6 +1871,48 @@ const MEDIA_CAPTURE_SCRIPT = `
     return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
+  // Fetch del blob URL con timeout. Si el blob expiró o WA cambió de sesión,
+  // el fetch puede colgar indefinidamente; con AbortController tras 10s lo
+  // abortamos para que la captura falle limpiamente y no bloquee el flujo.
+  async function fetchBlobWithTimeout(blobUrl, timeoutMs) {
+    timeoutMs = timeoutMs || 10000;
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+    try {
+      var resp = await fetch(blobUrl, { signal: controller.signal });
+      return await resp.blob();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Comprime imágenes >maxSizeMB usando OffscreenCanvas. Reduce dimensiones
+  // a max 1920px y re-encoda como JPEG calidad 0.7. Esto evita que imágenes
+  // de 8MB+ inflen a 11MB+ en base64 y tumben el endpoint del backend.
+  // Si la compresión falla por cualquier motivo, retorna el blob original.
+  async function compressImageIfLarge(blob, maxSizeMB) {
+    maxSizeMB = maxSizeMB || 2;
+    if (!blob || blob.size <= maxSizeMB * 1024 * 1024) return blob;
+    try {
+      var bitmap = await createImageBitmap(blob);
+      var maxDim = 1920;
+      var scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+      var w = Math.max(1, Math.round(bitmap.width * scale));
+      var h = Math.max(1, Math.round(bitmap.height * scale));
+      var canvas = new OffscreenCanvas(w, h);
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      var compressed = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
+      console.log('[MWS Compress] ' + Math.round(blob.size / 1024) + 'KB → ' +
+        Math.round(compressed.size / 1024) + 'KB (' + bitmap.width + 'x' + bitmap.height +
+        ' → ' + w + 'x' + h + ')');
+      return compressed.size < blob.size ? compressed : blob;
+    } catch (err) {
+      console.warn('[MWS Compress] Falló, usando blob original:', (err && err.message) || err);
+      return blob;
+    }
+  }
+
   // Helper: Format local datetime components as ISO string (no UTC conversion)
   // WhatsApp shows times in local timezone; DB column is TIMESTAMP without timezone
   function localToUtcIso(year, month, day, hours, minutes) {
@@ -2342,8 +2387,12 @@ const MEDIA_CAPTURE_SCRIPT = `
         return;
       }
 
-      // Dedup por messageId (permite misma imagen en mensajes distintos)
-      const messageId = messageEl.getAttribute('data-id') || null;
+      // Dedup por messageId. Acepta data-id (DOM viejo) y data-testid (DOM
+      // mayo 2026 cuando WA eventualmente quite data-id). Para imagen
+      // reenviada en otro mensaje, el key será distinto → captura nueva,
+      // dedup global vive en backend por hash del blob.
+      const messageId = messageEl.getAttribute('data-id') ||
+                        messageEl.getAttribute('data-testid') || null;
       if (messageId && processedMessageIds.has(messageId)) {
         console.log('[MWS Auto] Mensaje ya procesado:', messageId);
         return;
@@ -2352,9 +2401,10 @@ const MEDIA_CAPTURE_SCRIPT = `
       // Marcar como procesado
       saveRevealedMessage(messageId);
 
-      // Descargar la imagen
-      const response = await fetch(blobUrl);
-      const blob = await response.blob();
+      // Descargar la imagen (con timeout para no colgar si el blob expira)
+      const rawBlob = await fetchBlobWithTimeout(blobUrl, 10000);
+      // Comprimir si es >2MB para no inflar el payload base64 al backend.
+      const blob = await compressImageIfLarge(rawBlob, 2);
       const mimeType = blob.type || 'image/jpeg';
       const size = blob.size;
 
@@ -3037,8 +3087,7 @@ const MEDIA_CAPTURE_SCRIPT = `
         capturedHashes.add(hash);
 
         try {
-          const response = await fetch(audioSrc);
-          const blob = await response.blob();
+          const blob = await fetchBlobWithTimeout(audioSrc, 10000);
 
           // El click listener siempre corre antes de play() — confiar en su timestamp
           // sin límite de tiempo estricto (el fetch del blob puede tardar >5s)
@@ -3094,7 +3143,9 @@ const MEDIA_CAPTURE_SCRIPT = `
           };
           reader.readAsDataURL(blob);
         } catch (err) {
-          // Silently ignore
+          // Loguear (no silenciar): si el blob expiró o el fetch fue abortado
+          // por timeout, queremos saberlo para diagnóstico.
+          console.warn('[MWS Audio] Captura falló:', (err && err.message) || err);
         }
       }
     }
@@ -3258,7 +3309,11 @@ const MEDIA_CAPTURE_SCRIPT = `
     // This ensures messages restored from localStorage get fresh lastSeen/neighbor
     // so absence detection works when they're later deleted.
     if (currentChat && currentChat !== previousChatName) {
-      messageNoMediaScans.clear();  // Reset Method 3 counters on chat change
+      // No reseteamos messageNoMediaScans aquí. Si un mensaje del chat
+      // anterior tenía 3/5 scans sin media (Method 3), queremos que la
+      // próxima vez que volvamos a ese chat sumen al contador previo.
+      // Antes hacíamos .clear() que perdía la cuenta y el agente alternando
+      // entre chats nunca llegaba a las 5 scans → eliminaciones perdidas.
       previousChatName = currentChat;
       for (var rebaseId of messagesWithMedia) {
         if (detectedDeletions.has(rebaseId)) continue;

@@ -514,7 +514,15 @@ export class ElectronService {
    */
   setActiveClient(clientUserId: number | null, chatPhone: string, chatName: string): void {
     if ((window as any).electronAPI?.setActiveClient) {
-      (window as any).electronAPI.setActiveClient({ clientUserId, chatPhone, chatName });
+      // Normalizar a 9 dígitos (formato consistente con backend y con
+      // el script inyectado en WA). Si el caller pasa "+51 999 111 222",
+      // backend recibe "999111222". Si pasa "999111222", queda igual.
+      const normalizedPhone = (chatPhone || '').replace(/\D/g, '').slice(-9);
+      (window as any).electronAPI.setActiveClient({
+        clientUserId,
+        chatPhone: normalizedPhone || chatPhone, // fallback si no quedan dígitos
+        chatName
+      });
     }
   }
 

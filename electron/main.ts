@@ -207,9 +207,11 @@ function loadRevealedMessageIds(): Set<string> {
 
 function saveRevealedMessageIds(): void {
   try {
-    // Limitar a 500 entradas (las más recientes)
+    // Limitar a 2000 entradas (antes 500). Sesiones largas con mucho
+    // tráfico llegaban al límite y al reiniciar la app reaparecía el
+    // overlay. 2000 cubre días de uso intensivo.
     const arr = Array.from(revealedMessageIds);
-    const toSave = arr.length > 500 ? arr.slice(-500) : arr;
+    const toSave = arr.length > 2000 ? arr.slice(-2000) : arr;
     fs.writeFileSync(REVEALED_MESSAGES_FILE, JSON.stringify(toSave));
   } catch (e) {
     console.error('[MWS Overlay] Error guardando revealed messages:', e);
@@ -457,43 +459,66 @@ async function seedKnownMediaInWhatsApp(
  * Envía un medio capturado al backend
  */
 async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
-  try {
-    const response = await fetch(`${MEDIA_API_URL}`, {
-      method: 'POST',
-      headers: getMediaApiHeaders(),
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      console.error('[MWS Media] Error enviando medio:', response.status);
-    } else {
-      console.log('[MWS Media] Medio guardado:', payload.mediaType, payload.size, 'bytes');
-
-      // Registrar en auditoría
-      sendAuditLog({
-        action: 'MEDIA_CAPTURED',
-        userId: payload.userId,
-        agentId: payload.agentId,
-        mimeType: payload.mimeType,
-        size: payload.size,
-        chatPhone: payload.chatPhone,
-        timestamp: payload.capturedAt,
-        description: `${payload.mediaType} capturado del chat ${payload.chatPhone}`,
-        filename: `${payload.mediaId}.${payload.mimeType?.split('/')[1] || 'bin'}`,
-        metadata: {
-          mediaId: payload.mediaId,
-          source: payload.source,
-          chatName: payload.chatName,
-          whatsappMessageId: payload.whatsappMessageId,
-          messageSentAt: payload.messageSentAt,
-          duration: payload.duration
-        }
+  // Reintento in-memory con backoff exponencial (5s, 15s, 60s). El payload
+  // contiene base64 que puede ser grande, evitamos persistirlo a disco —
+  // si los 3 intentos fallan, se loguea warning y se descarta.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(`${MEDIA_API_URL}`, {
+        method: 'POST',
+        headers: getMediaApiHeaders(),
+        body: JSON.stringify(payload)
       });
+
+      if (response.ok) {
+        console.log('[MWS Media] Medio guardado:', payload.mediaType, payload.size, 'bytes',
+          attempt > 1 ? `(en intento ${attempt})` : '');
+
+        sendAuditLog({
+          action: 'MEDIA_CAPTURED',
+          userId: payload.userId,
+          agentId: payload.agentId,
+          mimeType: payload.mimeType,
+          size: payload.size,
+          chatPhone: payload.chatPhone,
+          timestamp: payload.capturedAt,
+          description: `${payload.mediaType} capturado del chat ${payload.chatPhone}`,
+          filename: `${payload.mediaId}.${payload.mimeType?.split('/')[1] || 'bin'}`,
+          metadata: {
+            mediaId: payload.mediaId,
+            source: payload.source,
+            chatName: payload.chatName,
+            whatsappMessageId: payload.whatsappMessageId,
+            messageSentAt: payload.messageSentAt,
+            duration: payload.duration
+          }
+        });
+        return;
+      }
+
+      // 401/403 invalida el token (mismo patrón que notifyIncomingMessage)
+      if (response.status === 401 || response.status === 403) {
+        console.warn('[MWS Media] Token inválido — invalidando mediaAuthToken');
+        mediaAuthToken = null;
+        if (mainWindow) {
+          mainWindow.webContents.send('whatsapp:auth-incomplete', {
+            missing: ['mediaAuthToken'],
+            droppedSignal: 'media-capture-401',
+            phone: payload.chatPhone
+          });
+        }
+        return; // sin retry hasta nuevo token
+      }
+
+      console.error(`[MWS Media] Backend error (intento ${attempt}/3):`, response.status);
+    } catch (err) {
+      console.error(`[MWS Media] Network error (intento ${attempt}/3):`, err);
     }
-  } catch (err) {
-    console.error('[MWS Media] Error de conexión:', err);
-    // TODO: Implementar cola offline para reintentos
+    if (attempt < 3) {
+      await new Promise(resolve => setTimeout(resolve, 5000 * attempt));
+    }
   }
+  console.warn('[MWS Media] Todos los reintentos fallaron, captura perdida:', payload.mediaId);
 }
 
 /**
