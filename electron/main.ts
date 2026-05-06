@@ -43,7 +43,26 @@ const BACKEND_BASE_URL = DEFAULT_BACKEND_URL;
 const bulkSender = new BulkSender(BACKEND_BASE_URL);
 const BULK_SEND_STATE_FILE = path.join(app.getPath('userData'), 'bulk-send-state.json');
 bulkSender.setStateFile(BULK_SEND_STATE_FILE);
+
+// Trackeamos el último valor de periodicPauseRemaining para detectar la
+// transición de "pausa anti-ban en curso" → "pausa terminó, reanuda envíos".
+// Cuando ocurre, si la BrowserView de WA está oculta (porque el agente
+// salió del módulo Clientes durante la pausa), debemos restaurarla antes
+// de que el bulk intente cdpType / dispatchKeyEvent (esas operaciones
+// requieren que la BrowserView esté agregada al window y reciba focus).
+let lastBulkPeriodicPauseRemaining = 0;
 bulkSender.setOverlayCallback((data) => {
+  const remaining = data.periodicPauseRemaining ?? 0;
+  const wasInPause = lastBulkPeriodicPauseRemaining > 0;
+  const nowInPause = remaining > 0;
+  lastBulkPeriodicPauseRemaining = remaining;
+
+  // Pausa terminó y el bulk vuelve a enviar → asegurar WA visible.
+  if (wasInPause && !nowInPause && data.state === 'running' && !whatsappVisible) {
+    console.log('[MWS] Pausa anti-ban terminó — restaurando WhatsApp view para que cdpType funcione');
+    showWhatsAppView();
+  }
+
   if (mainWindow) {
     mainWindow.webContents.send('bulk-send-state-changed', data);
   }
