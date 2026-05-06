@@ -939,18 +939,22 @@ export class BulkSender {
               }
             }
 
-            var selectors = [
-              '[data-testid="cell-frame-container"]',
-              '#pane-side [role="listitem"]',
-              '#pane-side [role="row"]'
-            ];
-            var seen = new Set();
-            var count = 0;
-            for (var s = 0; s < selectors.length; s++) {
-              var els = document.querySelectorAll(selectors[s]);
-              for (var j = 0; j < els.length; j++) {
-                if (!seen.has(els[j])) { seen.add(els[j]); count++; }
-              }
+            // Contar SOLO cell-frame-container: en DOM mayo 2026 cada chat
+            // tiene además [role="listitem"] y [role="row"] como etiquetas
+            // separadas, y los dedupe por elemento NO funciona (son nodos
+            // distintos: la celda y el wrapper-row). Sumar los 3 selectores
+            // inflaba el conteo por encima del threshold y rompía el filter
+            // aunque el filter sí hubiera ocurrido (caso Samuel: 7 cells →
+            // sumaban 21+ con listitem/row/tabs y el código abortaba).
+            // Si testid cambiara en el futuro, los demás caminos del flujo
+            // (no_results, navegación) ya cubren los fallos.
+            var cells = document.querySelectorAll('[data-testid="cell-frame-container"]');
+            var count = cells.length;
+            // Fallback: si por algún motivo cell-frame-container no aparece
+            // (testid cambió), caer a [role="listitem"] que también marca
+            // chats individuales.
+            if (count === 0) {
+              count = document.querySelectorAll('#pane-side [role="listitem"]').length;
             }
             return { status: 'has_results', count: count };
           })()
