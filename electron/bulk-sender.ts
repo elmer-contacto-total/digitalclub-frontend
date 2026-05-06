@@ -676,6 +676,10 @@ export class BulkSender {
             break;  // Exit countdown → main loop detects session loss and auto-pauses
           }
 
+          // Re-check pause/cancel después de cada operación async — pueden haber
+          // llegado vía IPC durante el await.
+          if (this.isPaused || this.isCancelled) break;
+
           // Emit countdown directly (skip persistState/updateOverlay)
           if (this.onOverlayUpdate) {
             this.onOverlayUpdate({
@@ -688,12 +692,30 @@ export class BulkSender {
             });
           }
           await this.sleep(1000);
+          if (this.isPaused || this.isCancelled) break;
           remainingSec--;
         }
 
-        // If interrupted by cancel/pause/session-loss, the main loop will detect it
-        // If finished naturally, restore overlay and notify backend
-        if (!this.isPaused && !this.isCancelled && !sessionLostDuringPause) {
+        // Guard explícito: si pause/cancel llegó durante la pausa anti-ban,
+        // salir directamente del processLoop sin pasar por continue. El
+        // continue + while-exterior funcionaba en teoría pero deja una
+        // ventana donde el bulk podría emitir periodic_resume al backend
+        // antes de que el exterior detecte la pausa, dejando estados
+        // inconsistentes ("se chanca el flujo").
+        if (this.isPaused || this.isCancelled) {
+          console.log(`[BulkSender] Pausa anti-ban interrumpida — isPaused=${this.isPaused} isCancelled=${this.isCancelled}, saliendo del processLoop`);
+          if (this.isCancelled) {
+            this._state = 'cancelled';
+          } else {
+            this._state = 'paused';
+            await this.notifyBackend('pause'); // idempotente con el pause() que ya pudo haber notificado
+          }
+          this.emitOverlayUpdate();
+          return; // ← sale del processLoop, no continue
+        }
+
+        // Pausa periódica terminó naturalmente: emit resume y continuar.
+        if (!sessionLostDuringPause) {
           await this.notifyBackend('periodic_resume');
           await this.showOverlay();
           if (this.onOverlayUpdate) {
