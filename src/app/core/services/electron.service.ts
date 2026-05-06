@@ -149,10 +149,16 @@ export class ElectronService {
   }
 
   /**
-   * Whether a bulk send is currently running (blocks UI)
+   * Whether a bulk send is currently sending messages (running + NOT in
+   * periodic pause). Durante la "Pausa anti-ban" (state==='running' con
+   * periodicPauseRemaining > 0) el bulk no envía nada y la WhatsApp
+   * BrowserView puede ocultarse si el agente sale del módulo Clientes.
+   * Cuando la pausa termine y el bulk vuelva a enviar, el agente puede
+   * volver a la página y la BrowserView se vuelve a mostrar.
    */
   get bulkSendActive(): boolean {
-    return this.bulkSendStateSubject.value.state === 'running';
+    const s = this.bulkSendStateSubject.value;
+    return s.state === 'running' && (s.periodicPauseRemaining ?? 0) === 0;
   }
 
   /**
