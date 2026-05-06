@@ -439,6 +439,64 @@ const BLOCK_DOWNLOAD_SCRIPT = `
     return originalWindowOpen.call(this, url, ...args);
   };
 
+  // ===== BLOQUEAR INPUT DEL USUARIO DURANTE BULK SEND ACTIVO =====
+  // Cuando el bulk-sender está enviando activamente, los eventos físicos
+  // del usuario (teclado/mouse) se mezclan con los CDP del bulk y producen
+  // texto corrupto en el input de WA (ej. "978dskd51jdd1hd383" si el
+  // agente teclea mientras el bulk escribe "978511383"). Distinguimos
+  // eventos físicos (isTrusted=true) de los sintéticos del CDP/click()
+  // (isTrusted=false) y descartamos los físicos cuando el flag está activo.
+  window.__hablapeBulkSendActive = false;
+
+  const BULK_BLOCKED_EVENTS = [
+    'keydown', 'keypress', 'keyup',
+    'click', 'mousedown', 'mouseup', 'dblclick',
+    'pointerdown', 'pointerup',
+    'paste', 'cut'
+  ];
+  BULK_BLOCKED_EVENTS.forEach(function(evt) {
+    document.addEventListener(evt, function(e) {
+      if (window.__hablapeBulkSendActive && e.isTrusted) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    }, true); // capture phase para llegar antes que React
+  });
+
+  // Banner visual en la esquina superior. Se crea on-demand y se oculta
+  // cuando el flag baja. No bloquea visualmente — solo informa.
+  function ensureBulkBanner() {
+    var existing = document.getElementById('hablape-bulk-banner');
+    if (existing) return existing;
+    var banner = document.createElement('div');
+    banner.id = 'hablape-bulk-banner';
+    banner.style.cssText =
+      'position:fixed;top:12px;left:50%;transform:translateX(-50%);' +
+      'z-index:2147483646;padding:8px 14px;border-radius:999px;' +
+      'background:rgba(245,158,11,0.95);color:#1f2937;' +
+      'font-family:system-ui,sans-serif;font-size:12px;font-weight:600;' +
+      'box-shadow:0 4px 12px rgba(0,0,0,0.25);pointer-events:none;' +
+      'display:flex;align-items:center;gap:6px;letter-spacing:0.2px;';
+    banner.innerHTML = '<span>🔒</span><span>Envío masivo en curso — no interactúes con WhatsApp</span>';
+    document.body.appendChild(banner);
+    return banner;
+  }
+  function removeBulkBanner() {
+    var existing = document.getElementById('hablape-bulk-banner');
+    if (existing) existing.remove();
+  }
+
+  // Setter expuesto para que main.ts active/desactive el bloqueo.
+  window.__hablapeSetBulkSendActive = function(active) {
+    window.__hablapeBulkSendActive = !!active;
+    if (active) {
+      ensureBulkBanner();
+    } else {
+      removeBulkBanner();
+    }
+  };
+
   // ===== BLOQUEAR DOCUMENTOS (PDF, WORD, EXCEL, ETC) =====
   // Limpieza inicial: eliminar overlays que pudo haber dejado una versión
   // anterior del script (texto/estilo distintos) o un re-render. Si ambos

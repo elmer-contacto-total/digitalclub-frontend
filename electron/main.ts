@@ -72,6 +72,17 @@ bulkSender.setOverlayCallback((data) => {
     }
   }
 
+  // Activar/desactivar bloqueo de inputs físicos del usuario en WA.
+  // Solo durante envío ACTIVO (running sin pausa periódica). Durante
+  // pausas el agente puede usar WA libremente.
+  const isActiveSending = data.state === 'running' && !nowInPause;
+  if (whatsappView && whatsappView.webContents) {
+    whatsappView.webContents.executeJavaScript(
+      `if (window.__hablapeSetBulkSendActive) window.__hablapeSetBulkSendActive(${isActiveSending});`,
+      true
+    ).catch(() => {});
+  }
+
   if (mainWindow) {
     mainWindow.webContents.send('bulk-send-state-changed', data);
   }
