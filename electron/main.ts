@@ -1738,23 +1738,12 @@ function handlePhoneExtracted(phone: string): void {
   // Guard: si ya se procesó este teléfono, ignorar duplicados
   if (phone === chatBlockState.expectedPhone) return;
 
-  // Guard: contacto sin nombre real en WA (header == teléfono).
-  // Cuando el contacto no está guardado en la agenda de WA, el header del chat
-  // muestra el número como "nombre" y el panel de contacto extrae ese mismo
-  // número. Detección estricta: el "nombre" debe quedar como puros dígitos
-  // tras quitar separadores telefónicos (+, espacios, guiones, paréntesis).
-  // Ejemplos:
-  //   "+51 999 123 456" → "51999123456" → puro dígito → SÍ es phone-as-name
-  //   "Juan 999 123 456" → "Juan999123456" → contiene letras → NO
-  //   "Pedro" → "Pedro" → contiene letras → NO
-  if (lastDetectedName) {
-    const nameStripped = lastDetectedName.replace(/[+\s\-().]/g, '');
-    const isPureDigitName = nameStripped.length >= 9 && /^\d+$/.test(nameStripped);
-    if (isPureDigitName && phone === nameStripped.slice(-9)) {
-      console.log('[MWS] Contacto sin nombre real (header == teléfono):', phone, '— overlay permanece, panel CRM en placeholder');
-      return;
-    }
-  }
+  // Antes había aquí un guard "name == phone" que abortaba cuando el header
+  // del chat era literal el número formateado (caso "contacto no guardado en
+  // agenda"). Eliminado: el caso del agente abriendo su propio chat (donde
+  // WA muestra el número en el header) también disparaba el guard y bloqueaba
+  // el flujo. La protección de "no poblar el panel CRM con datos basura" ya
+  // vive en electron-clients.component cuando result===null tras searchByPhone.
 
   console.log('[MWS] ✓ Número extraído por usuario:', phone);
 

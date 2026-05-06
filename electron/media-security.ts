@@ -2484,13 +2484,31 @@ const MEDIA_CAPTURE_SCRIPT = `
   function isMessageOutgoing(msgEl) {
     var dataId = msgEl.getAttribute('data-id') || '';
     var testid = msgEl.getAttribute('data-testid') || '';
-    // Señales tradicionales (DOM viejo)
+
+    // DOM mayo 2026: la clase "message-out"/"message-in" vive en un DIV
+    // HIJO del nodo conv-msg-, NO en ancestor. closest() no la encuentra.
+    // querySelector sí. Está presente en TODOS los mensajes (no como tail-out
+    // que sólo aparece en el último del bloque).
+    if (msgEl.querySelector('[class*="message-out"]')) return true;
+    if (msgEl.querySelector('[class*="message-in"]')) return false;
+
+    // Señales tradicionales (DOM viejo, por si vuelven o coexisten)
     if (dataId.startsWith('true_')) return true;
     if (msgEl.classList.contains('message-out')) return true;
     if (msgEl.closest('[class*="message-out"]')) return true;
-    // DOM mayo 2026: tail-out / tail-in (cola del bocadillo)
+
+    // tail-out / tail-in: confirma cuando aparece (último del bloque)
     if (msgEl.querySelector('[data-testid="tail-out"]')) return true;
     if (msgEl.querySelector('[data-testid="tail-in"]')) return false;
+
+    // aria-label español/inglés: "Tú  Audio ..." o "You ...". Robusto cuando
+    // las clases ofuscadas cambian.
+    var ariaEl = msgEl.querySelector('[aria-label]');
+    if (ariaEl) {
+      var aria = (ariaEl.getAttribute('aria-label') || '').trim();
+      if (/^(t[úu]\s|yo\s|you\s)/i.test(aria)) return true;
+    }
+
     // Algunos releases prefijan "true_" en el testid
     if (testid.indexOf('true_') > -1) return true;
     return false;
