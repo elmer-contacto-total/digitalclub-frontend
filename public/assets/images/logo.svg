@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" fill="none">
+  <rect width="200" height="80" rx="8" fill="#1e293b"/>
+  <text x="100" y="45" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#22c55e">MWS</text>
+  <text x="100" y="62" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#94a3b8">Monitor WhatsApp Service</text>
+</svg>

@@ -1,0 +1,8 @@
+version: 1.2.0
+files:
+  - url: MWS-Desktop-Setup-1.2.0.exe
+    sha512: ckvEPhY7TumdW7z8ik1CP972g2RmbnqeD1/cCStGexNulhOdgOESovtbrJK+q0nNpDg8C+1vbiLUHKQaj1L8iQ==
+    size: 91502415
+path: MWS-Desktop-Setup-1.2.0.exe
+sha512: ckvEPhY7TumdW7z8ik1CP972g2RmbnqeD1/cCStGexNulhOdgOESovtbrJK+q0nNpDg8C+1vbiLUHKQaj1L8iQ==
+releaseDate: '2026-02-11T22:28:41.092Z'
