@@ -9,6 +9,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LoginAsService } from '../../../core/services/login-as.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { safeFullReload } from '../../../core/utils/safe-navigation.util';
 
 @Component({
   selector: 'app-impersonation-toolbar',
@@ -122,8 +123,8 @@ export class ImpersonationToolbarComponent {
       next: (response) => {
         if (response.result === 'success') {
           this.toastService.success('Sesión restaurada correctamente');
-          // Reload to apply original session
-          window.location.href = '/app/dashboard';
+          // Full reload necesario: restaura el JWT del admin original y reinicializa la app.
+          safeFullReload('/app/dashboard');
         } else {
           this.toastService.error('Error al volver a la sesión original');
           this.isReturning.set(false);

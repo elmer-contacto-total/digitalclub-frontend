@@ -13,6 +13,18 @@ import {
   AuthUser
 } from '../models/auth.model';
 import { UserRole, RoleUtils } from '../models/user.model';
+import { environment } from '../../../environments/environment';
+
+/**
+ * Logs condicionales: solo aparecen en builds de dev. En prod se silencian
+ * para no filtrar info sensible de auth en DevTools del cliente.
+ */
+function debugWarn(msg: string, ...args: any[]): void {
+  if (!environment.production) console.warn(msg, ...args);
+}
+function debugError(msg: string, ...args: any[]): void {
+  if (!environment.production) console.error(msg, ...args);
+}
 
 const TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
@@ -234,7 +246,7 @@ export class AuthService {
       this.api.post('/api/v1/auth/logout', { refreshToken }).pipe(
         catchError(error => {
           // Log but don't block logout on backend error
-          console.warn('[Auth] Backend logout failed:', error);
+          debugWarn('[Auth] Backend logout failed:', error);
           return of(null);
         })
       ).subscribe(() => {
@@ -350,7 +362,7 @@ export class AuthService {
     const storedRefreshToken = this.storage.getString(REFRESH_TOKEN_KEY);
 
     if (!storedRefreshToken) {
-      console.warn('[Auth] No refresh token available');
+      debugWarn('[Auth] No refresh token available');
       return of(false);
     }
 
@@ -380,7 +392,7 @@ export class AuthService {
       }),
       map(response => !!response.token),
       catchError(error => {
-        console.error('[Auth] Token refresh failed:', error);
+        debugError('[Auth] Token refresh failed:', error);
         this._isRefreshing.next(false);
         this._refreshTokenSubject.next('');
         // Do NOT logout here - let the interceptor handle it
@@ -443,7 +455,7 @@ export class AuthService {
           );
         }
         // Other errors - log but assume authenticated to avoid unnecessary logouts
-        console.warn('[Auth] Token validation error:', error);
+        debugWarn('[Auth] Token validation error:', error);
         return of(true);
       })
     );
@@ -455,7 +467,7 @@ export class AuthService {
   private handleLoginSuccess(response: LoginResponse): void {
     // Validate response has required fields
     if (!response.token || !response.user) {
-      console.error('Invalid login response: missing token or user');
+      debugError('Invalid login response: missing token or user');
       return;
     }
 
@@ -528,14 +540,14 @@ export class AuthService {
 
       // Invalid user data - clear it
       if (user) {
-        console.warn('[Auth] Invalid user data in storage, clearing...');
+        debugWarn('[Auth] Invalid user data in storage, clearing...');
         this.storage.remove(USER_KEY);
         this.storage.remove(TOKEN_KEY);
       }
 
       return null;
     } catch (e) {
-      console.error('[Auth] Error loading user from storage:', e);
+      debugError('[Auth] Error loading user from storage:', e);
       this.storage.remove(USER_KEY);
       this.storage.remove(TOKEN_KEY);
       return null;

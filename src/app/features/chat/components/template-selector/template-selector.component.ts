@@ -13,6 +13,17 @@ import {
   countBodyParams
 } from '../../../../core/models/message-template.model';
 
+/**
+ * Segmento del body interpolado. Reemplaza HTML construido como string
+ * (vulnerable a XSS via [innerHTML]) por estructura tipada que el template
+ * renderiza con @for/@switch usando text binding (Angular escapa cualquier HTML
+ * que venga del backend o de los inputs del usuario).
+ */
+type TemplateSegment =
+  | { type: 'text'; value: string }
+  | { type: 'param'; placeholder: string; value: string; filled: boolean }
+  | { type: 'break' };
+
 @Component({
   selector: 'app-template-selector',
   standalone: true,
@@ -95,7 +106,17 @@ import {
               <!-- Body Content with Params -->
               <div class="preview-section">
                 <label>Mensaje</label>
-                <div class="preview-text preview-body" [innerHTML]="getInterpolatedBody()"></div>
+                <div class="preview-text preview-body">
+                  @for (seg of bodySegments(); track $index) {
+                    @switch (seg.type) {
+                      @case ('text') { <span>{{ seg.value }}</span> }
+                      @case ('param') {
+                        <span [class.param-highlight]="!seg.filled">{{ seg.value }}</span>
+                      }
+                      @case ('break') { <br> }
+                    }
+                  }
+                </div>
               </div>
 
               <!-- Parameter Inputs -->
@@ -529,22 +550,48 @@ export class TemplateSelectorComponent implements OnInit {
     return Array.from({ length: count }, (_, i) => i + 1);
   }
 
-  getInterpolatedBody(): string {
+  /**
+   * Parsea el bodyContent + paramValues a segmentos tipados.
+   * Reemplaza el viejo getInterpolatedBody() (que devolvía HTML string + innerHTML
+   * vulnerable a Stored XSS si bodyContent o paramValues contenían HTML/scripts).
+   * El template usa text binding y Angular escapa automáticamente.
+   */
+  bodySegments(): TemplateSegment[] {
     const template = this.selectedTemplate();
-    if (!template) return '';
+    if (!template) return [];
 
-    let body = template.bodyContent;
+    const body = template.bodyContent || '';
+    const segments: TemplateSegment[] = [];
+    const placeholderRegex = /\{\{(\d+)\}\}/g;
+    const lines = body.split('\n');
 
-    // Replace params with values or highlighted placeholders
-    body = body.replace(/\{\{(\d+)\}\}/g, (match, num) => {
-      const value = this.paramValues[parseInt(num)];
-      if (value) {
-        return value;
+    lines.forEach((line, lineIdx) => {
+      let lastIdx = 0;
+      const re = new RegExp(placeholderRegex);
+      let match: RegExpExecArray | null;
+      while ((match = re.exec(line)) !== null) {
+        if (match.index > lastIdx) {
+          segments.push({ type: 'text', value: line.slice(lastIdx, match.index) });
+        }
+        const idx = parseInt(match[1], 10);
+        const value = this.paramValues[idx] || '';
+        segments.push({
+          type: 'param',
+          placeholder: match[0],
+          value: value || match[0],
+          filled: !!value
+        });
+        lastIdx = match.index + match[0].length;
       }
-      return `<span class="param-highlight">${match}</span>`;
+      if (lastIdx < line.length) {
+        segments.push({ type: 'text', value: line.slice(lastIdx) });
+      }
+      if (lineIdx < lines.length - 1) {
+        segments.push({ type: 'break' });
+      }
     });
 
-    return body.replace(/\n/g, '<br>');
+    return segments;
   }
 
   updatePreview(): void {

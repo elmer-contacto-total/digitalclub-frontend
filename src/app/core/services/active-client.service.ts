@@ -5,6 +5,7 @@ import { StorageService } from './storage.service';
 import { AuthService } from './auth.service';
 import { ToastService } from './toast.service';
 import { environment } from '../../../environments/environment';
+import { safeReload } from '../utils/safe-navigation.util';
 
 /**
  * Interface para cliente/organización activa
@@ -147,7 +148,7 @@ export class ActiveClientService {
         if (reload) {
           // Pequeño delay para asegurar que el token se guardó
           setTimeout(() => {
-            window.location.reload();
+            safeReload();
           }, 100);
         }
       }),

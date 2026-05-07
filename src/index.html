@@ -5,6 +5,11 @@
   <title>Holape</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Content-Security-Policy: limita orígenes para defensa XSS / data exfiltration.
+       'unsafe-inline' en style-src es necesario porque Angular AOT emite los estilos
+       del decorador @Component({styles:[...]}) como <style> inline en runtime.
+       Si una nueva integración requiere un dominio nuevo, agregarlo aquí. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:8080 ws://localhost:8080 https://*.digitalclub.com.pe wss://*.digitalclub.com.pe https://*.innovag.com.pe wss://*.innovag.com.pe https://fonts.googleapis.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <!-- Google Fonts - Non-blocking load -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,15 +18,8 @@
   <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
   <!-- Runtime config: overwrite public/env.js on each VM to set apiUrl, wsUrl, title, etc. -->
   <script src="env.js"></script>
-  <script>
-    if (window.__env && window.__env.title) document.title = window.__env.title;
-  </script>
-  <!-- Polyfill for Node.js globals required by SockJS/STOMP -->
-  <script>
-    var global = global || window;
-    var process = process || { env: { DEBUG: undefined } };
-    var Buffer = Buffer || { isBuffer: function() { return false; } };
-  </script>
+  <!-- Polyfills + title setter. Movido a archivo externo para permitir CSP estricta (script-src 'self'). -->
+  <script src="polyfills-init.js"></script>
 </head>
 <body>
   <app-root></app-root>

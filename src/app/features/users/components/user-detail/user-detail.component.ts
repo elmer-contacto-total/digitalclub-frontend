@@ -11,6 +11,7 @@ import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { UserService, UserDetailResponse } from '../../../../core/services/user.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { LoginAsService } from '../../../../core/services/login-as.service';
+import { safeFullReload } from '../../../../core/utils/safe-navigation.util';
 import { User, UserRole, UserStatus, RoleUtils, getFullName, getInitials } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
@@ -1078,7 +1079,8 @@ export class UserDetailComponent implements OnInit, OnDestroy {
 
     this.loginAsService.loginAs(user.id).subscribe({
       next: () => {
-        window.location.href = '/app/dashboard';
+        // Full reload necesario: cambia el contexto de sesión global.
+        safeFullReload('/app/dashboard');
       },
       error: (err) => {
         console.error('Error logging in as user:', err);

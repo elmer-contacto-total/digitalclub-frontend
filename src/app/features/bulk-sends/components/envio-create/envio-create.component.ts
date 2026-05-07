@@ -521,9 +521,18 @@ export class EnvioCreateComponent implements OnDestroy {
 
   onCsvSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
-    if (input.files?.[0]) {
-      this.processCsvFile(input.files[0]);
+    const file = input.files?.[0];
+    if (!file) return;
+
+    // Validar extensión client-side antes de procesar (alineado con whitelist backend).
+    const name = file.name.toLowerCase();
+    if (!name.endsWith('.csv') && !name.endsWith('.txt')) {
+      this.errors.set(['Solo se permiten archivos .csv o .txt']);
+      input.value = '';
+      return;
     }
+
+    this.processCsvFile(file);
   }
 
   private processCsvFile(file: File): void {

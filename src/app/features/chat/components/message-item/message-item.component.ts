@@ -18,6 +18,16 @@ import {
 } from '../../../../core/models/message.model';
 import { ImagePreviewComponent } from '../../../../shared/components/image-preview/image-preview.component';
 
+/**
+ * Segmento del contenido renderizable. Reemplaza el HTML construido como string
+ * (vulnerable a XSS via innerHTML) por una estructura tipada que el template
+ * renderiza con @for + @switch usando text binding (Angular escapa automáticamente).
+ */
+type ContentSegment =
+  | { type: 'text'; value: string }
+  | { type: 'link'; href: string; text: string }
+  | { type: 'break' };
+
 @Component({
   selector: 'app-message-item',
   standalone: true,
@@ -104,7 +114,17 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
           @if (message().historicSenderName) {
             <strong class="sender-name">{{ message().historicSenderName }}:</strong>
           }
-          <span [innerHTML]="formatContent()"></span>
+          <span class="message-text">
+            @for (seg of contentSegments(); track $index) {
+              @switch (seg.type) {
+                @case ('text') { <span>{{ seg.value }}</span> }
+                @case ('link') {
+                  <a [href]="seg.href" target="_blank" rel="noopener noreferrer">{{ seg.text }}</a>
+                }
+                @case ('break') { <br> }
+              }
+            }
+          </span>
         </div>
 
         <!-- Footer -->
@@ -220,17 +240,38 @@ export class MessageItemComponent {
     });
   }
 
-  formatContent(): string {
-    let content = this.message().content || '';
+  /**
+   * Parsea el content del mensaje a segmentos tipados (text/link/break).
+   * Reemplaza el viejo formatContent() que devolvía HTML string + innerHTML
+   * (vulnerable a Stored XSS si el backend o un atacante inyectaba `<script>`/`<img onerror>`).
+   * Ahora el template usa text binding y Angular escapa automáticamente cualquier HTML del content.
+   */
+  contentSegments(): ContentSegment[] {
+    const content = this.message().content || '';
+    const segments: ContentSegment[] = [];
+    const urlRegex = /https?:\/\/[^\s<>"]+/g;
+    const lines = content.split('\n');
 
-    // Convert URLs to links
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    content = content.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    lines.forEach((line, lineIdx) => {
+      let lastIdx = 0;
+      const re = new RegExp(urlRegex);
+      let match: RegExpExecArray | null;
+      while ((match = re.exec(line)) !== null) {
+        if (match.index > lastIdx) {
+          segments.push({ type: 'text', value: line.slice(lastIdx, match.index) });
+        }
+        segments.push({ type: 'link', href: match[0], text: match[0] });
+        lastIdx = match.index + match[0].length;
+      }
+      if (lastIdx < line.length) {
+        segments.push({ type: 'text', value: line.slice(lastIdx) });
+      }
+      if (lineIdx < lines.length - 1) {
+        segments.push({ type: 'break' });
+      }
+    });
 
-    // Convert newlines to <br>
-    content = content.replace(/\n/g, '<br>');
-
-    return content;
+    return segments;
   }
 
   getDocumentName(): string {

@@ -13,6 +13,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { LoginAsService } from '../../../../core/services/login-as.service';
 import { UserService } from '../../../../core/services/user.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { safeFullReload } from '../../../../core/utils/safe-navigation.util';
 import { ToastService } from '../../../../core/services/toast.service';
 import { UserRole, RoleUtils } from '../../../../core/models/user.model';
 
@@ -975,8 +976,9 @@ export class LoginAsComponent implements OnInit, OnDestroy {
         next: (response) => {
           if (response.result === 'success') {
             this.toastService.success('Sesión iniciada correctamente');
-            // Reload the page to apply new session
-            window.location.href = '/app/dashboard';
+            // Full reload necesario: el JWT cambió y todos los servicios de auth
+            // (guards, interceptores, signals) deben reinicializarse con el nuevo contexto.
+            safeFullReload('/app/dashboard');
           } else {
             this.errorMessage.set(response.error || 'Error al iniciar sesión');
             this.isProcessing.set(false);

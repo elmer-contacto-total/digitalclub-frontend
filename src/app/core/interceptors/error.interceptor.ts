@@ -5,6 +5,19 @@ import { ToastService } from '../services/toast.service';
 import { translateError } from './error-translations';
 
 /**
+ * Sanea mensajes de error que vienen del backend antes de mostrarlos al usuario.
+ * El ToastService usa text binding (seguro), pero esto agrega defensa en profundidad
+ * por si en el futuro alguien cambia a innerHTML, o si hay error toasts en otros
+ * componentes que sí rendericen HTML. También trunca mensajes excesivamente largos.
+ */
+function sanitizeErrorMessage(raw: string): string {
+  return String(raw ?? '')
+    .replace(/<[^>]*>/g, '')   // remover tags HTML balanceados
+    .replace(/[\r\n\t]/g, ' ')  // normalizar whitespace (evita header injection en logs)
+    .substring(0, 500);          // truncar para evitar mensajes gigantes
+}
+
+/**
  * Error interceptor for handling HTTP errors.
  * NOTE: 401 errors are handled by auth.interceptor.ts with automatic token refresh.
  * This interceptor handles all other error codes.
@@ -32,7 +45,15 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
             showToast = false;
             break;
           case 403:
-            errorMessage = 'Acceso denegado. No tiene permiso para realizar esta acción.';
+            // Si el backend devuelve un mensaje específico (ej: "No tiene acceso a este ticket"),
+            // úsalo. Si no, mensaje genérico. Cubre IDORs y restricciones de ownership multi-tenant.
+            if (error.error?.error) {
+              errorMessage = translateError(error.error.error);
+            } else if (error.error?.message) {
+              errorMessage = translateError(error.error.message);
+            } else {
+              errorMessage = 'Acceso denegado. No tiene permiso para realizar esta acción.';
+            }
             break;
           case 404:
             errorMessage = 'Recurso no encontrado.';
@@ -56,12 +77,15 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         }
       }
 
+      // Sanitizar antes de mostrar al usuario (defensa en profundidad).
+      const safeMessage = sanitizeErrorMessage(errorMessage);
+
       // Show toast notification (except for 401 which is handled by auth interceptor)
       if (showToast) {
-        toastService.error(errorMessage);
+        toastService.error(safeMessage);
       }
 
-      return throwError(() => ({ ...error, message: errorMessage }));
+      return throwError(() => ({ ...error, message: safeMessage }));
     })
   );
 };
