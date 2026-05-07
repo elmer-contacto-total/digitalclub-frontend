@@ -3459,11 +3459,34 @@ const MEDIA_CAPTURE_SCRIPT = `
             }
           }
 
-          // Fallback: neighbors absent or all out of DOM. After 15s (5 scans)
-          // in the same chat, if the message was confirmed in DOM before, flag as
-          // deleted. Covers out-of-viewport deletions that the observer missed.
-          if (!isDeleted && scansSinceSeen >= 5 && messageSeenInDOM.has(messageId)) {
-            isDeleted = true;
+          // Fallback Path B: vecinos ausentes o todos fuera del DOM.
+          // Antes flageaba después de 15s (5 scans) sin más checks → causaba FALSOS
+          // POSITIVOS por virtual scroll: si el agente capturaba un mensaje arriba
+          // y bajaba a mensajes recientes >15s, el mensaje (y sus vecinos) salían
+          // del DOM por virtualización y se marcaba "eliminado" sin haberlo sido.
+          //
+          // Defensa nueva (más conservadora):
+          //   1) Aumentar el threshold a 60s (20 scans) — agente que pasa minuto
+          //      sin scrollear de vuelta es más sospechoso.
+          //   2) Requerir un marker de eliminación VISIBLE en algún mensaje del
+          //      chat actual (#main). Si no hay markers visibles, asumimos virtual
+          //      scroll (no eliminación). Si el agente luego scrollea de vuelta y
+          //      el mensaje aparece con marker, Method 1 lo detecta sin demora.
+          if (!isDeleted && scansSinceSeen >= 20 && messageSeenInDOM.has(messageId)) {
+            var hasMarkerInChat = !!document.querySelector(
+              '#main [data-testid="recalled"], #main [data-icon="recalled"], #main [data-testid="msg-revoked"]'
+            );
+            if (hasMarkerInChat) {
+              console.log('[MWS Deleted] Path B confirmado: marker visible en chat para ' + messageId.substring(0, 40));
+              isDeleted = true;
+            } else {
+              // Sin marker visible → probable virtual scroll. No flagear.
+              // Log cada ~30 scans para visibilidad sin spam.
+              if (scansSinceSeen % 30 === 0) {
+                console.log('[MWS Path B] Skipping ' + messageId.substring(0, 40) +
+                  ' (' + scansSinceSeen + ' scans sin DOM, sin marker visible — asumiendo virtual scroll)');
+              }
+            }
           }
 
           if (isDeleted) {
