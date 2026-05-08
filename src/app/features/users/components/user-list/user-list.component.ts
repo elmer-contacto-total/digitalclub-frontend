@@ -1042,7 +1042,14 @@ export class UserListComponent implements OnInit, OnDestroy {
         r.value === UserRole.AGENT ||
         r.value === UserRole.WHATSAPP_BUSINESS
       );
+    } else if (user.role === UserRole.MANAGER_LEVEL_4) {
+      // Supervisor: solo puede asignar Agente o Cliente (STANDARD)
+      filtered = allRoles.filter(r =>
+        r.value === UserRole.AGENT ||
+        r.value === UserRole.STANDARD
+      );
     } else if (RoleUtils.isManager(user.role)) {
+      // ML1/ML2/ML3 (managers de gerencia, no Supervisor)
       filtered = allRoles.filter(r =>
         r.value === UserRole.STANDARD ||
         r.value === UserRole.WHATSAPP_BUSINESS
