@@ -16,6 +16,7 @@ import { UserListItem, UserRole, UserStatus, RoleUtils, getFullName, UserOption 
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
+import { environment } from '../../../../../environments/environment';
 
 @Component({
   selector: 'app-user-list',
@@ -1030,24 +1031,48 @@ export class UserListComponent implements OnInit, OnDestroy {
       UserRole.WHATSAPP_BUSINESS
     ].map(value => ({ value, label: RoleUtils.getDisplayName(value) }));
 
-    if (user.role === UserRole.SUPER_ADMIN) return allRoles;
-    if (user.role === UserRole.ADMIN) {
-      return allRoles.filter(r => r.value !== UserRole.SUPER_ADMIN);
-    }
-    if (user.role === UserRole.STAFF) {
-      return allRoles.filter(r =>
+    let filtered: { value: UserRole; label: string }[];
+    if (user.role === UserRole.SUPER_ADMIN) {
+      filtered = allRoles;
+    } else if (user.role === UserRole.ADMIN) {
+      filtered = allRoles.filter(r => r.value !== UserRole.SUPER_ADMIN);
+    } else if (user.role === UserRole.STAFF) {
+      filtered = allRoles.filter(r =>
         r.value === UserRole.STANDARD ||
         r.value === UserRole.AGENT ||
         r.value === UserRole.WHATSAPP_BUSINESS
       );
-    }
-    if (RoleUtils.isManager(user.role)) {
-      return allRoles.filter(r =>
+    } else if (RoleUtils.isManager(user.role)) {
+      filtered = allRoles.filter(r =>
         r.value === UserRole.STANDARD ||
         r.value === UserRole.WHATSAPP_BUSINESS
       );
+    } else {
+      filtered = [];
     }
-    return [];
+
+    // Tenant infinance: limitar a Administrador, Manager (=ML4) y Agente.
+    // Modal de edición: preservar el rol actual del user editado si está fuera del set.
+    if (environment.simplifiedRoles) {
+      const allowed = new Set<UserRole>([
+        UserRole.ADMIN,
+        UserRole.MANAGER_LEVEL_4,
+        UserRole.AGENT
+      ]);
+      filtered = filtered.filter(r => allowed.has(r.value));
+
+      const currentRole = this.editingUser()?.role;
+      if (currentRole != null &&
+          !allowed.has(currentRole) &&
+          !filtered.some(r => r.value === currentRole)) {
+        filtered = [
+          ...filtered,
+          { value: currentRole, label: RoleUtils.getDisplayName(currentRole) }
+        ];
+      }
+    }
+
+    return filtered;
   });
 
   private searchTimeout: ReturnType<typeof setTimeout> | null = null;
