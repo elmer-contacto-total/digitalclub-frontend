@@ -5,7 +5,7 @@
  */
 import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Subject, takeUntil, forkJoin } from 'rxjs';
+import { Subject, takeUntil, forkJoin, debounceTime, distinctUntilChanged } from 'rxjs';
 import { UserService } from '../../core/services/user.service';
 import { ToastService } from '../../core/services/toast.service';
 import { UserOption, UserListItem } from '../../core/models/user.model';
@@ -216,6 +216,7 @@ export class ManagerAssignmentsComponent implements OnInit, OnDestroy {
   private userService = inject(UserService);
   private toast = inject(ToastService);
   private destroy$ = new Subject<void>();
+  private searchSubject = new Subject<string>();
 
   // Data
   managers = signal<UserOption[]>([]);
@@ -237,16 +238,10 @@ export class ManagerAssignmentsComponent implements OnInit, OnDestroy {
   isAssigning = signal(false);
 
   // Computed
-  filteredClients = computed(() => {
-    const term = this.searchTerm().toLowerCase().trim();
-    if (!term) return this.clients();
-
-    return this.clients().filter(c =>
-      c.name.toLowerCase().includes(term) ||
-      c.phone.includes(term) ||
-      c.managerName.toLowerCase().includes(term)
-    );
-  });
+  // El backend ya filtra (name/phone/codigo) via SQL desde que searchSubject dispara
+  // loadClients(). Antes esto era client-side sobre los 50 cargados, lo cual rompía
+  // la búsqueda en datasets paginados.
+  filteredClients = computed(() => this.clients());
 
   totalPages = computed(() => Math.ceil(this.totalClients() / this.pageSize));
 
@@ -271,6 +266,16 @@ export class ManagerAssignmentsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadData();
+
+    // Search debounced: dispara recarga al backend (que ya filtra por SQL).
+    this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.currentPage.set(1);
+      this.loadClients();
+    });
   }
 
   ngOnDestroy(): void {
@@ -360,10 +365,12 @@ export class ManagerAssignmentsComponent implements OnInit, OnDestroy {
   onSearchInput(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.searchTerm.set(value);
+    this.searchSubject.next(value);
   }
 
   clearSearch(): void {
     this.searchTerm.set('');
+    this.searchSubject.next('');
   }
 
   goToPage(page: number): void {
