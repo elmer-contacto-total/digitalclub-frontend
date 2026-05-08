@@ -12,6 +12,7 @@ import { Subject, takeUntil, debounceTime, distinctUntilChanged } from 'rxjs';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
 import { WebSocketService } from '../../core/services/websocket.service';
+import { ToastService } from '../../core/services/toast.service';
 import { ChatService } from '../chat/services/chat.service';
 import { ChatPanelComponent } from '../chat/components/chat-panel/chat-panel.component';
 import { ConversationDetail } from '../../core/models/conversation.model';
@@ -68,6 +69,17 @@ interface ProspectsResponse {
     page: number;
     pageSize: number;
   };
+}
+
+interface SkippedAssociation {
+  prospectId: number;
+  userId: number;
+  reason: string;
+}
+
+interface GenerateImportCsvResponse {
+  files: { filename: string; content: string }[];
+  skipped?: SkippedAssociation[];
 }
 
 @Component({
@@ -264,12 +276,12 @@ interface ProspectsResponse {
 
     <!-- Conversion Modal -->
     @if (showConversionModal()) {
-      <div class="modal-backdrop" (click)="closeConversionModal()"></div>
+      <div class="modal-backdrop" (click)="attemptCloseConversionModal()"></div>
       <div class="modal-container modal-xl">
         <div class="modal-content">
           <div class="modal-header">
             <h5>Convertir Prospectos a CSV de Importación</h5>
-            <button class="close-btn" (click)="closeConversionModal()">
+            <button class="close-btn" (click)="attemptCloseConversionModal()">
               <i class="ph ph-x"></i>
             </button>
           </div>
@@ -366,7 +378,7 @@ interface ProspectsResponse {
           <div class="modal-footer">
             <span class="assoc-count">{{ countTotalAssociations() }} de {{ conversionProspectsCount() }} prospectos asociados</span>
             <div class="footer-actions">
-              <button class="btn btn-secondary" (click)="closeConversionModal()">Cancelar</button>
+              <button class="btn btn-secondary" (click)="attemptCloseConversionModal()">Cancelar</button>
               <button
                 class="btn btn-primary"
                 (click)="generateImportCsv()"
@@ -429,6 +441,7 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
   private wsService = inject(WebSocketService);
   private chatService = inject(ChatService);
+  private toastService = inject(ToastService);
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
 
@@ -628,6 +641,20 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
     this.searchTimers.clear();
   }
 
+  /**
+   * Close attempt: ask for confirmation if there are pending associations,
+   * so a misclick on the backdrop doesn't wipe the user's work.
+   */
+  attemptCloseConversionModal(): void {
+    if (this.countTotalAssociations() > 0) {
+      const confirmed = window.confirm(
+        '¿Cerrar sin generar el CSV? Se perderán las asociaciones realizadas.'
+      );
+      if (!confirmed) return;
+    }
+    this.closeConversionModal();
+  }
+
   addConvGroup(): void {
     const snapshot = [...this.prospects()];
     const items: ConvGroupItem[] = snapshot.map(p => ({
@@ -707,7 +734,7 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
 
     this.isGeneratingCsv.set(true);
 
-    this.http.post<{ files: { filename: string; content: string }[] }>(
+    this.http.post<GenerateImportCsvResponse>(
       `${environment.apiUrl}/app/prospects/generate-import-csv`,
       { groups }
     ).subscribe({
@@ -725,13 +752,47 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
         });
+        this.notifySkipped(response.skipped);
         this.closeConversionModal();
       },
       error: (err) => {
         console.error('Error generando CSV:', err);
         this.isGeneratingCsv.set(false);
+        this.toastService.error('Error generando el CSV de importación.');
       }
     });
+  }
+
+  /**
+   * Show a warning toast summarizing rows the backend skipped, grouped by reason.
+   * Reasons come from ProspectAdminController.generateImportCsv().
+   */
+  private notifySkipped(skipped: SkippedAssociation[] | undefined): void {
+    if (!skipped || skipped.length === 0) return;
+
+    const reasonLabels: Record<string, string> = {
+      phone_already_exists_as_user: 'teléfono ya registrado como usuario',
+      prospect_not_found_or_wrong_client: 'prospecto no encontrado',
+      user_not_found: 'usuario no encontrado',
+      user_not_standard: 'usuario no es estándar',
+      user_wrong_client: 'usuario de otro cliente'
+    };
+
+    const counts = new Map<string, number>();
+    for (const item of skipped) {
+      counts.set(item.reason, (counts.get(item.reason) ?? 0) + 1);
+    }
+
+    const parts: string[] = [];
+    for (const [reason, count] of counts) {
+      const label = reasonLabels[reason] ?? reason;
+      parts.push(`${count} con ${label}`);
+    }
+
+    this.toastService.warning(
+      `Se omitieron ${skipped.length} fila(s) del CSV: ${parts.join(', ')}.`,
+      8000
+    );
   }
 
   private searchStandardUsers(gIdx: number, iIdx: number, term: string): void {
