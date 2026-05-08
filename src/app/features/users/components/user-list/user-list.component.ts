@@ -1018,17 +1018,17 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (!user) return [];
 
     const allRoles = [
-      { value: UserRole.STANDARD, label: 'Estándar' },
-      { value: UserRole.SUPER_ADMIN, label: 'Super Admin' },
-      { value: UserRole.ADMIN, label: 'Administrador' },
-      { value: UserRole.MANAGER_LEVEL_1, label: 'Manager Nivel 1' },
-      { value: UserRole.MANAGER_LEVEL_2, label: 'Manager Nivel 2' },
-      { value: UserRole.MANAGER_LEVEL_3, label: 'Manager Nivel 3' },
-      { value: UserRole.MANAGER_LEVEL_4, label: 'Manager Nivel 4' },
-      { value: UserRole.AGENT, label: 'Agente' },
-      { value: UserRole.STAFF, label: 'Staff' },
-      { value: UserRole.WHATSAPP_BUSINESS, label: 'WhatsApp Business' }
-    ];
+      UserRole.STANDARD,
+      UserRole.SUPER_ADMIN,
+      UserRole.ADMIN,
+      UserRole.MANAGER_LEVEL_1,
+      UserRole.MANAGER_LEVEL_2,
+      UserRole.MANAGER_LEVEL_3,
+      UserRole.MANAGER_LEVEL_4,
+      UserRole.AGENT,
+      UserRole.STAFF,
+      UserRole.WHATSAPP_BUSINESS
+    ].map(value => ({ value, label: RoleUtils.getDisplayName(value) }));
 
     if (user.role === UserRole.SUPER_ADMIN) return allRoles;
     if (user.role === UserRole.ADMIN) {

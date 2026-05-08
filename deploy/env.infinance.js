@@ -7,4 +7,5 @@
   window.__env.logoPath = '/assets/images/logo-sip.png';
   window.__env.appName = 'InFinance';
   window.__env.title = 'InFinance Cobranza';
+  window.__env.simplifiedRoles = true;
 })(window);

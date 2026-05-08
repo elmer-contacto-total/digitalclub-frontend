@@ -5,5 +5,6 @@ export const environment = {
   logoPath: null as string | null,
   appName: 'Holape',
   title: 'Holape (dev)',
-  version: '1.0.0'
+  version: '1.0.0',
+  simplifiedRoles: false
 };

@@ -12,6 +12,7 @@ import { AuthService } from '../../../../core/services/auth.service';
 import { User, UserRole, UserStatus, UserOption, RoleUtils } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { translateError } from '../../../../core/interceptors/error-translations';
+import { environment } from '../../../../../environments/environment';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
 
@@ -621,44 +622,63 @@ export class UserFormComponent implements OnInit {
     if (!user) return [];
 
     const allRoles = [
-      { value: UserRole.STANDARD, label: 'Estándar' },
-      { value: UserRole.SUPER_ADMIN, label: 'Super Admin' },
-      { value: UserRole.ADMIN, label: 'Administrador' },
-      { value: UserRole.MANAGER_LEVEL_1, label: 'Manager Nivel 1' },
-      { value: UserRole.MANAGER_LEVEL_2, label: 'Manager Nivel 2' },
-      { value: UserRole.MANAGER_LEVEL_3, label: 'Manager Nivel 3' },
-      { value: UserRole.MANAGER_LEVEL_4, label: 'Manager Nivel 4' },
-      { value: UserRole.AGENT, label: 'Agente' },
-      { value: UserRole.STAFF, label: 'Staff' },
-      { value: UserRole.WHATSAPP_BUSINESS, label: 'WhatsApp Business' }
-    ];
+      UserRole.STANDARD,
+      UserRole.SUPER_ADMIN,
+      UserRole.ADMIN,
+      UserRole.MANAGER_LEVEL_1,
+      UserRole.MANAGER_LEVEL_2,
+      UserRole.MANAGER_LEVEL_3,
+      UserRole.MANAGER_LEVEL_4,
+      UserRole.AGENT,
+      UserRole.STAFF,
+      UserRole.WHATSAPP_BUSINESS
+    ].map(value => ({ value, label: RoleUtils.getDisplayName(value) }));
 
-    // Super admin can assign any role
-    if (user.role === UserRole.SUPER_ADMIN) return allRoles;
-
-    // Admin can't create super admins
-    if (user.role === UserRole.ADMIN) {
-      return allRoles.filter(r => r.value !== UserRole.SUPER_ADMIN);
-    }
-
-    // Staff can create standard users and agents
-    if (user.role === UserRole.STAFF) {
-      return allRoles.filter(r =>
+    // Filter by current user's permissions
+    let filtered: { value: UserRole; label: string }[];
+    if (user.role === UserRole.SUPER_ADMIN) {
+      filtered = allRoles;
+    } else if (user.role === UserRole.ADMIN) {
+      filtered = allRoles.filter(r => r.value !== UserRole.SUPER_ADMIN);
+    } else if (user.role === UserRole.STAFF) {
+      filtered = allRoles.filter(r =>
         r.value === UserRole.STANDARD ||
         r.value === UserRole.AGENT ||
         r.value === UserRole.WHATSAPP_BUSINESS
       );
-    }
-
-    // Managers can create standard users
-    if (RoleUtils.isManager(user.role)) {
-      return allRoles.filter(r =>
+    } else if (RoleUtils.isManager(user.role)) {
+      filtered = allRoles.filter(r =>
         r.value === UserRole.STANDARD ||
         r.value === UserRole.WHATSAPP_BUSINESS
       );
+    } else {
+      filtered = [];
     }
 
-    return [];
+    // Tenant infinance: limitar a Administrador, Manager (=ML4) y Agente.
+    // En modo edit, preservar el rol actual aunque no esté en el set (legacy).
+    if (environment.simplifiedRoles) {
+      const allowed = new Set<UserRole>([
+        UserRole.ADMIN,
+        UserRole.MANAGER_LEVEL_4,
+        UserRole.AGENT
+      ]);
+      filtered = filtered.filter(r => allowed.has(r.value));
+
+      if (this.isEditMode()) {
+        const currentRole = this.existingUser()?.role;
+        if (currentRole != null &&
+            !allowed.has(currentRole) &&
+            !filtered.some(r => r.value === currentRole)) {
+          filtered = [
+            ...filtered,
+            { value: currentRole, label: RoleUtils.getDisplayName(currentRole) }
+          ];
+        }
+      }
+    }
+
+    return filtered;
   });
 
   ngOnInit(): void {

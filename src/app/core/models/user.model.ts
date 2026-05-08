@@ -1,3 +1,5 @@
+import { environment } from '../../../environments/environment';
+
 /**
  * User roles matching Spring Boot UserRole enum
  * PARIDAD: digitalgroup-web-main-spring-boot/domain/common/enums/UserRole.java
@@ -79,7 +81,7 @@ export const RoleUtils = {
       [UserRole.MANAGER_LEVEL_1]: 'Manager Nivel 1',
       [UserRole.MANAGER_LEVEL_2]: 'Manager Nivel 2',
       [UserRole.MANAGER_LEVEL_3]: 'Manager Nivel 3',
-      [UserRole.MANAGER_LEVEL_4]: 'Manager Nivel 4',
+      [UserRole.MANAGER_LEVEL_4]: environment.simplifiedRoles ? 'Manager' : 'Manager Nivel 4',
       [UserRole.AGENT]: 'Agente',
       [UserRole.STAFF]: 'Staff',
       [UserRole.WHATSAPP_BUSINESS]: 'WhatsApp Business'
