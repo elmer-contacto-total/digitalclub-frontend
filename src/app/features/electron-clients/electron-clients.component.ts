@@ -519,17 +519,20 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   /**
    * Initiate ticket close process with a specific close type
    */
-  initiateCloseTicket(closeType: TicketCloseType): void {
+  // Esperamos el IPC ANTES de mostrar el modal: el modal queda centrado en el
+  // viewport, y la BrowserView de WA tapa la mitad derecha (botón Confirmar).
+  // Fire-and-forget rendereaba el modal antes de que removeBrowserView llegara.
+  async initiateCloseTicket(closeType: TicketCloseType): Promise<void> {
+    await this.electronService.setWhatsAppOverlayMode(true);
     this.showTicketConfirmation.set(closeType);
-    this.electronService.setWhatsAppOverlayMode(true);
   }
 
   /**
    * Initiate generic ticket close (when no close types are configured)
    */
-  initiateCloseTicketGeneric(): void {
+  async initiateCloseTicketGeneric(): Promise<void> {
+    await this.electronService.setWhatsAppOverlayMode(true);
     this.showTicketConfirmation.set({ name: 'Finalizar', kpiName: '' });
-    this.electronService.setWhatsAppOverlayMode(true);
   }
 
   /**

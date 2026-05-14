@@ -2551,18 +2551,21 @@ function setupIPC(): void {
   });
 
   // === Overlay Mode (para ocultar WhatsApp cuando hay menús abiertos) ===
+  // Al ABRIR overlay quitamos la BrowserView si está adjunta — sin chequear
+  // `whatsappVisible`, porque si quedó desincronizado (p.ej. ciclos pause/resume
+  // del bulk-sender) y la view sigue adjunta, el modal de cierre de ticket se
+  // pintaba debajo de WA y no se podía clickear Confirmar.
   ipcMain.handle('whatsapp:set-overlay-mode', (_, overlayOpen: boolean) => {
     if (!mainWindow || !whatsappView) return false;
 
     if (overlayOpen) {
-      // Ocultar WhatsApp temporalmente (remover del window)
-      if (whatsappVisible && mainWindow.getBrowserViews().includes(whatsappView)) {
+      if (mainWindow.getBrowserViews().includes(whatsappView)) {
         mainWindow.removeBrowserView(whatsappView);
         whatsappView.webContents.executeJavaScript('window.__hablapeViewVisible = false;', true).catch(() => {});
         console.log('[MWS] WhatsApp ocultado temporalmente (overlay abierto)');
       }
     } else {
-      // Restaurar WhatsApp si estaba visible
+      // Solo restauramos si la view debería ser visible para el flujo actual.
       if (whatsappVisible && !mainWindow.getBrowserViews().includes(whatsappView)) {
         mainWindow.addBrowserView(whatsappView);
         updateWhatsAppViewBounds();
