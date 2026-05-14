@@ -1,7 +1,6 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { RouterLink } from '@angular/router';
 import { inject } from '@angular/core';
 import { LogoComponent } from '../../shared/components/logo/logo.component';
 import { environment } from '../../../environments/environment';
@@ -19,7 +18,7 @@ interface VersionDto {
 @Component({
   selector: 'app-download',
   standalone: true,
-  imports: [CommonModule, RouterLink, LogoComponent],
+  imports: [CommonModule, LogoComponent],
   template: `
     <!-- Background -->
     <div class="download-bg">
@@ -141,13 +140,6 @@ interface VersionDto {
           </ul>
         </div>
 
-        <!-- Login link -->
-        <div class="login-link">
-          <a routerLink="/auth/login">
-            <i class="ph ph-sign-in"></i>
-            ¿Ya tienes cuenta? Iniciar sesión
-          </a>
-        </div>
       </div>
     </div>
 
@@ -459,25 +451,6 @@ interface VersionDto {
           color: var(--fg-default);
           width: 1.25rem;
           text-align: center;
-        }
-      }
-    }
-
-    /* Login link */
-    .login-link {
-      text-align: center;
-
-      a {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: 0.875rem;
-        color: #25D366;
-        text-decoration: none;
-        transition: opacity 0.15s;
-
-        &:hover {
-          opacity: 0.8;
         }
       }
     }
