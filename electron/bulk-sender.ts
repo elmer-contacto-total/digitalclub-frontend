@@ -38,6 +38,9 @@ export type OverlayUpdateCallback = (data: {
   periodicPauseRemaining?: number;
 }) => void;
 
+/** Resultado de navigateToChat / prefetchNext */
+type NavResult = { success: boolean; error?: string; errorType?: 'not_registered' | 'not_found' | 'timeout' | 'selector' | 'unknown' };
+
 const DEFAULT_RULES: BulkSendRules = {
   min_delay_seconds: 30,
   max_delay_seconds: 90,
@@ -70,6 +73,9 @@ export class BulkSender {
   private stateFile: string | null = null;
   private cdpAttached = false;
   private processLoopPromise: Promise<void> | null = null;
+  // Destinatario pre-cargado + pre-navegado durante la espera del mensaje
+  // anterior (solapa el trabajo con la espera anti-ban). Ver prefetchNext().
+  private prefetched: { next: any; navResult: NavResult } | null = null;
   private rateLimitResumeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(apiBaseUrl: string) {
@@ -344,6 +350,10 @@ export class BulkSender {
 
   private async processLoop(): Promise<void> {
     let messagesSinceLastPause = 0;
+    // Descartar cualquier prefetch de una corrida anterior: tras pausa/reanudación
+    // resumeBulkSend() resetea los IN_PROGRESS a PENDING, así que un prefetch
+    // viejo sería un destinatario obsoleto (reportarlo lo duplicaría).
+    this.prefetched = null;
 
     while (true) {
       // Check cancel/pause
@@ -392,42 +402,63 @@ export class BulkSender {
         return;
       }
 
-      // Fetch next recipient
-      const next = await this.fetchNextRecipient();
+      // Usar el destinatario pre-cargado (fetch + navegación solapados con la
+      // espera del mensaje anterior) si está disponible; si no, fetch fresco.
+      let next: any;
+      let navResult: NavResult | null = null;
 
-      // Network/HTTP error — NOT completion, treat as transient failure
-      if (next === null) {
-        this.consecutiveFailures++;
-        console.warn(`[BulkSender] Failed to fetch next recipient (attempt ${this.consecutiveFailures})`);
-        if (this.consecutiveFailures >= 5) {
-          this.isPaused = true;
-          this._state = 'paused';
-          this.lastError = 'Error de conexión con el servidor. Verifique su red y reanude.';
-          await this.notifyBackend('pause');
+      if (this.prefetched) {
+        next = this.prefetched.next;
+        navResult = this.prefetched.navResult;
+        this.prefetched = null;
+      } else {
+        // Fetch next recipient
+        next = await this.fetchNextRecipient();
+
+        // Network/HTTP error — NOT completion, treat as transient failure
+        if (next === null) {
+          this.consecutiveFailures++;
+          console.warn(`[BulkSender] Failed to fetch next recipient (attempt ${this.consecutiveFailures})`);
+          if (this.consecutiveFailures >= 5) {
+            this.isPaused = true;
+            this._state = 'paused';
+            this.lastError = 'Error de conexión con el servidor. Verifique su red y reanude.';
+            await this.notifyBackend('pause');
+            this.emitOverlayUpdate();
+            return;
+          }
+          await this.sleep(5000);
+          continue;
+        }
+
+        if (!next.has_next) {
+          // Check if backend stopped us due to limits (NOT actual completion)
+          if (next.daily_limit_reached || next.rate_limited) {
+            this.isPaused = true;
+            this._state = 'paused';
+            this.lastError = next.message || 'Límite alcanzado. Se reanudará automáticamente en ~15 minutos.';
+            await this.notifyBackend('pause');
+            this.scheduleRateLimitResume(15 * 60 * 1000);
+            this.emitOverlayUpdate();
+            return;
+          }
+          this._state = 'completed';
           this.emitOverlayUpdate();
+          this.clearPersistedState();
+          this.cleanupTempAttachment();
+          console.log(`[BulkSender] Bulk send ${this.bulkSendId} completed: ${this.sentCount} sent, ${this.failedCount} failed`);
           return;
         }
-        await this.sleep(5000);
-        continue;
-      }
 
-      if (!next.has_next) {
-        // Check if backend stopped us due to limits (NOT actual completion)
-        if (next.daily_limit_reached || next.rate_limited) {
-          this.isPaused = true;
-          this._state = 'paused';
-          this.lastError = next.message || 'Límite alcanzado. Se reanudará automáticamente en ~15 minutos.';
-          await this.notifyBackend('pause');
-          this.scheduleRateLimitResume(15 * 60 * 1000);
+        // Validate phone
+        if (!next.phone || next.phone.trim().length < 5) {
+          console.warn(`[BulkSender] Invalid phone "${next.phone}" for recipient ${next.recipient_id} — skipping`);
+          await this.reportResult(next.recipient_id, false, 'Teléfono inválido: vacío o muy corto', 'SKIP');
+          this.failedCount++;
           this.emitOverlayUpdate();
-          return;
+          await this.sleep(1000);
+          continue;
         }
-        this._state = 'completed';
-        this.emitOverlayUpdate();
-        this.clearPersistedState();
-        this.cleanupTempAttachment();
-        console.log(`[BulkSender] Bulk send ${this.bulkSendId} completed: ${this.sentCount} sent, ${this.failedCount} failed`);
-        return;
       }
 
       this.currentPhone = next.phone;
@@ -435,22 +466,14 @@ export class BulkSender {
       const recipientId = next.recipient_id;
       const hasAttachment = !!next.attachment_path;
 
-      // Validate phone
-      if (!next.phone || next.phone.trim().length < 5) {
-        console.warn(`[BulkSender] Invalid phone "${next.phone}" for recipient ${recipientId} — skipping`);
-        await this.reportResult(recipientId, false, 'Teléfono inválido: vacío o muy corto', 'SKIP');
-        this.failedCount++;
-        this.emitOverlayUpdate();
-        await this.sleep(1000);
-        continue;
-      }
-
       this.emitOverlayUpdate();
 
       console.log(`[BulkSender] Sending to ${next.phone} (${next.recipient_name || 'Unknown'})`);
 
-      // Navigate to chat
-      const navResult = await this.navigateToChat(next.phone);
+      // Navigate to chat (omitido si el destinatario ya viene pre-navegado)
+      if (navResult === null) {
+        navResult = await this.navigateToChat(next.phone);
+      }
 
       if (!navResult.success) {
         const errorMsg = navResult.error || 'navigation_failed';
@@ -464,10 +487,8 @@ export class BulkSender {
           this.failedCount++;
           this.emitOverlayUpdate();
 
-          // Short delay before next (no need to wait full inter-message delay)
-          const skipDelay = 2000 + Math.random() * 3000;
-          console.log(`[BulkSender] Skip delay: ${Math.round(skipDelay / 1000)}s`);
-          await this.sleep(skipDelay);
+          // Espera breve antes del siguiente: no se envió nada → sin riesgo de baneo.
+          await this.sleep(600 + Math.random() * 400);
           continue;
         }
 
@@ -500,9 +521,8 @@ export class BulkSender {
 
       // Navigation succeeded — send the message
       try {
-        // Random delay to simulate typing
-        const typingDelay = 500 + Math.random() * 1000;
-        await this.sleep(typingDelay);
+        // Breve asentamiento del chat antes de verificar (no es anti-ban).
+        await this.sleep(150);
 
         // Verify we're still in the correct chat; re-navigate up to MAX_VERIFY_ATTEMPTS times
         const MAX_VERIFY_ATTEMPTS = 5;
@@ -733,10 +753,44 @@ export class BulkSender {
         continue; // Skip inter-message delay after periodic pause
       }
 
-      // Random delay between messages
+      // Random delay between messages. Durante esta espera pre-cargamos y
+      // pre-navegamos al siguiente destinatario: solapa ~5s de trabajo con
+      // los ~30-90s de espera. Navegar/buscar chats NO dispara baneo; el
+      // anti-ban es la espera entre envíos, que no se toca.
       const delay = this.getRandomDelay();
       console.log(`[BulkSender] Waiting ${Math.round(delay / 1000)}s before next...`);
+      const prefetchPromise = this.prefetchNext();
       await this.sleep(delay);
+      this.prefetched = await prefetchPromise;
+    }
+  }
+
+  /**
+   * Pre-carga el siguiente destinatario y pre-navega a su chat, para solapar
+   * ese trabajo (~5s) con la espera entre mensajes (~30-90s).
+   *
+   * Devuelve null si no hay un siguiente destinatario "limpio" (no hay más,
+   * error de red, teléfono inválido): en ese caso el loop principal hace el
+   * fetch fresco y maneja esos casos con su lógica robusta.
+   *
+   * Si el envío se pausa/cancela tras el prefetch, el destinatario queda
+   * IN_PROGRESS en el backend; resumeBulkSend() lo resetea a PENDING al
+   * reanudar, así que no se pierde ni se duplica.
+   */
+  private async prefetchNext(): Promise<{ next: any; navResult: NavResult } | null> {
+    try {
+      if (this.isPaused || this.isCancelled) return null;
+      const next = await this.fetchNextRecipient();
+      // Solo pre-navegamos destinatarios "limpios"; el resto (no hay más,
+      // error de red, teléfono inválido) lo resuelve el loop con fetch fresco.
+      if (!next || !next.has_next) return null;
+      if (!next.phone || next.phone.trim().length < 5) return null;
+      if (this.isPaused || this.isCancelled) return null;
+      const navResult = await this.navigateToChat(next.phone);
+      return { next, navResult };
+    } catch (err: any) {
+      console.warn('[BulkSender] prefetchNext falló, el loop hará fetch fresco:', err?.message || err);
+      return null;
     }
   }
 
@@ -1209,8 +1263,8 @@ export class BulkSender {
         return { success: false, error: 'No se pudo escribir el texto en el chat' };
       }
 
-      // Step 3: Typing simulation delay
-      await this.sleep(500 + Math.random() * 1000);
+      // Step 3: breve asentamiento antes de enviar (no es anti-ban)
+      await this.sleep(150);
 
       // Step 3.5: Final chat verification before sending
       if (expectedPhone) {
@@ -1248,7 +1302,7 @@ export class BulkSender {
       }
 
       // Step 6: Soft-check — verify last outgoing message has a tick (warning only)
-      await this.sleep(500);
+      await this.sleep(200);
       try {
         const hasTick = await this.whatsappView.webContents.executeJavaScript(`
           (function() {
