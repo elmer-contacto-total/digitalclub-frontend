@@ -4,19 +4,13 @@
  */
 import { Routes } from '@angular/router';
 
-// Shared loader: '' y ':clientId' deben referenciar la MISMA función para que
-// SharedComponentRouteReuseStrategy reutilice el componente al seleccionar un
-// cliente (sin recrearlo ni perder el filtro de búsqueda).
-const loadAgentClients = () =>
-  import('./agent-clients.component').then(m => m.AgentClientsComponent);
-
 export const AGENT_CLIENTS_ROUTES: Routes = [
   {
     path: '',
-    loadComponent: loadAgentClients
+    loadComponent: () => import('./agent-clients.component').then(m => m.AgentClientsComponent)
   },
   {
     path: ':clientId',
-    loadComponent: loadAgentClients
+    loadComponent: () => import('./agent-clients.component').then(m => m.AgentClientsComponent)
   }
 ];

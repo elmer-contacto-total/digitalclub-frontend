@@ -186,11 +186,11 @@ export class ChatLayoutComponent implements OnInit, OnDestroy {
   }
 
   onClientSelected(client: ConversationListItem): void {
+    // NO navegamos a /:clientId: '' y ':clientId' son route configs distintas,
+    // así que el router recrea ChatLayoutComponent (y conversation-list),
+    // perdiendo búsqueda/filtros de la lista. La selección vive en el signal.
+    // La ruta /:clientId sigue existiendo solo para deep-links externos.
     this.selectClient(client.id);
-    // Update URL
-    this.router.navigate(['/app/chat', client.id], {
-      queryParams: this.viewType() === 'prospects' ? { view: 'prospects' } : {}
-    });
   }
 
   onViewTypeChanged(viewType: ChatViewType): void {

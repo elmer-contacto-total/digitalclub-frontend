@@ -3,14 +3,13 @@ import {
   provideBrowserGlobalErrorListeners,
   provideZoneChangeDetection
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withDebugTracing, RouteReuseStrategy } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withDebugTracing } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { loadingInterceptor } from './core/interceptors/loading.interceptor';
-import { SharedComponentRouteReuseStrategy } from './core/strategies/shared-component-route-reuse.strategy';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -23,7 +22,6 @@ export const appConfig: ApplicationConfig = {
         authInterceptor,
         errorInterceptor
       ])
-    ),
-    { provide: RouteReuseStrategy, useClass: SharedComponentRouteReuseStrategy }
+    )
   ]
 };

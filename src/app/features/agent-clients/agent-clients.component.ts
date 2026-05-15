@@ -438,11 +438,10 @@ export class AgentClientsComponent implements OnInit, OnDestroy {
   selectClient(client: UserListItem): void {
     this.selectedClientId.set(client.id);
     this.loadConversationDetail(client.id);
-    // Update URL
-    this.router.navigate(['/app/agent_clients', client.id], {
-      queryParams: this.activeOnly() ? { active_only: 'true' } : {},
-      queryParamsHandling: 'merge'
-    });
+    // NO navegamos a /:clientId: '' y ':clientId' son route configs distintas,
+    // así que el router destruye y recrea el componente, perdiendo searchTerm
+    // y los filtros. La selección vive en el signal selectedClientId.
+    // La ruta /:clientId sigue existiendo solo para deep-links externos.
   }
 
   private selectClientById(clientId: number): void {

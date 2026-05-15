@@ -540,8 +540,10 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
   selectProspect(prospect: Prospect): void {
     this.selectedProspectId.set(prospect.id);
     this.loadConversationDetail(prospect.id);
-    // Update URL
-    this.router.navigate(['/app/agent_prospects', prospect.id]);
+    // NO navegamos a /:prospectId: '' y ':prospectId' son route configs
+    // distintas, así que el router recrea el componente y se pierde el filtro
+    // de búsqueda. La selección vive en el signal selectedProspectId.
+    // La ruta /:prospectId sigue existiendo solo para deep-links externos.
   }
 
   private selectProspectById(prospectId: number): void {
