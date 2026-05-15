@@ -46,6 +46,7 @@ interface ElectronAPI {
   hideWhatsApp?(): Promise<boolean>;
   isWhatsAppVisible?(): Promise<boolean>;
   setWhatsAppOverlayMode?(overlayOpen: boolean): Promise<boolean>;
+  resetWhatsAppSession?(): Promise<boolean>;
 
   // User login/logout (for media capture association)
   setLoggedInUser?(userId: number, userName: string, clientId?: number): void;
@@ -473,6 +474,21 @@ export class ElectronService {
     if (window.electronAPI?.setWhatsAppOverlayMode) {
       try {
         return await window.electronAPI.setWhatsAppOverlayMode(overlayOpen);
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Logout total de WhatsApp: destruye la BrowserView y borra la sesión de
+   * la partición persist:whatsapp. Se usa al dejar de impersonar.
+   */
+  async resetWhatsAppSession(): Promise<boolean> {
+    if (window.electronAPI?.resetWhatsAppSession) {
+      try {
+        return await window.electronAPI.resetWhatsAppSession();
       } catch {
         return false;
       }

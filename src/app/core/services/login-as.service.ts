@@ -206,6 +206,12 @@ export class LoginAsService {
 
           // Notify Electron to adjust WhatsApp view bounds
           (window as any).electronAPI?.setImpersonation?.(false);
+
+          // Al dejar de impersonar: destruir la BrowserView de WhatsApp y borrar
+          // su sesión. El full-reload posterior NO dispara el ngOnDestroy de
+          // electron-clients (la vista quedaría pegada), y la sesión de WhatsApp
+          // del usuario impersonado no debe heredarla el admin.
+          (window as any).electronAPI?.resetWhatsAppSession?.();
         }
       })
     );

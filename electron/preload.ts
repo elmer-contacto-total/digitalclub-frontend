@@ -287,6 +287,11 @@ const electronAPI = {
     return ipcRenderer.invoke('whatsapp:set-overlay-mode', overlayOpen);
   },
 
+  // Logout total de WhatsApp: destruye la vista y borra la sesión (fin de impersonación)
+  resetWhatsAppSession: (): Promise<boolean> => {
+    return ipcRenderer.invoke('whatsapp:reset-session');
+  },
+
   // Limpiar listeners
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel);
@@ -382,6 +387,7 @@ declare global {
       };
       onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number }) => void) => void;
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
+      resetWhatsAppSession: () => Promise<boolean>;
       setImpersonation: (active: boolean) => void;
       setLoggedInUser: (userId: number, userName: string, clientId?: number) => void;
       onIncomingMessageDetected?: (callback: (data: { phone: string }) => void) => void;

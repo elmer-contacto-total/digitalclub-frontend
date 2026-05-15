@@ -3001,6 +3001,37 @@ function setupIPC(): void {
     }
   });
 
+  // Logout total de WhatsApp: destruye la BrowserView y borra la sesión de la
+  // partición persist:whatsapp. Usado al dejar de impersonar — el full-reload
+  // del renderer NO dispara el ngOnDestroy de electron-clients, así que la
+  // BrowserView quedaba pegada; y la sesión de WhatsApp del usuario
+  // impersonado no debe heredarla el admin ni el siguiente usuario.
+  ipcMain.handle('whatsapp:reset-session', async () => {
+    try {
+      stopChatScanner();
+      stopSessionMonitor();
+
+      if (whatsappView) {
+        if (mainWindow && mainWindow.getBrowserViews().includes(whatsappView)) {
+          mainWindow.removeBrowserView(whatsappView);
+        }
+        whatsappView = null;
+      }
+      whatsappVisible = false;
+      whatsappInitialized = false;
+
+      const whatsappSession = session.fromPartition('persist:whatsapp');
+      await whatsappSession.clearStorageData();
+      await whatsappSession.clearCache();
+
+      console.log('[MWS] Sesión de WhatsApp limpiada y BrowserView destruida');
+      return true;
+    } catch (error) {
+      console.error('[MWS] Error reseteando sesión de WhatsApp:', error);
+      return false;
+    }
+  });
+
   // === Update Checker ===
   ipcMain.handle('open-download-url', (_, url: string) => {
     if (url && url.startsWith('http')) {
