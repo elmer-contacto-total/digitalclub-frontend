@@ -2065,6 +2065,10 @@ export class BulkSender {
     if (!this.whatsappView) return;
     await this.ensureCdpAttached();
     const dbg = this.whatsappView.webContents.debugger;
+    // Sin sleep entre teclas: la escritura va lo más rápido posible. El await
+    // de cada sendCommand ya serializa los eventos en orden. El anti-ban real
+    // es la demora aleatoria de 30-90 s ENTRE mensajes, no la velocidad de
+    // tecleo (un paste sería instantáneo de todas formas).
     for (const char of text) {
       const code = char >= 'a' && char <= 'z' ? 'Key' + char.toUpperCase()
                  : char >= '0' && char <= '9' ? 'Digit' + char : '';
@@ -2076,7 +2080,6 @@ export class BulkSender {
         type: 'keyUp', key: char, code,
         windowsVirtualKeyCode: char.charCodeAt(0), nativeVirtualKeyCode: char.charCodeAt(0)
       });
-      await this.sleep(30 + Math.random() * 20);
     }
   }
 
