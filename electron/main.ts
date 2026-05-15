@@ -1743,18 +1743,12 @@ async function showPhoneNeededInWhatsApp(): Promise<void> {
     // Ignorar errores
   }
 
-  // Timeout de seguridad para extracción manual: 30 segundos. Si pasa sin
-  // que el usuario haga click en el nombre del contacto y se extraiga el
-  // teléfono, desbloqueamos para que la app no quede inutilizable.
-  chatBlockState.timeoutHandle = setTimeout(() => {
-    if (chatBlockState.isBlocked && chatBlockState.waitingForManualExtraction) {
-      console.warn('[MWS] ⚠️ TIMEOUT extracción manual (30s) — desbloqueando');
-      forceUnblockWhatsAppChat();
-      if (mainWindow) {
-        mainWindow.webContents.send('whatsapp:phone-extraction-timeout');
-      }
-    }
-  }, 30000);
+  // SIN timeout: el overlay de extracción manual permanece indefinidamente.
+  // Solo se quita al capturar el número (click en el nombre del contacto →
+  // handlePhoneExtracted), al cambiar de chat, o por logout/reset de WhatsApp.
+  // El agente no queda bloqueado globalmente: el sidebar de chats sigue
+  // clickeable y puede cambiar de conversación cuando quiera.
+  chatBlockState.timeoutHandle = null;
 }
 
 /**
