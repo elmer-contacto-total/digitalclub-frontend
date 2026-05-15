@@ -69,6 +69,17 @@ interface ParsedCsv {
             <span class="help-text">Debe contener al menos una columna con teléfonos</span>
             <input #csvInput type="file" accept=".csv,.txt" style="display: none" (change)="onCsvSelected($event)">
           </div>
+
+          <div class="csv-help">
+            <div class="info-box">
+              <i class="ph ph-info"></i>
+              <p>Los campos del CSV pueden ser <strong>los que necesites</strong> — cada columna se usa como variable en el mensaje (escríbela como <code>[campo]</code>). El único campo <strong>obligatorio</strong> es uno con el <strong>número de teléfono</strong>.</p>
+            </div>
+            <button type="button" class="btn-download-sample" (click)="downloadSampleCsv()">
+              <i class="ph ph-download-simple"></i>
+              Descargar CSV de ejemplo
+            </button>
+          </div>
         } @else {
           <div class="csv-preview">
             <div class="csv-info">
@@ -325,6 +336,31 @@ interface ParsedCsv {
       .help-text { font-size: var(--text-sm); color: var(--fg-subtle); }
     }
 
+    .csv-help {
+      padding: 0 var(--space-5) var(--space-5);
+      display: flex; flex-direction: column; gap: var(--space-3);
+    }
+    .info-box {
+      display: flex; gap: var(--space-2); align-items: flex-start;
+      background: var(--accent-subtle); border: 1px solid var(--accent-default);
+      border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4);
+      i { font-size: 20px; color: var(--accent-emphasis); flex-shrink: 0; }
+      p { margin: 0; font-size: var(--text-sm); color: var(--fg-default); line-height: 1.5; }
+      code {
+        font-family: var(--font-mono); background: var(--card-bg);
+        padding: 1px 5px; border-radius: 4px; font-size: 0.9em;
+      }
+    }
+    .btn-download-sample {
+      align-self: flex-start;
+      display: inline-flex; align-items: center; gap: var(--space-2);
+      background: none; border: 1px solid var(--border-default); border-radius: var(--radius-lg);
+      padding: var(--space-2) var(--space-4); font-size: var(--text-sm); color: var(--fg-muted);
+      cursor: pointer; transition: all var(--duration-normal);
+      i { font-size: 18px; }
+      &:hover { border-color: var(--accent-default); color: var(--accent-default); }
+    }
+
     .csv-preview { padding: var(--space-4) var(--space-5); }
     .csv-info {
       display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3);
@@ -571,6 +607,33 @@ export class EnvioCreateComponent implements OnDestroy {
     this.selectedPhoneColumn = 0;
     this.selectedNameColumn = -1;
     this.showCsvPreview.set(false);
+  }
+
+  /**
+   * Descarga una trama CSV de ejemplo enfocada en cobranza.
+   * 'numero' es el único campo indispensable; el resto son variables opcionales.
+   */
+  downloadSampleCsv(): void {
+    const headers = [
+      'numero', 'nombre', 'documento', 'codigo_cliente', 'entidad', 'producto',
+      'monto_deuda', 'moneda', 'dias_mora', 'fecha_vencimiento', 'monto_a_pagar', 'fecha_pago'
+    ];
+    const rows = [
+      ['987654321', 'Juan Pérez', '12345678', 'CL-00123', 'Financiera InFinance', 'Préstamo Personal', '1500.00', 'S/', '45', '2026-03-30', '1680.50', '2026-05-31'],
+      ['987111222', 'María Gómez', '87654321', 'CL-00457', 'Financiera InFinance', 'Tarjeta de Crédito', '820.50', 'S/', '12', '2026-04-22', '865.00', '2026-05-31'],
+      ['987333444', 'Carlos Ruiz', '45678912', 'CL-00890', 'Financiera InFinance', 'Crédito Vehicular', '3200.00', 'S/', '78', '2026-02-15', '3620.75', '2026-05-31']
+    ];
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    // BOM para que Excel interprete UTF-8 (acentos)
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'ejemplo_envio_masivo.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   getExtraVariables(): string[] {
