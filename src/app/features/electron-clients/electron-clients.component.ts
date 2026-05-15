@@ -50,7 +50,6 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
 
   // Form fields
   notesField = signal('');
-  isSavingNotes = signal(false);
 
   // Ticket state
   isClosingTicket = signal(false);
@@ -270,30 +269,6 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Save notes to backend (only available for registered contacts)
-   */
-  saveNotes(): void {
-    const c = this.contact();
-    if (!c?.registered) return;
-
-    const notes = this.notesField();
-    this.isSavingNotes.set(true);
-
-    this.contactsService.updateIssueNotes(c.registered.id, notes).subscribe({
-      next: () => {
-        this.isSavingNotes.set(false);
-        if (c.registered) {
-          c.registered.issueNotes = notes;
-        }
-      },
-      error: (err) => {
-        console.error('Error saving notes:', err);
-        this.isSavingNotes.set(false);
-      }
-    });
-  }
-
-  /**
    * Notify Electron of the active client for media capture association
    */
   private notifyElectronOfActiveClient(contact: CrmContact): void {
@@ -337,7 +312,6 @@ export class ElectronClientsComponent implements OnInit, OnDestroy {
     this.currentName.set(null);
     this.contact.set(null);
     this.notesField.set('');
-    this.isSavingNotes.set(false);
 
     // Reset ticket state
     this.isClosingTicket.set(false);

@@ -209,7 +209,6 @@
                 class="notes-input"
                 [ngModel]="notesField()"
                 (ngModelChange)="notesField.set($event)"
-                (blur)="saveNotes()"
                 placeholder="Escribe notas sobre este contacto..."
                 rows="3"
               ></textarea>

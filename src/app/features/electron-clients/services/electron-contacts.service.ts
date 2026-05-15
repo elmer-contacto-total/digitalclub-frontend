@@ -124,13 +124,6 @@ export class ElectronContactsService {
   }
 
   /**
-   * Update issue notes for a registered contact (saves to backend)
-   */
-  updateIssueNotes(userId: number, notes: string): Observable<{ success: boolean }> {
-    return this.http.patch<{ success: boolean }>(`${this.baseUrl}/${userId}/issue_notes`, { notes });
-  }
-
-  /**
    * Get contact details including manager history
    */
   getContactDetails(userId: number): Observable<{
