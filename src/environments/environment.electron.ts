@@ -6,8 +6,8 @@ export const environment = {
   apiUrl: _env.apiUrl ?? '',
   wsUrl: _env.wsUrl ?? '',
   logoPath: (_env.logoPath as string) || null,
-  appName: (_env.appName as string) || 'Holape',
-  title: (_env.title as string) || 'Holape',
+  appName: (_env.appName as string) || 'App',
+  title: (_env.title as string) || 'App',
   version: '1.0.0',
   simplifiedRoles: Boolean(_env.simplifiedRoles ?? false)
 };

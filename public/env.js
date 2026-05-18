@@ -8,7 +8,8 @@
   window.__env.wsUrl = '';
   // Logo path opcional. Si null, se usa el SVG embebido por defecto del sidebar.
   window.__env.logoPath = null;
-  // Branding por dominio
-  window.__env.appName = 'Holape';
-  window.__env.title = 'Holape';
+  // Branding por dominio — el deploy script sobrescribe estos valores
+  // con deploy/env.<dominio>.js (InFinance, MWS, ...).
+  window.__env.appName = 'App';
+  window.__env.title = 'App';
 })(window);
