@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <!-- Placeholder: el title real se setea en runtime desde window.__env.title (polyfills-init.js). -->
-  <title>Cargando…</title>
+  <!-- Title estático: lo leen los crawlers (WhatsApp, buscadores) que NO ejecutan JS.
+       El deploy script lo reemplaza por el del dominio (deploy-<dominio>.sh).
+       En runtime, polyfills-init.js lo re-sincroniza con window.__env.title. -->
+  <title>App</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- CSP removida del index.html: bloqueaba recursos legítimos de la app y

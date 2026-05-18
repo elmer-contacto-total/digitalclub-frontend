@@ -8,6 +8,7 @@ export NG_CLI_ANALYTICS=false
 REPO_DIR="${REPO_DIR:-$HOME/digitalclub/digitalclub-frontend}"
 WEB_ROOT="/var/www/holape-angular"
 DOMAIN_ENV="deploy/env.mws.js"
+DOMAIN_TITLE="MWS Desktop"
 
 echo "==> Sincronizando repo en $REPO_DIR"
 cd "$REPO_DIR"
@@ -27,6 +28,9 @@ sudo cp -r dist/holape-angular/browser/* "$WEB_ROOT/"
 
 echo "==> Inyectando env.js para mws"
 sudo cp "$DOMAIN_ENV" "$WEB_ROOT/env.js"
+
+echo "==> Inyectando title del dominio en index.html (para crawlers/WhatsApp)"
+sudo sed -i "s#<title>.*</title>#<title>${DOMAIN_TITLE}</title>#" "$WEB_ROOT/index.html"
 
 echo "==> Probando y recargando nginx"
 sudo nginx -t
