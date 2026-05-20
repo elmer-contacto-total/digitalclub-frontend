@@ -115,7 +115,6 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
                   type="email"
                   formControlName="email"
                   [class.invalid]="isFieldInvalid('email')"
-                  [readonly]="isEditMode()"
                 />
                 @if (isFieldInvalid('email')) {
                   <span class="error-message">
@@ -912,6 +911,7 @@ export class UserFormComponent implements OnInit {
 
   private updateUser(): void {
     const request: UpdateUserRequest = {
+      email: this.form.value.email,
       firstName: this.form.value.firstName,
       lastName: this.form.value.lastName,
       phone: this.buildFullPhone(),
