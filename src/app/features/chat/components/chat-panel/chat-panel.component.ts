@@ -87,14 +87,12 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
   conversationDetail = input<ConversationDetail | null>(null);
   isLoading = input(false);
 
-  // null = cargando/desconocido | false = no configurado (bloquear) | true = ok
-  // Viene del response de /app/messages — accesible para todos los roles
-  whatsappConfigured = computed<boolean | null>(() => {
-    const detail = this.conversationDetail();
-    if (!detail) return null;
-    if (!detail.isWhatsappBusiness) return null;
-    return detail.whatsappApiConfigured ?? null;
-  });
+  // null = no aplica / aún cargando (no bloquear) | false = no configurado (bloquear) | true = ok
+  // whatsappApiConfigured viene en el response de /app/messages (accesible para todos los roles)
+  // undefined significa que el backend no lo incluyó → no aplica → null
+  whatsappConfigured = computed<boolean | null>(() =>
+    this.conversationDetail()?.whatsappApiConfigured ?? null
+  );
 
   // Outputs
   closeTicket = output<{ ticketId: number; closeType?: string; notes?: string }>();
