@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { ActiveClientService, ActiveClient } from '../../../core/services/active-client.service';
+import { CurrentVersionService } from '../../../core/services/current-version.service';
 import { NavSection, getNavigationForRole } from '../../../core/models/navigation.model';
 import { getInitials, RoleUtils, UserRole } from '../../../core/models/user.model';
 import { environment } from '../../../../environments/environment';
@@ -19,6 +20,7 @@ import { environment } from '../../../../environments/environment';
 export class SidebarComponent implements OnInit, OnDestroy {
   private authService = inject(AuthService);
   private activeClientService = inject(ActiveClientService);
+  private versionService = inject(CurrentVersionService);
   private destroy$ = new Subject<void>();
 
   // Inputs
@@ -83,7 +85,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
 
   // App info — appName configurable por dominio vía window.__env (env.js)
   appName = environment.appName;
-  appVersion = 'v. 1.0.2';
+  appVersion = this.versionService.version;
 
   // Runtime logo override (set via window.__env.logoPath in env.js at deploy time)
   readonly envLogoPath = environment.logoPath;

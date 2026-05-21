@@ -7,6 +7,6 @@ export const environment = {
   logoPath: (_env.logoPath as string) || null,
   appName: (_env.appName as string) || 'App',
   title: (_env.title as string) || 'App',
-  version: '1.0.0',
+  version: '1.0.4',
   simplifiedRoles: Boolean(_env.simplifiedRoles ?? false)
 };

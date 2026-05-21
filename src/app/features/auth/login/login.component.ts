@@ -4,6 +4,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { CurrentVersionService } from '../../../core/services/current-version.service';
 import { parseApiError, AuthErrorCode } from '../../../core/models/auth.model';
 import { LogoComponent } from '../../../shared/components/logo/logo.component';
 
@@ -21,6 +22,7 @@ export class LoginComponent {
   private authService = inject(AuthService);
   private router = inject(Router);
   private toastService = inject(ToastService);
+  protected versionService = inject(CurrentVersionService);
 
   loginForm: FormGroup;
   isLoading = signal(false);
