@@ -9,7 +9,6 @@ import { Subject, takeUntil } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
 import { WebSocketService, WsCapturedMediaPayload } from '../../../../core/services/websocket.service';
 import { AuthService } from '../../../../core/services/auth.service';
-import { WhatsAppStatusService } from '../../../../core/services/whatsapp-status.service';
 import { ConversationDetail, CapturedMedia } from '../../../../core/models/conversation.model';
 import { Message } from '../../../../core/models/message.model';
 import { ChatHeaderComponent } from '../chat-header/chat-header.component';
@@ -81,7 +80,6 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
   private chatService = inject(ChatService);
   private wsService = inject(WebSocketService);
   private authService = inject(AuthService);
-  private whatsAppStatusService = inject(WhatsAppStatusService);
   private destroy$ = new Subject<void>();
 
   // Inputs
@@ -89,12 +87,13 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
   conversationDetail = input<ConversationDetail | null>(null);
   isLoading = input(false);
 
-  // null = no aplica / cargando (no bloquear) | false = no configurado (bloquear) | true = ok
-  // Chequea clientType desde el token (más fiable que conversationDetail.isWhatsappBusiness)
+  // null = cargando/desconocido | false = no configurado (bloquear) | true = ok
+  // Viene del response de /app/messages — accesible para todos los roles
   whatsappConfigured = computed<boolean | null>(() => {
-    const user = this.authService.currentUser();
-    if (user?.clientType !== 'whatsapp_business') return null;
-    return this.whatsAppStatusService.isConnected();
+    const detail = this.conversationDetail();
+    if (!detail) return null;
+    if (!detail.isWhatsappBusiness) return null;
+    return detail.whatsappApiConfigured ?? null;
   });
 
   // Outputs

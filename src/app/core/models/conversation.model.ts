@@ -135,6 +135,7 @@ export interface ConversationDetail {
 
   // WhatsApp Business specific
   isWhatsappBusiness: boolean;
+  whatsappApiConfigured?: boolean;
   lastIncomingMessageAt?: string;
   canSendFreeform: boolean;
 

@@ -383,6 +383,7 @@ export class ChatService {
       // PARIDAD RAILS: header_custom_fields (datos de cobranza)
       customFields: response.customFields || {},
       isWhatsappBusiness: response.isWhatsappBusiness || false,
+      whatsappApiConfigured: response.whatsappApiConfigured,
       lastIncomingMessageAt: response.lastIncomingMessageAt,
       canSendFreeform: response.canSendFreeform ?? true,
       closeTypes: response.closeTypes?.map(ct => ({
