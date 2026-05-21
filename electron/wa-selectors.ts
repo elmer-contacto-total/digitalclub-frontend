@@ -43,4 +43,14 @@ export const WA_SELECTORS = {
   CONTACT_DRAWER:  '[data-testid="chat-info-drawer"]',
   CONTACT_ALT1:    '[data-testid="conversation-info-drawer"]',
   CONTACT_ALT2:    '[data-testid="contact-info-drawer"]',
+
+  // Timestamps — media-security.ts: extractMessageTimestamp
+  MSG_TIMESTAMP:   '[data-pre-plain-text]',
+
+  // Message IDs — media-security.ts: trackMedia
+  MSG_ID_OUT:      '[data-id^="true_"]',
+  MSG_ID_IN:       '[data-id^="false_"]',
+
+  // Download blocking CSS — media-security.ts: HIDE_DOWNLOAD_CSS
+  ATTACH_BTN:      '[data-testid="clip"], [data-testid="plus-rounded"]',
 } as const;

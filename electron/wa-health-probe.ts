@@ -98,6 +98,66 @@ export function getHealthProbeScript(): string {
         ? { ok: true }
         : { ok: true, note: 'requires_interaction' };
 
+      // === Inyecciones de seguridad ===
+      report.features['inject_security']    = { ok: window.__hablapeSecurityInjected === true, category: 'inject' };
+      report.features['inject_media_queue'] = { ok: Array.isArray(window.__hablapeMediaQueue), category: 'inject' };
+      report.features['inject_chat_blocker']= { ok: typeof window.__hablapeShowChatBlocker === 'function', category: 'inject' };
+      report.features['inject_audit_queue'] = { ok: Array.isArray(window.__hablapeAuditQueue), category: 'inject' };
+
+      // === Formato de mensajes ===
+      if (panel && items.length > 0) {
+        var firstItem = items[0];
+        var timestampEl = firstItem.querySelector(${JSON.stringify(S.MSG_TIMESTAMP)});
+        var timestampValid = timestampEl
+          ? /\\[\\d{1,2}:\\d{2}/.test(timestampEl.getAttribute('data-pre-plain-text') || '')
+          : false;
+        report.features['msg_timestamp'] = {
+          ok: !!timestampEl && timestampValid,
+          note: !timestampEl ? 'attr_missing' : !timestampValid ? 'format_changed' : undefined,
+          category: 'messages'
+        };
+        var hasIdOut = !!panel.querySelector(${JSON.stringify(S.MSG_ID_OUT)});
+        var hasIdIn  = !!panel.querySelector(${JSON.stringify(S.MSG_ID_IN)});
+        report.features['msg_id_format'] = {
+          ok: hasIdOut || hasIdIn,
+          note: (!hasIdOut && !hasIdIn) ? 'format_changed' : undefined,
+          category: 'messages'
+        };
+      } else {
+        report.features['msg_timestamp'] = { ok: true, note: 'no_messages_visible', category: 'messages' };
+        report.features['msg_id_format']  = { ok: true, note: 'no_messages_visible', category: 'messages' };
+      }
+
+      // === Bloqueo de descargas (CSS) ===
+      var attachBtn = document.querySelector('[data-testid="clip"]') ||
+                      document.querySelector('[data-testid="plus-rounded"]');
+      if (attachBtn) {
+        var btnStyle = window.getComputedStyle(attachBtn);
+        report.features['download_block_css'] = {
+          ok: btnStyle.display === 'none' || btnStyle.visibility === 'hidden',
+          note: (btnStyle.display !== 'none' && btnStyle.visibility !== 'hidden') ? 'css_not_applied' : undefined,
+          category: 'security'
+        };
+      } else {
+        report.features['download_block_css'] = { ok: true, note: 'btn_not_in_dom', category: 'security' };
+      }
+
+      // === Contexto de chat activo (IPC health) ===
+      report.features['chat_context_phone'] = {
+        ok: true,
+        note: (window.__hablapeCurrentChatPhone && window.__hablapeCurrentChatPhone.length > 0)
+          ? undefined : 'no_active_chat',
+        category: 'context'
+      };
+
+      // === Lista de chats (navegación / bulk send) ===
+      var chatRows = document.querySelectorAll('[data-testid="cell-frame-container"]');
+      report.features['chat_list_items'] = {
+        ok: chatRows.length > 0,
+        note: chatRows.length === 0 ? 'no_chats_in_list' : undefined,
+        category: 'navigation'
+      };
+
       console.log('[HABLAPE_HEALTH]' + JSON.stringify(report));
       return report;
     } catch (e) {
