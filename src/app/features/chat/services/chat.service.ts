@@ -52,6 +52,7 @@ interface ConversationApiResponse {
    */
   customFields?: Record<string, unknown>;
   isWhatsappBusiness: boolean;
+  whatsappApiConfigured?: boolean;
   lastIncomingMessageAt?: string;
   canSendFreeform: boolean;
   closeTypes?: any[];
