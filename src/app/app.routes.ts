@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard, publicOnlyGuard } from './core/guards/auth.guard';
-import { adminGuard, superAdminGuard } from './core/guards/role.guard';
+import { adminGuard, superAdminGuard, internalGuard } from './core/guards/role.guard';
 
 export const routes: Routes = [
   // Root redirect to login
@@ -169,7 +169,7 @@ export const routes: Routes = [
       {
         path: 'wa_health',
         loadComponent: () => import('./features/wa-health/wa-health.component').then(m => m.WaHealthComponent),
-        canActivate: [superAdminGuard],
+        canActivate: [internalGuard],
         title: 'Diagnóstico WhatsApp - MWS'
       },
       // App Versions (super_admin only)
