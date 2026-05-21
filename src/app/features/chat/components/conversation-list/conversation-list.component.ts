@@ -833,7 +833,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       }
     };
 
-    this.chatService.getConversationList(request).subscribe({
+    this.chatService.getConversationList(request).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe({
       next: (response) => {
         this.totalRecords = response.recordsTotal;
         this.conversations.set(response.data);
