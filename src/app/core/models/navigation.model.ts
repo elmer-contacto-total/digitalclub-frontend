@@ -142,7 +142,8 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
       title: 'TABLAS INTERNAS',
       items: [
         { id: 'audits', label: 'Tablas de Auditoría', icon: 'ph-list-checks', route: '/app/audits' },
-        { id: 'app-versions', label: 'Versiones de App', icon: 'ph-rocket-launch', route: '/app/app_versions' }
+        { id: 'app-versions', label: 'Versiones de App', icon: 'ph-rocket-launch', route: '/app/app_versions' },
+        { id: 'wa-health', label: 'Diagnóstico WhatsApp', icon: 'ph-heartbeat', route: '/app/wa_health' }
       ]
     },
     {
