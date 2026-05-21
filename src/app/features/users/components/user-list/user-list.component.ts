@@ -95,7 +95,7 @@ import { environment } from '../../../../../environments/environment';
                   <th>Email</th>
                   <th class="hide-mobile">Teléfono</th>
                   <th>Rol</th>
-                  <th class="hide-mobile">Agente</th>
+                  <th class="hide-mobile">Manager</th>
                   <th>Estado</th>
                   <th class="col-actions"></th>
                 </tr>
