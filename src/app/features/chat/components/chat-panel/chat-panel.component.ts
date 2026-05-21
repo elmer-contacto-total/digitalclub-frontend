@@ -89,10 +89,11 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
   conversationDetail = input<ConversationDetail | null>(null);
   isLoading = input(false);
 
-  // null = no aplica (cliente no WA Business) | null = cargando | boolean = estado real
+  // null = no aplica / cargando (no bloquear) | false = no configurado (bloquear) | true = ok
+  // Chequea clientType desde el token (más fiable que conversationDetail.isWhatsappBusiness)
   whatsappConfigured = computed<boolean | null>(() => {
-    const isWaBiz = this.conversationDetail()?.isWhatsappBusiness;
-    if (!isWaBiz) return null;
+    const user = this.authService.currentUser();
+    if (user?.clientType !== 'whatsapp_business') return null;
     return this.whatsAppStatusService.isConnected();
   });
 
