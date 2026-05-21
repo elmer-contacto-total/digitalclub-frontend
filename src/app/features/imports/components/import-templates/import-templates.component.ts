@@ -10,6 +10,8 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { ImportService, MappingTemplate, MappingColumn } from '../../../../core/services/import.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { AuthService } from '../../../../core/services/auth.service';
+import { UserRole } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
@@ -899,6 +901,7 @@ interface FieldOption {
 export class ImportTemplatesComponent implements OnInit, OnDestroy {
   private importService = inject(ImportService);
   private toast = inject(ToastService);
+  private authService = inject(AuthService);
   private destroy$ = new Subject<void>();
 
   // List state
@@ -978,6 +981,10 @@ export class ImportTemplatesComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  isSuperAdmin(): boolean {
+    return this.authService.currentUser()?.role === UserRole.SUPER_ADMIN;
   }
 
   loadTemplates(): void {
