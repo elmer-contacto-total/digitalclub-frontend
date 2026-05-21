@@ -331,7 +331,18 @@ const electronAPI = {
   // Listen for download progress events
   onUpdateDownloadProgress: (callback: (data: { status: string; percent?: number; error?: string }) => void) => {
     ipcRenderer.on('update-download-progress', (_, data) => callback(data));
-  }
+  },
+
+  // === WhatsApp Health Probe ===
+  getWhatsappHealth: (): Promise<any> =>
+    ipcRenderer.invoke('whatsapp:get-health'),
+
+  onWhatsappHealthUpdate: (cb: (data: any) => void) => {
+    ipcRenderer.on('whatsapp:health-update', (_, data) => cb(data));
+  },
+
+  runHealthProbe: (): Promise<any> =>
+    ipcRenderer.invoke('whatsapp:run-health-probe'),
 };
 
 // Exponer directamente en window (sin contextBridge porque contextIsolation está deshabilitado)
@@ -405,6 +416,10 @@ declare global {
       getPendingUpdate: () => Promise<{ version: string; downloadUrl: string; releaseNotes: string | null; fileSize: number | null; mandatory: boolean; publishedAt: string } | null>;
       downloadAndInstallUpdate: (url: string) => Promise<boolean>;
       onUpdateDownloadProgress: (callback: (data: { status: string; percent?: number; error?: string }) => void) => void;
+      // WhatsApp Health Probe
+      getWhatsappHealth: () => Promise<any>;
+      onWhatsappHealthUpdate: (cb: (data: any) => void) => void;
+      runHealthProbe: () => Promise<any>;
     };
   }
 }

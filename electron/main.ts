@@ -22,6 +22,7 @@ import {
 import { checkForUpdates, notifyUpdateAvailable, openDownloadUrl, downloadAndInstallUpdate } from './update-checker';
 import { BulkSender } from './bulk-sender';
 import { DEFAULT_BACKEND_URL, DEFAULT_ANGULAR_URL, PRODUCT_NAME } from './app-config';
+import { getHealthProbeScript } from './wa-health-probe';
 
 // App version - read from package.json via Electron's app.getVersion()
 // When building with electron-builder, this reflects the version in package.json
@@ -37,6 +38,7 @@ app.setPath('userData', path.join(app.getPath('appData'), userDataName));
 
 // Stored update info (so renderer can pull it if it missed the push)
 let pendingUpdateInfo: any = null;
+let lastHealthReport: any = null;
 
 // Bulk sender for mass messaging
 const BACKEND_BASE_URL = DEFAULT_BACKEND_URL;
@@ -1226,6 +1228,10 @@ function createWhatsAppView(): void {
     // Ocultar botón de adjuntar
     whatsappView?.webContents.executeJavaScript(hideAttachButtonCSS, true)
       .catch(err => console.error('[MWS] Error ocultando botón adjuntar:', err));
+
+    // Inyectar health probe — solo querySelector, read-only, sin side effects
+    whatsappView?.webContents.executeJavaScript(getHealthProbeScript(), true)
+      .catch(err => console.error('[MWS Health] Error inyectando probe:', err));
   });
 
   // Aplicar zoom cuando cargue
@@ -1313,6 +1319,13 @@ function createWhatsAppView(): void {
       if (phone && loggedInUserId && loggedInClientId && mediaAuthToken) {
         notifyOutgoingMessage(phone);
       }
+    }
+    // Reporte de salud del DOM de WhatsApp
+    else if (message.startsWith('[HABLAPE_HEALTH]')) {
+      try {
+        lastHealthReport = JSON.parse(message.slice('[HABLAPE_HEALTH]'.length));
+        mainWindow?.webContents.send('whatsapp:health-update', lastHealthReport);
+      } catch { /* ignorar parse errors */ }
     }
     // Chat bloqueado por click en sidebar - sincronizar estado
     else if (message === '[HABLAPE_CHAT_BLOCKED]') {
@@ -3067,6 +3080,18 @@ function setupIPC(): void {
       return true;
     }
     return false;
+  });
+
+  ipcMain.handle('whatsapp:get-health', () => lastHealthReport ?? null);
+
+  ipcMain.handle('whatsapp:run-health-probe', async () => {
+    if (!whatsappView || !whatsappVisible) return null;
+    try {
+      return await whatsappView.webContents.executeJavaScript(
+        'typeof window.__hablapeRunHealthProbe === "function" ? window.__hablapeRunHealthProbe() : null',
+        true
+      );
+    } catch { return null; }
   });
 }
 
