@@ -59,7 +59,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
       @if (isWhatsappBlocked()) {
         <div class="whatsapp-not-configured-banner">
           <i class="ph ph-warning"></i>
-          <span>WhatsApp no configurado. Contacta al administrador.</span>
+          <span>WhatsApp no configurado.</span>
         </div>
       }
 
