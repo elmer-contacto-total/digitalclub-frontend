@@ -262,6 +262,11 @@ interface FieldOption {
                     <button class="action-btn action-btn-edit" (click)="startEdit(tpl)" title="Editar">
                       <i class="ph ph-pencil-simple"></i>
                     </button>
+                    @if (isSuperAdmin()) {
+                      <button class="action-btn action-btn-danger" (click)="confirmDelete(tpl)" title="Eliminar">
+                        <i class="ph ph-trash"></i>
+                      </button>
+                    }
                   </td>
                 </tr>
                 @if (editingTemplateId === tpl.id) {
