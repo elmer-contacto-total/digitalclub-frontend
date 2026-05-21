@@ -15,6 +15,28 @@
   flex-shrink: 0;
 }
 
+.whatsapp-not-configured-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  background: var(--warning-bg, #fff8e1);
+  border: 1px solid var(--warning-border, #ffe082);
+  border-radius: var(--radius-md);
+  color: var(--warning-text, #7c5e00);
+  font-size: var(--text-xs);
+
+  i {
+    flex-shrink: 0;
+    font-size: 1rem;
+  }
+
+  strong {
+    font-weight: 600;
+  }
+}
+
 .input-toolbar {
   display: flex;
   gap: var(--space-1);

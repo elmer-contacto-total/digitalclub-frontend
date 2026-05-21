@@ -3,7 +3,7 @@
  * Text input with canned messages and templates
  * PARIDAD RAILS: app/views/admin/messages/_message_input.html.erb
  */
-import { Component, inject, signal, input, output, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { Component, inject, signal, computed, input, output, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil, debounceTime } from 'rxjs';
@@ -46,6 +46,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
           <button
             class="toolbar-btn primary"
             title="Enviar plantilla"
+            [disabled]="isWhatsappBlocked()"
             (click)="showTemplateSelector.set(true)"
           >
             <i class="ph ph-file-text"></i>
@@ -53,6 +54,17 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
           </button>
         }
       </div>
+
+      <!-- WhatsApp not configured banner -->
+      @if (isWhatsappBlocked()) {
+        <div class="whatsapp-not-configured-banner">
+          <i class="ph ph-warning"></i>
+          <span>API de WhatsApp no configurada. Ve a
+            <strong>Configuración → Alta WhatsApp</strong>
+            para conectar.
+          </span>
+        </div>
+      }
 
       <!-- Main Input Area -->
       <div class="input-main">
@@ -65,7 +77,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
             [(ngModel)]="messageContent"
             (keydown)="onKeyDown($event)"
             (input)="onInput()"
-            [disabled]="!canSendFreeform() || isSending()"
+            [disabled]="!canSendFreeform() || isSending() || isWhatsappBlocked()"
             rows="1"
           ></textarea>
         </div>
@@ -75,7 +87,7 @@ import { CloseTicketModalComponent } from '../close-ticket-modal/close-ticket-mo
           class="send-btn"
           [disabled]="!canSend()"
           (click)="sendMessage()"
-          title="Enviar mensaje"
+          [title]="isWhatsappBlocked() ? 'WhatsApp no configurado' : 'Enviar mensaje'"
         >
           @if (isSending()) {
             <div class="spinner-small"></div>
@@ -181,6 +193,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   ticketId = input<number>();
   canSendFreeform = input(true);
   closeTypes = input<ConversationCloseType[]>([]);
+  whatsappConfigured = input<boolean | null>(null);
 
   // Outputs
   messageSent = output<Message>();
@@ -188,6 +201,9 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
   // Additional inputs
   hasOpenTicket = input(true);
+
+  // true only when we KNOW it's false (not when loading/null)
+  isWhatsappBlocked = computed(() => this.whatsappConfigured() === false);
 
   // State
   messageContent = '';
@@ -222,12 +238,16 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
   canSend(): boolean {
     if (this.isSending()) return false;
+    if (this.isWhatsappBlocked()) return false;
     if (!this.canSendFreeform()) return false;
 
     return this.messageContent.trim().length > 0;
   }
 
   getPlaceholder(): string {
+    if (this.isWhatsappBlocked()) {
+      return 'API de WhatsApp no configurada';
+    }
     if (!this.canSendFreeform()) {
       return 'Solo puedes enviar plantillas (ventana de 24h expirada)';
     }

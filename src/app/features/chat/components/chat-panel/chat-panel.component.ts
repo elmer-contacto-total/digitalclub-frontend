@@ -3,12 +3,13 @@
  * Main chat area with header, messages, and input
  * PARIDAD RAILS: app/views/admin/messages/_chat_panel.html.erb
  */
-import { Component, inject, signal, input, output, OnInit, OnDestroy, effect } from '@angular/core';
+import { Component, inject, signal, computed, input, output, OnInit, OnDestroy, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject, takeUntil } from 'rxjs';
 import { ChatService } from '../../services/chat.service';
 import { WebSocketService, WsCapturedMediaPayload } from '../../../../core/services/websocket.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { WhatsAppStatusService } from '../../../../core/services/whatsapp-status.service';
 import { ConversationDetail, CapturedMedia } from '../../../../core/models/conversation.model';
 import { Message } from '../../../../core/models/message.model';
 import { ChatHeaderComponent } from '../chat-header/chat-header.component';
@@ -63,6 +64,7 @@ import { MessageInputComponent } from '../message-input/message-input.component'
           [ticketId]="conversationDetail()?.ticket?.id"
           [canSendFreeform]="conversationDetail()!.canSendFreeform"
           [closeTypes]="conversationDetail()!.closeTypes || []"
+          [whatsappConfigured]="whatsappConfigured()"
           (messageSent)="onMessageSent($event)"
           (ticketClosed)="onCloseTicket($event)"
         />
@@ -79,12 +81,20 @@ export class ChatPanelComponent implements OnInit, OnDestroy {
   private chatService = inject(ChatService);
   private wsService = inject(WebSocketService);
   private authService = inject(AuthService);
+  private whatsAppStatusService = inject(WhatsAppStatusService);
   private destroy$ = new Subject<void>();
 
   // Inputs
   clientId = input.required<number>();
   conversationDetail = input<ConversationDetail | null>(null);
   isLoading = input(false);
+
+  // null = no aplica (cliente no WA Business) | null = cargando | boolean = estado real
+  whatsappConfigured = computed<boolean | null>(() => {
+    const isWaBiz = this.conversationDetail()?.isWhatsappBusiness;
+    if (!isWaBiz) return null;
+    return this.whatsAppStatusService.isConnected();
+  });
 
   // Outputs
   closeTicket = output<{ ticketId: number; closeType?: string; notes?: string }>();
