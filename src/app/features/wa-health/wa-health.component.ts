@@ -1,5 +1,7 @@
-import { Component, OnInit, OnDestroy, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 
 interface FeatureStatus {
   ok: boolean;
@@ -13,232 +15,197 @@ interface HealthReport {
   waLoaded: boolean;
   features: Record<string, FeatureStatus>;
   error?: string;
+  userId?: number;
+  userName?: string;
+  userEmail?: string;
 }
 
-const FEATURE_LABELS: Record<string, string> = {
-  session_main:    'Panel principal',
-  login_state:     'Estado de login',
-  chat_header:     'Header del chat',
-  chat_title:      'Título del chat',
-  compose_box:     'Caja de composición',
-  search_input:    'Buscador de chats',
-  msg_panel:       'Panel de mensajes',
-  msg_items:       'Items de mensajes',
-  msg_direction:   'Dirección de mensajes',
-  msg_text:        'Texto de mensajes',
-  msg_audio:       'Audio en chat',
-  msg_image:       'Imágenes en chat',
-  contact_drawer:  'Panel de contacto',
-};
+const STALE_MS = 10 * 60 * 1000;
 
 @Component({
   selector: 'app-wa-health',
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="container-fluid py-4">
-      <!-- Header -->
-      <div class="page-header mb-4">
-        <div class="row align-items-center">
-          <div class="col">
-            <h1 class="h3 mb-1">
-              <i class="ph ph-heartbeat me-2"></i>Diagnóstico WhatsApp Web
-            </h1>
-            <p class="text-muted mb-0">Estado de los selectores DOM en la sesión activa</p>
-          </div>
-          <div class="col-auto d-flex align-items-center gap-3">
-            @if (report()) {
-              <span class="text-muted small">
-                v{{ report()!.appVersion }} &middot; {{ relativeTime() }}
-              </span>
-            }
-            <button class="btn btn-primary btn-sm" (click)="runProbe()" [disabled]="running()">
-              @if (running()) {
-                <span class="spinner-border spinner-border-sm me-1"></span>Verificando...
-              } @else {
-                <i class="ph ph-arrows-clockwise me-1"></i>Verificar ahora
-              }
-            </button>
-          </div>
+    <div class="wa-health-page">
+      <div class="page-header">
+        <div class="page-header-left">
+          <h1 class="page-title">Diagnóstico WhatsApp Web</h1>
+          <p class="page-subtitle">Estado de los selectores DOM por asesor</p>
+        </div>
+        <div class="page-actions">
+          <span class="last-refresh">Actualiza cada 60s</span>
         </div>
       </div>
 
-      <!-- Not in Electron -->
-      @if (!isElectron) {
-        <div class="alert alert-warning d-flex align-items-center gap-2">
-          <i class="ph ph-warning fs-5"></i>
-          <span>Este diagnóstico solo está disponible en la aplicación de escritorio.</span>
+      @if (reports().length === 0) {
+        <div class="empty-state">
+          <i class="ph ph-hourglass"></i>
+          <p>Sin reportes aún. Los asesores reportan automáticamente cuando WhatsApp está abierto.</p>
         </div>
-      }
-
-      <!-- No report yet -->
-      @else if (!report()) {
-        <div class="card">
-          <div class="card-body text-center py-5 text-muted">
-            <i class="ph ph-hourglass fs-1 d-block mb-2"></i>
-            <p class="mb-0">Esperando el primer reporte de salud&hellip;</p>
-            <p class="small mb-0">El probe corre automáticamente cuando WhatsApp está abierto.</p>
-          </div>
-        </div>
-      }
-
-      <!-- WA not loaded -->
-      @else if (!report()!.waLoaded) {
-        <div class="alert alert-secondary d-flex align-items-center gap-2">
-          <i class="ph ph-wifi-slash fs-5"></i>
-          <span>
-            WhatsApp no está cargado o el agente no ha iniciado sesión todavía.
-            @if (report()!.error) {
-              <br><code class="small">{{ report()!.error }}</code>
-            }
-          </span>
-        </div>
-      }
-
-      <!-- Feature table -->
-      @else {
-        <div class="card">
-          <div class="card-body p-0">
-            <table class="table table-hover mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th class="ps-3">Feature</th>
-                  <th class="text-center" style="width:120px">Estado</th>
-                  <th>Nota</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (row of featureRows(); track row.key) {
-                  <tr>
-                    <td class="ps-3 align-middle">{{ row.label }}</td>
-                    <td class="text-center align-middle">
-                      @if (row.status.ok) {
-                        @if (row.status.usedFallback) {
-                          <span class="badge bg-warning text-dark">
-                            <i class="ph ph-warning me-1"></i>Fallback
-                          </span>
-                        } @else {
-                          <i class="ph ph-check-circle text-success fs-5"></i>
-                        }
-                      } @else {
-                        <i class="ph ph-x-circle text-danger fs-5"></i>
-                      }
+      } @else {
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Asesor</th>
+                <th>Versión App</th>
+                <th class="text-center">WA Cargado</th>
+                <th class="text-center">OK</th>
+                <th class="text-center">Fallback</th>
+                <th class="text-center">Rotos</th>
+                <th>Última actualización</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (report of reports(); track report.userId) {
+                <tr [class.stale]="isStale(report)">
+                  <td>
+                    <div class="agent-name">{{ report.userName || report.userEmail || '—' }}</div>
+                    <div class="agent-email">{{ report.userEmail }}</div>
+                  </td>
+                  <td>{{ report.appVersion || '—' }}</td>
+                  <td class="text-center">
+                    @if (report.waLoaded) {
+                      <i class="ph ph-check-circle text-success"></i>
+                    } @else {
+                      <i class="ph ph-x-circle text-danger"></i>
+                    }
+                  </td>
+                  @if (isStale(report)) {
+                    <td colspan="3" class="text-center">
+                      <span class="badge badge-secondary">Sin actividad</span>
                     </td>
-                    <td class="align-middle text-muted small">{{ noteLabel(row.status) }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Summary -->
-        <div class="row mt-3 g-3">
-          <div class="col-auto">
-            <div class="card text-center px-4 py-3">
-              <div class="fs-4 fw-bold text-success">{{ okCount() }}</div>
-              <div class="small text-muted">OK</div>
-            </div>
-          </div>
-          <div class="col-auto">
-            <div class="card text-center px-4 py-3">
-              <div class="fs-4 fw-bold text-warning">{{ fallbackCount() }}</div>
-              <div class="small text-muted">Fallback</div>
-            </div>
-          </div>
-          <div class="col-auto">
-            <div class="card text-center px-4 py-3">
-              <div class="fs-4 fw-bold text-danger">{{ failCount() }}</div>
-              <div class="small text-muted">Rotos</div>
-            </div>
-          </div>
+                  } @else {
+                    <td class="text-center fw-bold text-success">{{ okCount(report) }}</td>
+                    <td class="text-center fw-bold text-warning">{{ fallbackCount(report) }}</td>
+                    <td class="text-center fw-bold text-danger">{{ failCount(report) }}</td>
+                  }
+                  <td class="text-subtle">{{ relativeTime(report.timestamp) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
         </div>
       }
     </div>
   `,
+  styles: [`
+    .wa-health-page {
+      padding: var(--space-6);
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: var(--space-6);
+    }
+    .page-title {
+      margin: 0;
+      font-size: var(--text-2xl);
+      font-weight: var(--font-semibold);
+      color: var(--fg-default);
+    }
+    .page-subtitle {
+      margin: var(--space-1) 0 0;
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+    }
+    .last-refresh {
+      font-size: var(--text-sm);
+      color: var(--fg-subtle);
+    }
+    .empty-state {
+      text-align: center;
+      padding: var(--space-12);
+      color: var(--fg-muted);
+      i { font-size: 48px; display: block; margin-bottom: var(--space-3); }
+    }
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--text-base);
+    }
+    .data-table thead th {
+      padding: var(--space-3) var(--space-4);
+      background: var(--table-header-bg);
+      color: var(--fg-muted);
+      font-size: var(--text-sm);
+      font-weight: var(--font-semibold);
+      text-transform: uppercase;
+      text-align: left;
+      border-bottom: 1px solid var(--table-border);
+    }
+    .data-table tbody td {
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--table-border);
+      vertical-align: middle;
+    }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover { background: var(--table-row-hover); }
+    .data-table tbody tr.stale { opacity: 0.5; }
+    .text-center { text-align: center; }
+    .text-success { color: var(--success-text); }
+    .text-warning { color: var(--warning-text); }
+    .text-danger { color: var(--error-text); }
+    .text-subtle { color: var(--fg-subtle); font-size: var(--text-sm); }
+    .fw-bold { font-weight: var(--font-semibold); }
+    .agent-name { font-weight: var(--font-medium); }
+    .agent-email { font-size: var(--text-xs); color: var(--fg-subtle); }
+    .badge { display: inline-block; padding: 2px var(--space-2); border-radius: var(--radius-sm); font-size: var(--text-xs); }
+    .badge-secondary { background: var(--bg-muted); color: var(--fg-muted); }
+    i { font-size: 18px; }
+  `]
 })
 export class WaHealthComponent implements OnInit, OnDestroy {
-  readonly isElectron = typeof (window as any).electronAPI !== 'undefined';
+  private http = inject(HttpClient);
+  private pollInterval: ReturnType<typeof setInterval> | null = null;
 
-  report = signal<HealthReport | null>(null);
-  running = signal(false);
-
-  featureRows = computed(() => {
-    const r = this.report();
-    if (!r) return [];
-    return Object.entries(FEATURE_LABELS).map(([key, label]) => ({
-      key,
-      label,
-      status: r.features[key] ?? { ok: false, note: 'not_reported' },
-    }));
-  });
-
-  okCount = computed(() =>
-    this.featureRows().filter(r => r.status.ok && !r.status.usedFallback).length
-  );
-  fallbackCount = computed(() =>
-    this.featureRows().filter(r => r.status.ok && r.status.usedFallback).length
-  );
-  failCount = computed(() =>
-    this.featureRows().filter(r => !r.status.ok).length
-  );
-
-  relativeTime = computed(() => {
-    const r = this.report();
-    if (!r) return '';
-    const sec = Math.round((Date.now() - r.timestamp) / 1000);
-    if (sec < 60) return 'hace un momento';
-    if (sec < 3600) return `hace ${Math.round(sec / 60)} min`;
-    return `hace ${Math.round(sec / 3600)} h`;
-  });
-
-  private tickInterval: ReturnType<typeof setInterval> | null = null;
+  reports = signal<HealthReport[]>([]);
 
   ngOnInit(): void {
-    if (!this.isElectron) return;
-
-    (window as any).electronAPI.getWhatsappHealth().then((r: HealthReport | null) => {
-      if (r) this.report.set(r);
-    });
-
-    (window as any).electronAPI.onWhatsappHealthUpdate((r: HealthReport) => {
-      this.report.set(r);
-      this.running.set(false);
-    });
-
-    // Refresh relative-time label every 30s
-    this.tickInterval = setInterval(() => {
-      if (this.report()) this.report.update(r => r ? { ...r } : r);
-    }, 30_000);
+    this.fetchReports();
+    this.pollInterval = setInterval(() => this.fetchReports(), 60_000);
   }
 
   ngOnDestroy(): void {
-    if (this.tickInterval) clearInterval(this.tickInterval);
-    (window as any).electronAPI?.removeAllListeners?.('whatsapp:health-update');
+    if (this.pollInterval) clearInterval(this.pollInterval);
   }
 
-  async runProbe(): Promise<void> {
-    if (!this.isElectron || this.running()) return;
-    this.running.set(true);
-    const result = await (window as any).electronAPI.runHealthProbe();
-    if (result) {
-      this.report.set(result);
-    }
-    this.running.set(false);
+  private fetchReports(): void {
+    this.http.get<HealthReport[]>(`${environment.apiUrl}/app/wa_health_reports`)
+      .subscribe({ next: (data) => this.reports.set(data) });
   }
 
-  noteLabel(status: FeatureStatus): string {
-    if (!status.note) return '';
-    const map: Record<string, string> = {
-      no_chat_open:         'sin chat abierto',
-      no_messages_visible:  'sin mensajes visibles',
-      requires_interaction: 'requiere interacción del usuario',
-      no_msg_panel:         'panel de mensajes no encontrado',
-      selector_missing:     'selector no encontrado en el DOM',
-      not_reported:         'no reportado',
-      no_audio_visible:     'sin audio visible',
-      no_image_visible:     'sin imagen visible',
-    };
-    return map[status.note] ?? status.note;
+  isStale(report: HealthReport): boolean {
+    return Date.now() - report.timestamp > STALE_MS;
+  }
+
+  okCount(report: HealthReport): number {
+    return Object.values(report.features || {}).filter(f => f.ok && !f.usedFallback).length;
+  }
+
+  fallbackCount(report: HealthReport): number {
+    return Object.values(report.features || {}).filter(f => f.ok && !!f.usedFallback).length;
+  }
+
+  failCount(report: HealthReport): number {
+    return Object.values(report.features || {}).filter(f => !f.ok).length;
+  }
+
+  relativeTime(timestamp: number): string {
+    if (!timestamp) return '—';
+    const sec = Math.round((Date.now() - timestamp) / 1000);
+    if (sec < 60) return 'hace un momento';
+    if (sec < 3600) return `hace ${Math.round(sec / 60)} min`;
+    return `hace ${Math.round(sec / 3600)} h`;
   }
 }

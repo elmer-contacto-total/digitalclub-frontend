@@ -1325,6 +1325,13 @@ function createWhatsAppView(): void {
       try {
         lastHealthReport = JSON.parse(message.slice('[HABLAPE_HEALTH]'.length));
         mainWindow?.webContents.send('whatsapp:health-update', lastHealthReport);
+        if (mediaAuthToken) {
+          fetch(`${BACKEND_BASE_URL}/app/wa_health_report`, {
+            method: 'POST',
+            headers: getMediaApiHeaders(),
+            body: JSON.stringify(lastHealthReport)
+          }).catch(err => console.warn('[WaHealth] Error posteando reporte:', err));
+        }
       } catch { /* ignorar parse errors */ }
     }
     // Chat bloqueado por click en sidebar - sincronizar estado
