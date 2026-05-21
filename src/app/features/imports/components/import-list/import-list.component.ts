@@ -117,11 +117,6 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
                       <a [routerLink]="[importItem.id]" class="action-btn" title="Ver detalle">
                         <i class="ph ph-eye"></i>
                       </a>
-                      @if (!isCompleted(importItem.status)) {
-                        <button class="action-btn action-btn-danger" (click)="confirmDelete(importItem)" title="Eliminar">
-                          <i class="ph ph-trash"></i>
-                        </button>
-                      }
                     </div>
                   </td>
                 </tr>
