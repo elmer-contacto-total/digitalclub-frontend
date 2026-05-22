@@ -285,6 +285,52 @@ function getMediaApiHeaders(): Record<string, string> {
   return headers;
 }
 
+// Último reporte de salud que NO se pudo enviar al backend (sin token o fallo de red).
+// Solo guardamos el más reciente: al panel central solo le interesa el estado actual.
+// Se reintenta cuando llega el auth token y periódicamente.
+let pendingHealthReport: any = null;
+
+/**
+ * Envía un reporte de salud al backend. Si no hay token o el POST falla, lo deja
+ * encolado para reintento — así el asesor con auth a medias no queda invisible.
+ */
+async function sendHealthReport(report: any): Promise<void> {
+  if (!report) return;
+  if (!mediaAuthToken) {
+    pendingHealthReport = report;
+    return;
+  }
+  try {
+    const res = await fetch(`${BACKEND_BASE_URL}/app/wa_health_report`, {
+      method: 'POST',
+      headers: getMediaApiHeaders(),
+      body: JSON.stringify(report)
+    });
+    if (res.status === 401 || res.status === 403) {
+      // Token vencido: invalidar para forzar relogin y reencolar el reporte.
+      console.warn('[WaHealth] Token inválido al postear reporte — reencolando');
+      mediaAuthToken = null;
+      pendingHealthReport = report;
+      return;
+    }
+    if (!res.ok) {
+      pendingHealthReport = report;
+      return;
+    }
+    pendingHealthReport = null;
+  } catch (err) {
+    console.warn('[WaHealth] Error posteando reporte, queda en cola:', err);
+    pendingHealthReport = report;
+  }
+}
+
+/** Reintenta el envío del último reporte pendiente (al recibir token o por timer). */
+function flushPendingHealthReport(): void {
+  if (pendingHealthReport && mediaAuthToken) {
+    void sendHealthReport(pendingHealthReport);
+  }
+}
+
 /**
  * Notify backend of an incoming message detected in WhatsApp Web.
  * Creates/activates ticket using the message content as ticket subject.
@@ -599,6 +645,9 @@ async function retryPendingDeletions(): Promise<void> {
 
 // Retry pending deletions every 60 seconds
 setInterval(retryPendingDeletions, 60000);
+
+// Reintentar el reporte de salud pendiente cada 60s (por si falló el envío inicial)
+setInterval(flushPendingHealthReport, 60000);
 
 /**
  * Callback para manejar medios capturados desde el BrowserView
@@ -1325,13 +1374,7 @@ function createWhatsAppView(): void {
       try {
         lastHealthReport = JSON.parse(message.slice('[HABLAPE_HEALTH]'.length));
         mainWindow?.webContents.send('whatsapp:health-update', lastHealthReport);
-        if (mediaAuthToken) {
-          fetch(`${BACKEND_BASE_URL}/app/wa_health_report`, {
-            method: 'POST',
-            headers: getMediaApiHeaders(),
-            body: JSON.stringify(lastHealthReport)
-          }).catch(err => console.warn('[WaHealth] Error posteando reporte:', err));
-        }
+        void sendHealthReport(lastHealthReport);
       } catch { /* ignorar parse errors */ }
     }
     // Chat bloqueado por click en sidebar - sincronizar estado
@@ -2448,6 +2491,7 @@ function setupIPC(): void {
       console.log(`[MWS Deleted] Auth token recibido, reintentando ${pendingDeletions.length} eliminaciones pendientes`);
       retryPendingDeletions();
     }
+    flushPendingHealthReport();
   });
 
   ipcMain.on('clear-logged-in-user', () => {

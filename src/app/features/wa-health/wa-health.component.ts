@@ -8,20 +8,25 @@ interface FeatureStatus {
   note?: string;
   usedFallback?: boolean;
   category?: string;
+  verified?: boolean;
 }
 
 interface HealthReport {
   timestamp: number;
+  receivedAt?: number;
   appVersion: string;
+  waVersion?: string | null;
   waLoaded: boolean;
   features: Record<string, FeatureStatus>;
   error?: string;
   userId?: number;
   userName?: string;
   userEmail?: string;
+  // Asesor del padrón que nunca reportó (app caída o sin abrir).
+  status?: 'no_report';
 }
 
-type Severity = 'critical' | 'warning' | 'ok';
+type Severity = 'critical' | 'warning' | 'ok' | 'unverified';
 
 interface FeatureRow {
   key: string;
@@ -121,6 +126,7 @@ const NOTE_LABELS: Record<string, string> = {
 };
 
 function featureSeverity(key: string, status: FeatureStatus): Severity {
+  if (status.verified === false) return 'unverified';
   if (status.ok) return status.usedFallback ? 'warning' : 'ok';
   return FEATURE_SEVERITY_MAP[key] ?? 'warning';
 }
@@ -146,16 +152,46 @@ function reportSeverity(report: HealthReport): Severity {
   template: `
     <div class="wa-health-page">
       <div class="page-header">
-        <h1 class="page-title">Diagnóstico WhatsApp Web</h1>
-        <p class="page-subtitle">Estado de selectores DOM e inyecciones por asesor · actualiza cada 60s</p>
+        <div>
+          <h1 class="page-title">Diagnóstico WhatsApp Web</h1>
+          <p class="page-subtitle">Estado de selectores DOM e inyecciones por asesor · actualiza cada 60s</p>
+        </div>
+        <div class="header-actions">
+          @if (waVersionSummary().length > 0) {
+            <span class="wa-versions" title="Versiones de WhatsApp Web detectadas entre asesores activos">
+              <i class="ph ph-whatsapp-logo"></i>
+              @for (v of waVersionSummary(); track v.version) {
+                <span class="wa-version-chip">WA {{ v.version }} · {{ v.count }}</span>
+              }
+            </span>
+          }
+          <div class="view-toggle">
+            <button [class.active]="view() === 'agents'" (click)="view.set('agents')">Por asesor</button>
+            <button [class.active]="view() === 'features'" (click)="view.set('features')">Por feature</button>
+          </div>
+          <button class="refresh-btn" (click)="refresh()" title="Actualizar"><i class="ph ph-arrows-clockwise"></i></button>
+        </div>
       </div>
+
+      <!-- Estados de carga / error -->
+      @if (loadError()) {
+        <div class="summary-banner banner-critical">
+          <i class="ph ph-plug"></i>
+          <strong>{{ loadError() }}</strong>
+        </div>
+      } @else if (loading()) {
+        <div class="empty-state">
+          <i class="ph ph-spinner"></i>
+          <p>Cargando diagnóstico…</p>
+        </div>
+      } @else {
 
       <!-- Banner resumen -->
       @if (criticalCount() > 0) {
         <div class="summary-banner banner-critical">
           <i class="ph ph-warning-circle"></i>
-          <strong>{{ criticalCount() }} {{ criticalCount() === 1 ? 'asesor con problemas críticos' : 'asesores con problemas críticos' }}</strong>
-          <span>— Expandí cada fila para ver qué hacer.</span>
+          <strong>{{ criticalCount() }} {{ criticalCount() === 1 ? 'asesor con problemas' : 'asesores con problemas' }}</strong>
+          <span>— Incluye apps caídas y selectores críticos rotos.</span>
         </div>
       } @else if (warningCount() > 0) {
         <div class="summary-banner banner-warning">
@@ -174,16 +210,49 @@ function reportSeverity(report: HealthReport): Severity {
       @if (sortedReports().length === 0) {
         <div class="empty-state">
           <i class="ph ph-hourglass"></i>
-          <p>Sin reportes aún. Los asesores reportan automáticamente cuando WhatsApp está abierto.</p>
+          <p>Sin asesores ni reportes. Los asesores reportan automáticamente cuando WhatsApp está abierto.</p>
+        </div>
+      } @else if (view() === 'features') {
+        <!-- ===== VISTA POR FEATURE ===== -->
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th class="text-center">Rotos</th>
+                <th class="text-center">Fallback</th>
+                <th class="text-center">No verif.</th>
+                <th class="text-center">OK</th>
+                <th>WhatsApp afectado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of featureAggregation(); track f.key) {
+                <tr [class.row-critical]="f.severity === 'critical' && f.broken">
+                  <td>
+                    @if (f.broken && f.severity === 'critical') { <i class="ph ph-warning-circle text-danger"></i> }
+                    @else if (f.broken) { <i class="ph ph-warning text-warning"></i> }
+                    <span class="feature-label">{{ f.label }}</span>
+                  </td>
+                  <td class="text-center fw-bold" [class.text-danger]="f.fail > 0">{{ f.fail || '—' }}<span class="text-subtle"> / {{ f.total }}</span></td>
+                  <td class="text-center text-warning">{{ f.fallback || '—' }}</td>
+                  <td class="text-center text-subtle">{{ f.unverified || '—' }}</td>
+                  <td class="text-center text-success">{{ f.ok || '—' }}</td>
+                  <td class="text-subtle">{{ f.waVersions.length ? ('WA ' + f.waVersions.join(', ')) : '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
         </div>
       } @else {
+        <!-- ===== VISTA POR ASESOR ===== -->
         <div class="table-card">
           <table class="data-table">
             <thead>
               <tr>
                 <th class="col-expand"></th>
                 <th>Asesor</th>
-                <th>Versión</th>
+                <th>App / WA</th>
                 <th class="text-center">Estado</th>
                 <th class="text-center">Críticos</th>
                 <th class="text-center">Warnings</th>
@@ -192,9 +261,9 @@ function reportSeverity(report: HealthReport): Severity {
             </thead>
             <tbody>
               @for (report of sortedReports(); track report.userId) {
-                <tr [class.stale]="isStale(report)">
+                <tr [class.stale]="isStale(report)" [class.row-critical]="isNoReport(report)">
                   <td class="col-expand">
-                    @if (!isStale(report)) {
+                    @if (!isStale(report) && !isNoReport(report)) {
                       <button class="expand-btn" (click)="toggleExpand(report.userId)">
                         <i class="ph" [class.ph-caret-right]="!isExpanded(report.userId)" [class.ph-caret-down]="isExpanded(report.userId)"></i>
                       </button>
@@ -204,28 +273,38 @@ function reportSeverity(report: HealthReport): Severity {
                     <div class="agent-name">{{ report.userName || report.userEmail || '—' }}</div>
                     <div class="agent-email">{{ report.userEmail }}</div>
                   </td>
-                  <td class="text-subtle">{{ report.appVersion || '—' }}</td>
-                  <td class="text-center">
-                    @if (isStale(report)) {
-                      <span class="badge badge-secondary">Sin actividad</span>
-                    } @else {
-                      @switch (severity(report)) {
-                        @case ('critical') { <span class="badge badge-danger">Crítico</span> }
-                        @case ('warning')  { <span class="badge badge-warning">Warning</span> }
-                        @default           { <span class="badge badge-success">OK</span> }
-                      }
-                    }
-                  </td>
-                  @if (isStale(report)) {
-                    <td colspan="2"></td>
+                  @if (isNoReport(report)) {
+                    <td class="text-subtle">—</td>
+                    <td class="text-center"><span class="badge badge-danger">App caída / sin reporte</span></td>
+                    <td colspan="2" class="text-subtle">El asesor no abrió la app o la app no inicializó.</td>
+                    <td class="text-subtle">—</td>
                   } @else {
-                    <td class="text-center fw-bold text-danger">{{ criticalFeatures(report) || '—' }}</td>
-                    <td class="text-center fw-bold text-warning">{{ warningFeatures(report) || '—' }}</td>
+                    <td class="text-subtle">
+                      <div>{{ report.appVersion || '—' }}</div>
+                      @if (report.waVersion) { <div class="agent-email">WA {{ report.waVersion }}</div> }
+                    </td>
+                    <td class="text-center">
+                      @if (isStale(report)) {
+                        <span class="badge badge-secondary">Sin actividad</span>
+                      } @else {
+                        @switch (severity(report)) {
+                          @case ('critical') { <span class="badge badge-danger">Crítico</span> }
+                          @case ('warning')  { <span class="badge badge-warning">Warning</span> }
+                          @default           { <span class="badge badge-success">OK</span> }
+                        }
+                      }
+                    </td>
+                    @if (isStale(report)) {
+                      <td colspan="2"></td>
+                    } @else {
+                      <td class="text-center fw-bold text-danger">{{ criticalFeatures(report) || '—' }}</td>
+                      <td class="text-center fw-bold text-warning">{{ warningFeatures(report) || '—' }}</td>
+                    }
+                    <td class="text-subtle">{{ relativeTime(report) }}</td>
                   }
-                  <td class="text-subtle">{{ relativeTime(report.timestamp) }}</td>
                 </tr>
 
-                @if (isExpanded(report.userId) && !isStale(report)) {
+                @if (isExpanded(report.userId) && !isStale(report) && !isNoReport(report)) {
                   <tr class="detail-row">
                     <td colspan="7" class="detail-cell">
 
@@ -252,7 +331,9 @@ function reportSeverity(report: HealthReport): Severity {
                             <div class="category-title">{{ cat.label }}</div>
                             @for (f of cat.features; track f.key) {
                               <div class="feature-row">
-                                @if (!f.status.ok && f.severity === 'critical') {
+                                @if (f.severity === 'unverified') {
+                                  <i class="ph ph-circle-dashed text-subtle"></i>
+                                } @else if (!f.status.ok && f.severity === 'critical') {
                                   <i class="ph ph-warning-circle text-danger"></i>
                                 } @else if (!f.status.ok || f.status.usedFallback) {
                                   <i class="ph ph-warning text-warning"></i>
@@ -276,13 +357,20 @@ function reportSeverity(report: HealthReport): Severity {
           </table>
         </div>
       }
+      }
     </div>
   `,
   styles: [`
     .wa-health-page { padding: var(--space-6); max-width: 1200px; margin: 0 auto; }
-    .page-header { margin-bottom: var(--space-4); }
+    .page-header { margin-bottom: var(--space-4); display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
     .page-title { margin: 0; font-size: var(--text-2xl); font-weight: var(--font-semibold); color: var(--fg-default); }
     .page-subtitle { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--fg-muted); }
+    .header-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+    .wa-versions { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--fg-muted); i { font-size: 16px; } }
+    .wa-version-chip { background: var(--bg-muted); color: var(--fg-default); padding: 2px var(--space-2); border-radius: var(--radius-full); font-size: var(--text-xs); }
+    .view-toggle { display: inline-flex; border: 1px solid var(--card-border); border-radius: var(--radius-md); overflow: hidden; button { background: var(--card-bg); border: none; padding: var(--space-1) var(--space-3); font-size: var(--text-sm); cursor: pointer; color: var(--fg-muted); &.active { background: var(--table-header-bg); color: var(--fg-default); font-weight: var(--font-medium); } } }
+    .refresh-btn { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: var(--space-1) var(--space-2); cursor: pointer; color: var(--fg-muted); &:hover { color: var(--fg-default); } i { font-size: 16px; } }
+    .row-critical td { background: var(--error-subtle); }
 
     .summary-banner { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); margin-bottom: var(--space-4); font-size: var(--text-sm); i { font-size: 18px; flex-shrink: 0; } }
     .banner-critical { background: var(--error-subtle); color: var(--error-text); border: 1px solid var(--error-default, #f87171); }
@@ -338,21 +426,19 @@ export class WaHealthComponent implements OnInit, OnDestroy {
 
   reports = signal<HealthReport[]>([]);
   expandedRows = signal<Set<number | undefined>>(new Set());
+  loading = signal(true);          // true solo hasta la primera respuesta
+  loadError = signal<string | null>(null);
+  view = signal<'agents' | 'features'>('agents');
 
   sortedReports = computed(() =>
-    [...this.reports()].sort((a, b) => {
-      const order: Record<string, number> = { critical: 0, warning: 1, ok: 2, stale: 3 };
-      const sa = this.isStale(a) ? 3 : order[reportSeverity(a)];
-      const sb = this.isStale(b) ? 3 : order[reportSeverity(b)];
-      return sa - sb;
-    })
+    [...this.reports()].sort((a, b) => this.sortRank(a) - this.sortRank(b))
   );
 
   criticalCount = computed(() =>
-    this.reports().filter(r => !this.isStale(r) && reportSeverity(r) === 'critical').length
+    this.reports().filter(r => this.isNoReport(r) || (!this.isStale(r) && reportSeverity(r) === 'critical')).length
   );
   warningCount = computed(() =>
-    this.reports().filter(r => !this.isStale(r) && reportSeverity(r) === 'warning').length
+    this.reports().filter(r => !this.isNoReport(r) && !this.isStale(r) && reportSeverity(r) === 'warning').length
   );
 
   ngOnInit(): void {
@@ -364,12 +450,44 @@ export class WaHealthComponent implements OnInit, OnDestroy {
     if (this.pollInterval) clearInterval(this.pollInterval);
   }
 
+  refresh(): void { this.fetchReports(); }
+
   private fetchReports(): void {
     this.http.get<HealthReport[]>(`${environment.apiUrl}/app/wa_health_reports`)
-      .subscribe({ next: (data) => this.reports.set(data) });
+      .subscribe({
+        next: (data) => {
+          this.reports.set(data ?? []);
+          this.loadError.set(null);
+          this.loading.set(false);
+        },
+        error: (err) => {
+          this.loadError.set(
+            err?.status === 403 ? 'No tenés permisos para ver el diagnóstico (requiere Super Admin).'
+            : err?.status === 0 ? 'No se pudo conectar con el servidor.'
+            : `No se pudo cargar el diagnóstico (error ${err?.status ?? 'desconocido'}).`
+          );
+          this.loading.set(false);
+        }
+      });
   }
 
-  isStale(r: HealthReport): boolean { return Date.now() - r.timestamp > STALE_MS; }
+  // El timestamp del servidor (receivedAt) es la fuente de verdad: el reloj del
+  // asesor puede estar desfasado. Fallback al timestamp del cliente si falta.
+  private effectiveTs(r: HealthReport): number { return r.receivedAt ?? r.timestamp; }
+
+  isNoReport(r: HealthReport): boolean { return r.status === 'no_report'; }
+
+  private sortRank(r: HealthReport): number {
+    if (this.isNoReport(r)) return 0;            // app caída: lo más urgente
+    if (this.isStale(r)) return 4;
+    const order: Record<string, number> = { critical: 1, warning: 2, ok: 3, unverified: 3 };
+    return order[reportSeverity(r)] ?? 3;
+  }
+
+  isStale(r: HealthReport): boolean {
+    if (this.isNoReport(r)) return false;
+    return Date.now() - this.effectiveTs(r) > STALE_MS;
+  }
   isExpanded(userId?: number): boolean { return this.expandedRows().has(userId); }
 
   toggleExpand(userId?: number): void {
@@ -419,11 +537,54 @@ export class WaHealthComponent implements OnInit, OnDestroy {
 
   noteLabel(note: string): string { return NOTE_LABELS[note] || note; }
 
-  relativeTime(ts: number): string {
+  relativeTime(r: HealthReport): string {
+    const ts = this.effectiveTs(r);
     if (!ts) return '—';
     const sec = Math.round((Date.now() - ts) / 1000);
     if (sec < 60) return 'hace un momento';
     if (sec < 3600) return `hace ${Math.round(sec / 60)} min`;
     return `hace ${Math.round(sec / 3600)} h`;
   }
+
+  // === Vista agregada por feature ===
+  // Para cada feature, cuántos asesores la reportan rota/degradada/no verificada.
+  // Es la vista que delata "WhatsApp cambió un selector" (mismo feature roto en muchos).
+  featureAggregation = computed(() => {
+    const live = this.reports().filter(r => !this.isNoReport(r) && !this.isStale(r) && r.waLoaded);
+    const total = live.length;
+    const acc: Record<string, { ok: number; fallback: number; fail: number; unverified: number; severity: Severity; waVersions: Set<string> }> = {};
+
+    for (const r of live) {
+      for (const [key, status] of Object.entries(r.features || {})) {
+        const a = acc[key] ?? (acc[key] = { ok: 0, fallback: 0, fail: 0, unverified: 0, severity: 'ok', waVersions: new Set<string>() });
+        const sev = featureSeverity(key, status);
+        if (sev === 'unverified') a.unverified++;
+        else if (!status.ok) { a.fail++; if (sev === 'critical') a.severity = 'critical'; if (r.waVersion) a.waVersions.add(r.waVersion); }
+        else if (status.usedFallback) a.fallback++;
+        else a.ok++;
+      }
+    }
+
+    return Object.entries(acc)
+      .map(([key, a]) => ({
+        key,
+        label: FEATURE_LABELS[key] || key,
+        total,
+        ...a,
+        waVersions: Array.from(a.waVersions),
+        broken: a.fail > 0,
+      }))
+      .sort((x, y) => (y.severity === 'critical' ? 1 : 0) - (x.severity === 'critical' ? 1 : 0) || y.fail - x.fail);
+  });
+
+  // Resumen de versiones de WhatsApp Web detectadas entre asesores activos.
+  waVersionSummary = computed(() => {
+    const counts: Record<string, number> = {};
+    for (const r of this.reports()) {
+      if (this.isNoReport(r) || !r.waVersion) continue;
+      counts[r.waVersion] = (counts[r.waVersion] ?? 0) + 1;
+    }
+    return Object.entries(counts).map(([version, count]) => ({ version, count }))
+      .sort((a, b) => b.count - a.count);
+  });
 }
