@@ -169,6 +169,10 @@ function reportSeverity(report: HealthReport): Severity {
             <button [class.active]="view() === 'agents'" (click)="view.set('agents')">Por asesor</button>
             <button [class.active]="view() === 'features'" (click)="view.set('features')">Por feature</button>
           </div>
+          <button class="coverage-btn" [class.active]="coverage()" (click)="toggleCoverage()" title="Mostrar asesores que no reportan (no usan la app)">
+            <i class="ph" [class.ph-eye]="coverage()" [class.ph-eye-slash]="!coverage()"></i>
+            {{ coverage() ? 'Ocultar sin reporte' : 'Ver cobertura' }}
+          </button>
           <button class="refresh-btn" (click)="refresh()" title="Actualizar"><i class="ph ph-arrows-clockwise"></i></button>
         </div>
       </div>
@@ -190,8 +194,8 @@ function reportSeverity(report: HealthReport): Severity {
       @if (criticalCount() > 0) {
         <div class="summary-banner banner-critical">
           <i class="ph ph-warning-circle"></i>
-          <strong>{{ criticalCount() }} {{ criticalCount() === 1 ? 'asesor con problemas' : 'asesores con problemas' }}</strong>
-          <span>— Incluye apps caídas y selectores críticos rotos.</span>
+          <strong>{{ criticalCount() }} {{ criticalCount() === 1 ? 'asesor con captura rota' : 'asesores con captura rota' }}</strong>
+          <span>— Selector o inyección crítica caída mientras el asesor trabaja. Expandí la fila.</span>
         </div>
       } @else if (warningCount() > 0) {
         <div class="summary-banner banner-warning">
@@ -199,18 +203,24 @@ function reportSeverity(report: HealthReport): Severity {
           <strong>{{ warningCount() }} {{ warningCount() === 1 ? 'asesor con advertencias' : 'asesores con advertencias' }}</strong>
           <span>— Funcionando con fallbacks o selectores degradados.</span>
         </div>
-      } @else if (sortedReports().length > 0) {
+      } @else if (reportingCount() > 0) {
         <div class="summary-banner banner-ok">
           <i class="ph ph-check-circle"></i>
           <strong>Todo OK</strong>
-          <span>— Todos los asesores reportan estado normal.</span>
+          <span>— {{ reportingCount() }} {{ reportingCount() === 1 ? 'asesor activo reporta' : 'asesores activos reportan' }} estado normal.</span>
         </div>
       }
 
-      @if (sortedReports().length === 0) {
+      @if (reportingCount() === 0 && !coverage()) {
         <div class="empty-state">
           <i class="ph ph-hourglass"></i>
-          <p>Sin asesores ni reportes. Los asesores reportan automáticamente cuando WhatsApp está abierto.</p>
+          <p>Ningún asesor está reportando ahora. La app reporta automáticamente cuando WhatsApp está abierto.</p>
+          <p class="text-subtle">Usá <strong>Ver cobertura</strong> para listar a los asesores que no usan la app.</p>
+        </div>
+      } @else if (sortedReports().length === 0) {
+        <div class="empty-state">
+          <i class="ph ph-hourglass"></i>
+          <p>Sin asesores para mostrar.</p>
         </div>
       } @else if (view() === 'features') {
         <!-- ===== VISTA POR FEATURE ===== -->
@@ -261,7 +271,7 @@ function reportSeverity(report: HealthReport): Severity {
             </thead>
             <tbody>
               @for (report of sortedReports(); track report.userId) {
-                <tr [class.stale]="isStale(report)" [class.row-critical]="isNoReport(report)">
+                <tr [class.stale]="isStale(report) || isNoReport(report)">
                   <td class="col-expand">
                     @if (!isStale(report) && !isNoReport(report)) {
                       <button class="expand-btn" (click)="toggleExpand(report.userId)">
@@ -275,8 +285,8 @@ function reportSeverity(report: HealthReport): Severity {
                   </td>
                   @if (isNoReport(report)) {
                     <td class="text-subtle">—</td>
-                    <td class="text-center"><span class="badge badge-danger">App caída / sin reporte</span></td>
-                    <td colspan="2" class="text-subtle">El asesor no abrió la app o la app no inicializó.</td>
+                    <td class="text-center"><span class="badge badge-secondary">No usa la app</span></td>
+                    <td colspan="2" class="text-subtle">Sin registro de la app de escritorio.</td>
                     <td class="text-subtle">—</td>
                   } @else {
                     <td class="text-subtle">
@@ -370,6 +380,7 @@ function reportSeverity(report: HealthReport): Severity {
     .wa-version-chip { background: var(--bg-muted); color: var(--fg-default); padding: 2px var(--space-2); border-radius: var(--radius-full); font-size: var(--text-xs); }
     .view-toggle { display: inline-flex; border: 1px solid var(--card-border); border-radius: var(--radius-md); overflow: hidden; button { background: var(--card-bg); border: none; padding: var(--space-1) var(--space-3); font-size: var(--text-sm); cursor: pointer; color: var(--fg-muted); &.active { background: var(--table-header-bg); color: var(--fg-default); font-weight: var(--font-medium); } } }
     .refresh-btn { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: var(--space-1) var(--space-2); cursor: pointer; color: var(--fg-muted); &:hover { color: var(--fg-default); } i { font-size: 16px; } }
+    .coverage-btn { display: inline-flex; align-items: center; gap: var(--space-1); background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: var(--space-1) var(--space-3); font-size: var(--text-sm); cursor: pointer; color: var(--fg-muted); &:hover { color: var(--fg-default); } &.active { background: var(--table-header-bg); color: var(--fg-default); } i { font-size: 15px; } }
     .row-critical td { background: var(--error-subtle); }
 
     .summary-banner { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); margin-bottom: var(--space-4); font-size: var(--text-sm); i { font-size: 18px; flex-shrink: 0; } }
@@ -429,17 +440,22 @@ export class WaHealthComponent implements OnInit, OnDestroy {
   loading = signal(true);          // true solo hasta la primera respuesta
   loadError = signal<string | null>(null);
   view = signal<'agents' | 'features'>('agents');
+  coverage = signal(false);        // mostrar asesores que nunca reportaron (no usan la app)
 
   sortedReports = computed(() =>
     [...this.reports()].sort((a, b) => this.sortRank(a) - this.sortRank(b))
   );
 
+  // "Problema" = asesor activo (reportó hace poco) con un feature crítico roto.
+  // No cuenta a quien cerró la app (stale) ni a quien nunca la usó (no_report).
   criticalCount = computed(() =>
-    this.reports().filter(r => this.isNoReport(r) || (!this.isStale(r) && reportSeverity(r) === 'critical')).length
+    this.reports().filter(r => !this.isNoReport(r) && !this.isStale(r) && reportSeverity(r) === 'critical').length
   );
   warningCount = computed(() =>
     this.reports().filter(r => !this.isNoReport(r) && !this.isStale(r) && reportSeverity(r) === 'warning').length
   );
+  noReportCount = computed(() => this.reports().filter(r => this.isNoReport(r)).length);
+  reportingCount = computed(() => this.reports().filter(r => !this.isNoReport(r)).length);
 
   ngOnInit(): void {
     this.fetchReports();
@@ -452,8 +468,14 @@ export class WaHealthComponent implements OnInit, OnDestroy {
 
   refresh(): void { this.fetchReports(); }
 
+  toggleCoverage(): void {
+    this.coverage.update(v => !v);
+    this.fetchReports();
+  }
+
   private fetchReports(): void {
-    this.http.get<HealthReport[]>(`${environment.apiUrl}/app/wa_health_reports`)
+    const url = `${environment.apiUrl}/app/wa_health_reports?coverage=${this.coverage()}`;
+    this.http.get<HealthReport[]>(url)
       .subscribe({
         next: (data) => {
           this.reports.set(data ?? []);
@@ -478,10 +500,10 @@ export class WaHealthComponent implements OnInit, OnDestroy {
   isNoReport(r: HealthReport): boolean { return r.status === 'no_report'; }
 
   private sortRank(r: HealthReport): number {
-    if (this.isNoReport(r)) return 0;            // app caída: lo más urgente
-    if (this.isStale(r)) return 4;
-    const order: Record<string, number> = { critical: 1, warning: 2, ok: 3, unverified: 3 };
-    return order[reportSeverity(r)] ?? 3;
+    if (this.isNoReport(r)) return 5;            // nunca usó la app: al fondo
+    if (this.isStale(r)) return 4;               // cerró la app: gris
+    const order: Record<string, number> = { critical: 0, warning: 1, ok: 2, unverified: 2 };
+    return order[reportSeverity(r)] ?? 2;        // activo con crítico arriba de todo
   }
 
   isStale(r: HealthReport): boolean {
