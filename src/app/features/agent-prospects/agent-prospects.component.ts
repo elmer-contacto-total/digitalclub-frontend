@@ -75,6 +75,8 @@ interface SkippedAssociation {
   prospectId: number;
   userId: number;
   reason: string;
+  prospectName?: string;
+  prospectPhone?: string;
 }
 
 interface GenerateImportCsvResponse {
@@ -100,9 +102,12 @@ interface GenerateImportCsvResponse {
               <button
                 class="btn btn-secondary"
                 (click)="openConversionModal()"
-                [disabled]="prospects().length === 0"
+                [disabled]="eligibleCount() === 0"
               >
                 Convertir a CSV
+                @if (eligibleCount() > 0) {
+                  <span class="badge-count">{{ eligibleCount() }}</span>
+                }
               </button>
               <button
                 class="btn btn-primary export-btn"
@@ -158,7 +163,7 @@ interface GenerateImportCsvResponse {
                 class="form-control search-input"
                 [(ngModel)]="searchTerm"
                 (ngModelChange)="onSearchChange($event)"
-                placeholder=""
+                placeholder="Nombre o teléfono..."
               />
             </div>
           </div>
@@ -195,7 +200,12 @@ interface GenerateImportCsvResponse {
                       [class.selected]="selectedProspectId() === prospect.id"
                       (click)="selectProspect(prospect)"
                     >
-                      <td class="col-nombre">{{ prospect.name || 'Sin nombre' }}</td>
+                      <td class="col-nombre">
+                        {{ prospect.name || 'Sin nombre' }}
+                        @if (prospect.upgradedToUser) {
+                          <span class="badge-converted" title="Ya convertido a usuario"><i class="ph ph-check-circle"></i></span>
+                        }
+                      </td>
                       <td class="col-movil">{{ prospect.phone || '-' }}</td>
                       <td class="col-codigo">-</td>
                       <td class="col-action">
@@ -286,6 +296,12 @@ interface GenerateImportCsvResponse {
             </button>
           </div>
           <div class="modal-body">
+            <div class="modal-filters">
+              <label class="toggle-label">
+                <input type="checkbox" [(ngModel)]="showOnlyUnassociated" />
+                Mostrar solo sin asociar
+              </label>
+            </div>
             @for (group of convGroups; track $index; let gIdx = $index) {
               <div class="conv-group">
                 <div class="conv-group-header">
@@ -316,6 +332,7 @@ interface GenerateImportCsvResponse {
                     </thead>
                     <tbody>
                       @for (item of group.items; track item.prospect.id; let iIdx = $index) {
+                        @if (!showOnlyUnassociated || item.user === null) {
                         <tr>
                           <td>{{ item.prospect.name || 'Sin nombre' }}</td>
                           <td>{{ item.prospect.phone }}</td>
@@ -365,6 +382,7 @@ interface GenerateImportCsvResponse {
                             }
                           </td>
                         </tr>
+                        }
                       }
                     </tbody>
                   </table>
@@ -374,6 +392,29 @@ interface GenerateImportCsvResponse {
             <button class="btn btn-sm btn-outline add-group-btn" (click)="addConvGroup()">
               <i class="ph ph-plus"></i> Agregar grupo de template
             </button>
+
+            <!-- Panel de omitidos (visible después de generar si hay filas excluidas) -->
+            @if (showSkippedPanel() && skippedItems().length > 0) {
+              <div class="skipped-panel">
+                <div class="skipped-panel-header">
+                  <span><i class="ph ph-warning"></i> {{ skippedItems().length }} fila(s) no incluidas en el CSV</span>
+                  <button class="btn btn-sm btn-outline" (click)="downloadSkippedCsv()">
+                    <i class="ph ph-download-simple"></i> Descargar reporte
+                  </button>
+                </div>
+                <div class="skipped-list">
+                  @for (item of skippedItems(); track item.prospectId) {
+                    <div class="skipped-item">
+                      <span class="skipped-name">{{ item.prospectName || ('Prospecto #' + item.prospectId) }}</span>
+                      @if (item.prospectPhone) {
+                        <span class="skipped-phone">{{ item.prospectPhone }}</span>
+                      }
+                      <span class="skipped-reason">{{ reasonLabel(item.reason) }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
           </div>
           <div class="modal-footer">
             <span class="assoc-count">{{ countTotalAssociations() }} de {{ conversionProspectsCount() }} prospectos asociados</span>
@@ -475,6 +516,10 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
   isGeneratingCsv = signal(false);
   availableTemplates: ImportTemplate[] = [];
   convGroups: ConvGroup[] = [];
+  skippedItems = signal<SkippedAssociation[]>([]);
+  showSkippedPanel = signal(false);
+  showOnlyUnassociated = false;
+  eligibleCount = computed(() => this.prospects().filter(p => !p.upgradedToUser).length);
   private searchTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   // Current user
@@ -620,7 +665,7 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
   // ======================== CONVERSION MODAL ========================
 
   openConversionModal(): void {
-    const snapshot = [...this.prospects()];
+    const snapshot = this.prospects().filter(p => !p.upgradedToUser);
     const items: ConvGroupItem[] = snapshot.map(p => ({
       prospect: p,
       user: null,
@@ -639,6 +684,9 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
 
   closeConversionModal(): void {
     this.showConversionModal.set(false);
+    this.showSkippedPanel.set(false);
+    this.skippedItems.set([]);
+    this.showOnlyUnassociated = false;
     this.searchTimers.forEach(t => clearTimeout(t));
     this.searchTimers.clear();
   }
@@ -754,8 +802,14 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
         });
-        this.notifySkipped(response.skipped);
-        this.closeConversionModal();
+        if (response.skipped && response.skipped.length > 0) {
+          this.skippedItems.set(response.skipped);
+          this.showSkippedPanel.set(true);
+          this.toastService.success(`${response.files.length} archivo(s) descargado(s). Revisa los omitidos al final del modal.`);
+        } else {
+          this.toastService.success('CSV generado correctamente.');
+          this.closeConversionModal();
+        }
       },
       error: (err) => {
         console.error('Error generando CSV:', err);
@@ -795,6 +849,38 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
       `Se omitieron ${skipped.length} fila(s) del CSV: ${parts.join(', ')}.`,
       8000
     );
+  }
+
+  readonly reasonLabels: Record<string, string> = {
+    phone_already_exists_as_user: 'Teléfono ya registrado como usuario',
+    prospect_not_found_or_wrong_client: 'Prospecto no encontrado',
+    user_not_found: 'Usuario no encontrado',
+    user_not_standard: 'Usuario no es estándar',
+    user_wrong_client: 'Usuario de otro cliente'
+  };
+
+  reasonLabel(reason: string): string {
+    return this.reasonLabels[reason] ?? reason;
+  }
+
+  downloadSkippedCsv(): void {
+    const lines = ['Nombre,Teléfono,Motivo'];
+    for (const item of this.skippedItems()) {
+      const name = item.prospectName || `Prospecto #${item.prospectId}`;
+      const phone = item.prospectPhone || '';
+      const reason = this.reasonLabel(item.reason);
+      lines.push(`"${name}","${phone}","${reason}"`);
+    }
+    const csv = lines.join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `omitidos_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   private searchStandardUsers(gIdx: number, iIdx: number, term: string): void {
