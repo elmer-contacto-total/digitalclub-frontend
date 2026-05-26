@@ -561,7 +561,7 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
   showSkippedPanel = signal(false);
   showOnlyUnassociated = false;
   modalSearch = '';
-  private modalSnapshotCount = 0;
+  modalSnapshotCount = 0;
   eligibleCount = computed(() => this.prospects().filter(p => !p.upgradedToUser).length);
   private searchTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
