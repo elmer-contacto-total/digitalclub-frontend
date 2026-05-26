@@ -155,9 +155,9 @@ import { environment } from '../../../../../environments/environment';
                           <button
                             class="action-btn danger"
                             (click)="confirmDelete(user)"
-                            title="Eliminar"
+                            title="Desactivar"
                           >
-                            <i class="ph ph-trash"></i>
+                            <i class="ph ph-user-minus"></i>
                           </button>
                         }
                       </div>
@@ -224,10 +224,10 @@ import { environment } from '../../../../../environments/environment';
       @if (userToDelete()) {
         <app-confirm-dialog
           [isOpen]="true"
-          title="Eliminar Usuario"
-          [message]="'¿Estás seguro de eliminar a ' + getFullName(userToDelete()!) + '? Esta acción desactivará al usuario.'"
+          title="Desactivar Usuario"
+          [message]="'¿Estás seguro de desactivar a ' + getFullName(userToDelete()!) + '? El usuario no podrá iniciar sesión.'"
           type="danger"
-          confirmLabel="Eliminar"
+          confirmLabel="Desactivar"
           (confirmed)="deleteUser()"
           (cancelled)="userToDelete.set(null)"
         />

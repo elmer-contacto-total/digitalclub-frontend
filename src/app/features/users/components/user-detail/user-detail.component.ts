@@ -90,8 +90,8 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
               }
               @if (canDelete()) {
                 <button class="btn btn-danger" (click)="confirmDelete()">
-                  <i class="ph ph-trash"></i>
-                  Eliminar
+                  <i class="ph ph-user-minus"></i>
+                  Desactivar
                 </button>
               }
             </div>
@@ -284,10 +284,10 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
       @if (showDeleteConfirm()) {
         <app-confirm-dialog
           [isOpen]="true"
-          title="Eliminar Usuario"
-          [message]="'¿Estás seguro de eliminar a ' + getFullName(user()!) + '? Esta acción desactivará al usuario.'"
+          title="Desactivar Usuario"
+          [message]="'¿Estás seguro de desactivar a ' + getFullName(user()!) + '? El usuario no podrá iniciar sesión.'"
           type="danger"
-          confirmLabel="Eliminar"
+          confirmLabel="Desactivar"
           (confirmed)="deleteUser()"
           (cancelled)="showDeleteConfirm.set(false)"
         />
