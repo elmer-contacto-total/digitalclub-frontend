@@ -35,7 +35,8 @@ export const INTERNAL_USERS_ROUTES: Routes = [
   {
     path: '',
     loadComponent: () => import('./components/internal-users/internal-users.component').then(m => m.InternalUsersComponent),
-    title: 'Usuarios Internos - MWS'
+    title: 'Usuarios Internos - MWS',
+    canActivate: [roleGuard([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.STAFF])]
   }
 ];
 

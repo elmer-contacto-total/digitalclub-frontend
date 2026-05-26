@@ -295,22 +295,14 @@ export const SIDEBAR_CONFIG: Record<string, NavSection[]> = {
     }
   ],
 
-  // ===== STAFF =====
-  // PARIDAD: _sidebar_staff.html.erb
+  // ===== STAFF (Seguridad) =====
+  // Solo acceso a gestión de usuarios internos
   staff: [
     {
-      id: 'dashboard',
-      title: 'TABLERO',
+      id: 'internal',
+      title: 'SEGURIDAD',
       items: [
-        { id: 'dashboard', label: 'Tablero', icon: 'ph-house', route: '/app/dashboard' }
-      ]
-    },
-    {
-      id: 'tables',
-      title: 'TABLAS',
-      items: [
-        { id: 'users', label: 'Usuarios', icon: 'ph-users', route: '/app/users', badgeKey: 'usersCount' },
-        { id: 'imports', label: 'Importaciones', icon: 'ph-download', route: '/app/imports', badgeKey: 'importsCount' }
+        { id: 'internal-users', label: 'Usuarios Internos', icon: 'ph-user-gear', route: '/app/internal_users', badgeKey: 'internalUsersCount' }
       ]
     },
     {

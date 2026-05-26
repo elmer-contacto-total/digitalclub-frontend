@@ -1018,6 +1018,7 @@ export class UserDetailComponent implements OnInit, OnDestroy {
 
     if (current.role === UserRole.SUPER_ADMIN) return true;
     if (current.role === UserRole.ADMIN && user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.ADMIN) return true;
+    if (current.role === UserRole.STAFF && user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.ADMIN) return true;
 
     return false;
   }
