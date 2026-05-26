@@ -9,6 +9,7 @@ import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { UserService, PaginationParams } from '../../../../core/services/user.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { ToastService } from '../../../../core/services/toast.service';
 import { UserListItem, UserRole, UserStatus, RoleUtils, getFullName } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
@@ -108,6 +109,11 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                     <a [routerLink]="['/app/users', user.id, 'edit']" [queryParams]="{ from: 'internal' }" class="action-btn" title="Editar">
                       <i class="ph ph-pencil"></i>
                     </a>
+                    @if (canDeactivate(user)) {
+                      <button class="action-btn action-btn-danger" title="Desactivar" (click)="confirmDeactivate(user)">
+                        <i class="ph ph-prohibit"></i>
+                      </button>
+                    }
                   </td>
                 </tr>
               }
@@ -129,6 +135,24 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
         </div>
       }
     </div>
+
+    @if (userToDeactivate()) {
+      <div class="modal-overlay" (click)="userToDeactivate.set(null)">
+        <div class="modal-dialog" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>Desactivar Usuario</h3>
+          </div>
+          <div class="modal-body">
+            <p>¿Desactivar a <strong>{{ getFullName(userToDeactivate()!) }}</strong>?</p>
+            <p class="modal-hint">El usuario no podrá iniciar sesión.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" (click)="userToDeactivate.set(null)">Cancelar</button>
+            <button class="btn btn-danger" (click)="doDeactivate()">Desactivar</button>
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     .internal-users-container { padding: 24px; background: var(--bg-base); min-height: 100%; }
@@ -162,18 +186,31 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
     .status-badge.status-0 { background: var(--success-subtle); color: var(--success-text); }
     .status-badge.status-1 { background: var(--error-subtle); color: var(--error-text); }
     .actions-col { width: 120px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: var(--bg-subtle); color: var(--fg-muted); text-decoration: none; }
+    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: var(--bg-subtle); color: var(--fg-muted); text-decoration: none; border: none; cursor: pointer; }
     .action-btn:hover { background: var(--accent-default); color: white; }
+    .action-btn-danger:hover { background: var(--error-default, #dc2626); color: white; }
     .table-footer { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; background: var(--table-header-bg); border-top: 1px solid var(--border-default); }
     .records-info { font-size: 14px; color: var(--fg-muted); }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-dialog { background: var(--card-bg); border-radius: 12px; padding: 24px; min-width: 360px; max-width: 480px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .modal-header h3 { margin: 0 0 16px 0; font-size: 18px; font-weight: 600; color: var(--fg-default); }
+    .modal-body p { margin: 0 0 8px 0; color: var(--fg-default); }
+    .modal-hint { color: var(--fg-muted); font-size: 14px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border-default); color: var(--fg-default); cursor: pointer; }
+    .btn-ghost:hover { background: var(--bg-subtle); }
+    .btn-danger { background: var(--error-default, #dc2626); color: white; border: none; cursor: pointer; }
+    .btn-danger:hover { opacity: 0.9; }
   `]
 })
 export class InternalUsersComponent implements OnInit {
   private userService = inject(UserService);
   private authService = inject(AuthService);
+  private toastService = inject(ToastService);
 
   users = signal<UserListItem[]>([]);
   totalRecords = signal(0);
+  userToDeactivate = signal<UserListItem | null>(null);
   isLoading = signal(false);
   searchTerm = signal('');
   currentPage = signal(1);
@@ -222,6 +259,30 @@ export class InternalUsersComponent implements OnInit {
   }
 
   isStaff(): boolean { return this.authService.currentUser()?.role === UserRole.STAFF; }
+
+  canDeactivate(user: UserListItem): boolean {
+    const current = this.authService.currentUser();
+    if (!current || current.id === user.id) return false;
+    if (current.role === UserRole.SUPER_ADMIN) return true;
+    if (current.role === UserRole.ADMIN) return user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.ADMIN;
+    if (current.role === UserRole.STAFF) return user.role !== UserRole.SUPER_ADMIN && user.role !== UserRole.ADMIN;
+    return false;
+  }
+
+  confirmDeactivate(user: UserListItem): void { this.userToDeactivate.set(user); }
+
+  doDeactivate(): void {
+    const user = this.userToDeactivate();
+    if (!user) return;
+    this.userService.deleteUser(user.id).subscribe({
+      next: () => {
+        this.toastService.show('success', 'Usuario desactivado');
+        this.userToDeactivate.set(null);
+        this.loadUsers();
+      },
+      error: () => this.toastService.show('error', 'Error al desactivar el usuario')
+    });
+  }
 
   getFullName(user: UserListItem): string { return getFullName(user); }
   getInitials(user: UserListItem): string { return (user.firstName?.charAt(0) || '') + (user.lastName?.charAt(0) || ''); }
