@@ -26,6 +26,7 @@ export type ImportStatus =
   | 'status_new'
   | 'status_validating'
   | 'status_valid'
+  | 'status_invalid'
   | 'status_error'
   | 'status_processing'
   | 'status_completed';
@@ -418,6 +419,7 @@ export class ImportService {
       'status_new': 'Nuevo',
       'status_validating': 'Validando',
       'status_valid': 'Válido',
+      'status_invalid': 'Inválido',
       'status_error': 'Error',
       'status_processing': 'Procesando',
       'status_completed': 'Completado'
@@ -433,6 +435,7 @@ export class ImportService {
       'status_new': 'badge-secondary',
       'status_validating': 'badge-warning',
       'status_valid': 'badge-success',
+      'status_invalid': 'badge-danger',
       'status_error': 'badge-danger',
       'status_processing': 'badge-info',
       'status_completed': 'badge-success'
@@ -451,6 +454,6 @@ export class ImportService {
    * Helper: Verificar si la importación está completa
    */
   isComplete(status: ImportStatus): boolean {
-    return status === 'status_completed' || status === 'status_error';
+    return status === 'status_completed' || status === 'status_error' || status === 'status_invalid';
   }
 }
