@@ -95,7 +95,7 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 
         <!-- Actions -->
         <div class="form-actions">
-          @if (importData()?.status === 'status_valid') {
+          @if (importData()?.status === 'status_valid' || importData()?.status === 'status_invalid') {
             <a [routerLink]="['/app/imports', importData()?.id, 'preview']" class="btn-primary">
               <i class="ph ph-eye"></i>
               Ver validación

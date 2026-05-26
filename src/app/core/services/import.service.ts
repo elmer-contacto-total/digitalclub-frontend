@@ -419,7 +419,7 @@ export class ImportService {
       'status_new': 'Nuevo',
       'status_validating': 'Validando',
       'status_valid': 'Válido',
-      'status_invalid': 'Inválido',
+      'status_invalid': 'Con errores',
       'status_error': 'Error',
       'status_processing': 'Procesando',
       'status_completed': 'Completado'
@@ -435,7 +435,7 @@ export class ImportService {
       'status_new': 'badge-secondary',
       'status_validating': 'badge-warning',
       'status_valid': 'badge-success',
-      'status_invalid': 'badge-danger',
+      'status_invalid': 'badge-warning',
       'status_error': 'badge-danger',
       'status_processing': 'badge-info',
       'status_completed': 'badge-success'
