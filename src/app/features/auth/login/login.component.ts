@@ -7,6 +7,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { CurrentVersionService } from '../../../core/services/current-version.service';
 import { parseApiError, AuthErrorCode } from '../../../core/models/auth.model';
 import { LogoComponent } from '../../../shared/components/logo/logo.component';
+import { environment } from '../../../../environments/environment';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
 
@@ -28,7 +29,8 @@ export class LoginComponent {
   isLoading = signal(false);
   showPassword = signal(false);
   errorMessage = signal<string | null>(null);
-  selectedChannel = signal<'sms' | 'email'>('sms');
+  smsOtpEnabled = environment.smsOtpEnabled;
+  selectedChannel = signal<'sms' | 'email'>(environment.smsOtpEnabled ? 'sms' : 'email');
 
   constructor() {
     this.loginForm = this.fb.group({

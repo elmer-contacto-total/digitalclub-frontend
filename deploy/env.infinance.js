@@ -8,4 +8,5 @@
   window.__env.appName = 'InFinance';
   window.__env.title = 'InFinance Cobranza';
   window.__env.simplifiedRoles = true;
+  window.__env.smsOtpEnabled = false;
 })(window);

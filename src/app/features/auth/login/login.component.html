@@ -87,23 +87,25 @@
       </div>
 
       <!-- OTP Channel Selector -->
-      <div class="form-group">
-        <label class="form-label">Recibir código por:</label>
-        <div class="channel-selector">
-          <button type="button" class="channel-btn"
-            [class.active]="selectedChannel() === 'sms'"
-            (click)="selectChannel('sms')">
-            <i class="ph ph-device-mobile-camera"></i>
-            SMS
-          </button>
-          <button type="button" class="channel-btn"
-            [class.active]="selectedChannel() === 'email'"
-            (click)="selectChannel('email')">
-            <i class="ph ph-envelope-simple"></i>
-            Correo
-          </button>
+      @if (smsOtpEnabled) {
+        <div class="form-group">
+          <label class="form-label">Recibir código por:</label>
+          <div class="channel-selector">
+            <button type="button" class="channel-btn"
+              [class.active]="selectedChannel() === 'sms'"
+              (click)="selectChannel('sms')">
+              <i class="ph ph-device-mobile-camera"></i>
+              SMS
+            </button>
+            <button type="button" class="channel-btn"
+              [class.active]="selectedChannel() === 'email'"
+              (click)="selectChannel('email')">
+              <i class="ph ph-envelope-simple"></i>
+              Correo
+            </button>
+          </div>
         </div>
-      </div>
+      }
 
       <!-- Submit Button -->
       <button
