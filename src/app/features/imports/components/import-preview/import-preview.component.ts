@@ -48,7 +48,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
             </p>
           </div>
         </div>
-      } @else if (importData()?.status === 'status_valid' && invalidCount() === 0) {
+      } @else if (importData()?.status === 'status_valid') {
         <div class="status-banner status-banner-success">
           <i class="ph ph-check-circle"></i>
           <div>
@@ -56,7 +56,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
             <p>Se encontraron <strong>{{ validCount() }}</strong> registros listos para importar.</p>
           </div>
         </div>
-      } @else if (importData()?.status === 'status_valid' && invalidCount() > 0) {
+      } @else if (importData()?.status === 'status_invalid') {
         <div class="status-banner status-banner-warning">
           <i class="ph ph-warning"></i>
           <div>
@@ -210,7 +210,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
 
       <!-- Actions -->
       <div class="form-actions">
-        @if (importData()?.status === 'status_valid') {
+        @if (importData()?.status === 'status_valid' || importData()?.status === 'status_invalid') {
           <a routerLink="/app/imports/new" [queryParams]="{import_type: 'users'}" class="btn-ghost">Cancelar</a>
           <button type="button" class="btn-primary" (click)="confirmImport()"
             [disabled]="isProcessing() || unmatchedColumns().length > 0 || invalidCount() > 0">
@@ -748,7 +748,7 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
         }
 
         // Load temp users for preview when validation is complete
-        if (data.status === 'status_valid' || data.status === 'status_error') {
+        if (data.status === 'status_valid' || data.status === 'status_invalid' || data.status === 'status_error') {
           this.loadTempUsers();
         }
       },
@@ -812,7 +812,7 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
           return data;
         });
 
-        if (status.status === 'status_valid' || status.status === 'status_error' || status.status === 'status_completed') {
+        if (status.status === 'status_valid' || status.status === 'status_invalid' || status.status === 'status_error' || status.status === 'status_completed') {
           this.isValidating.set(false);
           this.loadImportData();
         }
@@ -919,7 +919,7 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
   // ===== Process =====
 
   confirmImport(): void {
-    if (this.importData()?.status !== 'status_valid') return;
+    if (this.importData()?.status !== 'status_valid' && this.importData()?.status !== 'status_invalid') return;
     if (this.invalidCount() > 0) return;
 
     this.isProcessing.set(true);
