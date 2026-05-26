@@ -9,7 +9,7 @@
     "node_modules/**/*",
     "package.json"
   ],
-  "artifactName": "InFinance-Desktop-${version}.${ext}",
+  "artifactName": "InFinance-Desktop.${ext}",
   "win": {
     "icon": "build/icon.ico",
     "target": [

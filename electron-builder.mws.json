@@ -9,7 +9,7 @@
     "node_modules/**/*",
     "package.json"
   ],
-  "artifactName": "MWS-Desktop-${version}.${ext}",
+  "artifactName": "MWS-Desktop.${ext}",
   "win": {
     "icon": "build/icon.ico",
     "target": [

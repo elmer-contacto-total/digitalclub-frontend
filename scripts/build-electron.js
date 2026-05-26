@@ -10,7 +10,7 @@ const PROFILES = {
     productName: 'MWS Desktop',
     appId: 'com.contactototal.mws-desktop',
     output: 'release/mws',
-    artifactName: 'MWS-Desktop-${version}.${ext}',
+    artifactName: 'MWS-Desktop.${ext}',
     shortcutName: 'MWS Desktop'
   },
   infinance: {
@@ -18,7 +18,7 @@ const PROFILES = {
     productName: 'InFinance Desktop',
     appId: 'com.innovag.infinance-desktop',
     output: 'release/infinance',
-    artifactName: 'InFinance-Desktop-${version}.${ext}',
+    artifactName: 'InFinance-Desktop.${ext}',
     shortcutName: 'InFinance Desktop'
   }
 };

@@ -28,6 +28,7 @@
     "directories": {
       "output": "release"
     },
+    "artifactName": "MWS-Desktop.${ext}",
     "files": [
       "dist/**/*",
       "node_modules/**/*",
