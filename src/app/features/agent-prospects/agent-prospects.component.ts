@@ -290,16 +290,39 @@ interface GenerateImportCsvResponse {
       <div class="modal-container modal-xl">
         <div class="modal-content">
           <div class="modal-header">
-            <h5>Convertir Prospectos a CSV de Importación</h5>
+            <div>
+              <h5>Convertir Prospectos a CSV de Importación</h5>
+              <small class="modal-scope-note">
+                <i class="ph ph-info"></i>
+                {{ modalSnapshotCount }} prospecto(s) · página actual
+                @if (totalRecords > pageSize) {
+                  · {{ totalRecords }} en total (usa el buscador principal para otro lote)
+                }
+              </small>
+            </div>
             <button class="close-btn" (click)="attemptCloseConversionModal()">
               <i class="ph ph-x"></i>
             </button>
           </div>
           <div class="modal-body">
             <div class="modal-filters">
+              <div class="modal-search-box">
+                <i class="ph ph-magnifying-glass"></i>
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  placeholder="Buscar por nombre o teléfono..."
+                  [(ngModel)]="modalSearch"
+                />
+                @if (modalSearch) {
+                  <button class="modal-search-clear" (click)="modalSearch = ''" title="Limpiar búsqueda">
+                    <i class="ph ph-x"></i>
+                  </button>
+                }
+              </div>
               <label class="toggle-label">
                 <input type="checkbox" [(ngModel)]="showOnlyUnassociated" />
-                Mostrar solo sin asociar
+                Solo sin asociar
               </label>
             </div>
             @for (group of convGroups; track $index; let gIdx = $index) {
@@ -332,7 +355,7 @@ interface GenerateImportCsvResponse {
                     </thead>
                     <tbody>
                       @for (item of group.items; track item.prospect.id; let iIdx = $index) {
-                        @if (!showOnlyUnassociated || item.user === null) {
+                        @if (matchesModalSearch(item) && (!showOnlyUnassociated || item.user === null)) {
                         <tr>
                           <td>{{ item.prospect.name || 'Sin nombre' }}</td>
                           <td>{{ item.prospect.phone }}</td>
@@ -384,6 +407,17 @@ interface GenerateImportCsvResponse {
                         </tr>
                         }
                       }
+                      @if (hasNoVisibleItems(group)) {
+                        <tr>
+                          <td colspan="4" class="empty-cell">
+                            @if (modalSearch) {
+                              Sin resultados para "{{ modalSearch }}"
+                            } @else {
+                              Todos los prospectos ya están asociados
+                            }
+                          </td>
+                        </tr>
+                      }
                     </tbody>
                   </table>
                 </div>
@@ -417,7 +451,14 @@ interface GenerateImportCsvResponse {
             }
           </div>
           <div class="modal-footer">
-            <span class="assoc-count">{{ countTotalAssociations() }} de {{ conversionProspectsCount() }} prospectos asociados</span>
+            <span class="assoc-count">
+              @if (modalSearch) {
+                <span class="filter-active-badge">
+                  <i class="ph ph-funnel-simple"></i> "{{ modalSearch }}"
+                </span>
+              }
+              {{ countTotalAssociations() }} de {{ conversionProspectsCount() }} asociados
+            </span>
             <div class="footer-actions">
               <button class="btn btn-secondary" (click)="attemptCloseConversionModal()">Cancelar</button>
               <button
@@ -519,6 +560,8 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
   skippedItems = signal<SkippedAssociation[]>([]);
   showSkippedPanel = signal(false);
   showOnlyUnassociated = false;
+  modalSearch = '';
+  private modalSnapshotCount = 0;
   eligibleCount = computed(() => this.prospects().filter(p => !p.upgradedToUser).length);
   private searchTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -666,6 +709,7 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
 
   openConversionModal(): void {
     const snapshot = this.prospects().filter(p => !p.upgradedToUser);
+    this.modalSnapshotCount = snapshot.length;
     const items: ConvGroupItem[] = snapshot.map(p => ({
       prospect: p,
       user: null,
@@ -687,6 +731,7 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
     this.showSkippedPanel.set(false);
     this.skippedItems.set([]);
     this.showOnlyUnassociated = false;
+    this.modalSearch = '';
     this.searchTimers.forEach(t => clearTimeout(t));
     this.searchTimers.clear();
   }
@@ -696,7 +741,7 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
    * so a misclick on the backdrop doesn't wipe the user's work.
    */
   attemptCloseConversionModal(): void {
-    if (this.countTotalAssociations() > 0) {
+    if (this.countAllAssociations() > 0) {
       const confirmed = window.confirm(
         '¿Cerrar sin generar el CSV? Se perderán las asociaciones realizadas.'
       );
@@ -761,13 +806,32 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
     this.convGroups[gIdx].items[iIdx].user = null;
   }
 
-  countTotalAssociations(): number {
+  matchesModalSearch(item: ConvGroupItem): boolean {
+    const term = this.modalSearch.trim().toLowerCase();
+    if (!term) return true;
+    return (item.prospect.name?.toLowerCase().includes(term) ?? false) ||
+           item.prospect.phone.includes(term);
+  }
+
+  hasNoVisibleItems(group: ConvGroup): boolean {
+    return group.items.every(i =>
+      !this.matchesModalSearch(i) || (this.showOnlyUnassociated && i.user !== null)
+    );
+  }
+
+  private countAllAssociations(): number {
     return this.convGroups.reduce((sum, g) =>
       sum + g.items.filter(i => i.user !== null).length, 0);
   }
 
+  countTotalAssociations(): number {
+    return this.convGroups.reduce((sum, g) =>
+      sum + g.items.filter(i => i.user !== null && this.matchesModalSearch(i)).length, 0);
+  }
+
   conversionProspectsCount(): number {
-    return this.convGroups.length > 0 ? this.convGroups[0].items.length : 0;
+    if (this.convGroups.length === 0) return 0;
+    return this.convGroups[0].items.filter(i => this.matchesModalSearch(i)).length;
   }
 
   generateImportCsv(): void {
@@ -775,7 +839,7 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
       .map(g => ({
         templateId: g.templateId,
         associations: g.items
-          .filter(i => i.user !== null)
+          .filter(i => i.user !== null && this.matchesModalSearch(i))
           .map(i => ({ prospectId: i.prospect.id, userId: i.user!.id }))
       }))
       .filter(g => g.associations.length > 0);

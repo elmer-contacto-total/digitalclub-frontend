@@ -599,11 +599,56 @@ h1 {
   line-height: 1;
 }
 
-// Toggle de filtro en el modal
+// Filtros en el modal: barra horizontal con búsqueda + toggle
 .modal-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
   margin-bottom: var(--space-3);
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border-default);
+}
+
+.modal-search-box {
+  position: relative;
+  flex: 1;
+  min-width: 180px;
+  max-width: 280px;
+
+  i.ph-magnifying-glass {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--fg-muted);
+    font-size: 14px;
+    pointer-events: none;
+  }
+
+  input {
+    width: 100%;
+    padding-left: 28px !important;
+    padding-right: 28px !important;
+  }
+}
+
+.modal-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--fg-muted);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  line-height: 1;
+
+  &:hover { color: var(--fg-default); }
 }
 
 .toggle-label {
@@ -613,11 +658,40 @@ h1 {
   font-size: var(--text-sm);
   color: var(--fg-muted);
   cursor: pointer;
+  white-space: nowrap;
 
   input[type="checkbox"] {
     cursor: pointer;
     accent-color: var(--accent-default);
   }
+}
+
+// Nota de contexto en el header del modal (página actual)
+.modal-scope-note {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--fg-subtle);
+  margin-top: 3px;
+
+  i { vertical-align: middle; margin-right: 2px; }
+}
+
+// Badge de filtro activo en el footer
+.filter-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-subtle);
+  color: var(--accent-default);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  margin-right: var(--space-2);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 // Panel de omitidos post-generación
