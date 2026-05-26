@@ -8,6 +8,7 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { UserService, PaginationParams } from '../../../../core/services/user.service';
+import { AuthService } from '../../../../core/services/auth.service';
 import { UserListItem, UserRole, UserStatus, RoleUtils, getFullName } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
@@ -36,10 +37,12 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
             <i class="ph ph-plus"></i>
             Crear Usuario
           </a>
-          <a routerLink="/app/imports/new" [queryParams]="{ import_type: 'users' }" class="btn btn-secondary">
-            <i class="ph ph-upload-simple"></i>
-            Importar
-          </a>
+          @if (!isStaff()) {
+            <a routerLink="/app/imports/new" [queryParams]="{ import_type: 'users' }" class="btn btn-secondary">
+              <i class="ph ph-upload-simple"></i>
+              Importar
+            </a>
+          }
         </div>
       </div>
 
@@ -167,6 +170,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
 })
 export class InternalUsersComponent implements OnInit {
   private userService = inject(UserService);
+  private authService = inject(AuthService);
 
   users = signal<UserListItem[]>([]);
   totalRecords = signal(0);
@@ -216,6 +220,8 @@ export class InternalUsersComponent implements OnInit {
     this.currentPage.set(1);
     this.loadUsers();
   }
+
+  isStaff(): boolean { return this.authService.currentUser()?.role === UserRole.STAFF; }
 
   getFullName(user: UserListItem): string { return getFullName(user); }
   getInitials(user: UserListItem): string { return (user.firstName?.charAt(0) || '') + (user.lastName?.charAt(0) || ''); }
