@@ -1245,6 +1245,56 @@ function createWhatsAppView(): void {
   // Inyectar anti-fingerprinting único ANTES de que cargue cualquier script de WhatsApp
   const evasionScript = generateEvasionScript(userFingerprint);
 
+  // CSS para ocultar botones del nav superior de WhatsApp Web que no se usan:
+  // Estados / Status, Canales / Channels, Comunidades / Communities,
+  // Contenido multimedia / Media y Tú / You (perfil propio).
+  // Estrategia multicapa: data-testid + aria-label en ES e EN + ícono svg title.
+  const hideNavButtonsCSS = `
+    (function() {
+      const style = document.createElement('style');
+      style.textContent = \`
+        /* Estados / Status */
+        [data-testid="status"],
+        [data-testid="status-v3"],
+        button[aria-label="Estado"],
+        button[aria-label="Status"],
+        li[title="Estado"],
+        li[title="Status"] { display: none !important; }
+
+        /* Canales / Channels (newsletter) */
+        [data-testid="newsletter"],
+        [data-testid="channels"],
+        button[aria-label="Canales"],
+        button[aria-label="Channels"],
+        li[title="Canales"],
+        li[title="Channels"] { display: none !important; }
+
+        /* Comunidades / Communities */
+        [data-testid="communities"],
+        button[aria-label="Comunidades"],
+        button[aria-label="Communities"],
+        li[title="Comunidades"],
+        li[title="Communities"] { display: none !important; }
+
+        /* Contenido multimedia / Starred messages (Media) */
+        [data-testid="starred-messages-btn"],
+        button[aria-label="Contenido multimedia"],
+        button[aria-label="Media"],
+        li[title="Contenido multimedia"],
+        li[title="Media"] { display: none !important; }
+
+        /* Tú / You (perfil propio — icono de la esquina) */
+        [data-testid="me-from-you"],
+        button[aria-label="Tú"],
+        button[aria-label="You"],
+        li[title="Tú"],
+        li[title="You"] { display: none !important; }
+      \`;
+      document.head.appendChild(style);
+      console.log('[MWS] Botones de nav WhatsApp ocultados');
+    })();
+  `;
+
   // CSS para ocultar el botón de adjuntar archivos (+) en WhatsApp Web
   const hideAttachButtonCSS = `
     (function() {
@@ -1273,6 +1323,10 @@ function createWhatsAppView(): void {
     // Aplicar anti-fingerprinting
     whatsappView?.webContents.executeJavaScript(evasionScript, true)
       .catch(err => console.error('[MWS] Error aplicando anti-fingerprinting:', err));
+
+    // Ocultar botones de nav (Estados, Canales, Comunidades, Multimedia, Tú)
+    whatsappView?.webContents.executeJavaScript(hideNavButtonsCSS, true)
+      .catch(err => console.error('[MWS] Error ocultando botones de nav:', err));
 
     // Ocultar botón de adjuntar
     whatsappView?.webContents.executeJavaScript(hideAttachButtonCSS, true)

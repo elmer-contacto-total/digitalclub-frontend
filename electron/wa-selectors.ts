@@ -53,4 +53,11 @@ export const WA_SELECTORS = {
 
   // Download blocking CSS — media-security.ts: HIDE_DOWNLOAD_CSS
   ATTACH_BTN:      '[data-testid="clip"], [data-testid="plus-rounded"]',
+
+  // Nav buttons hidden in Electron (main.ts: hideNavButtonsCSS)
+  NAV_STATUS:      '[data-testid="status"], [data-testid="status-v3"]',
+  NAV_CHANNELS:    '[data-testid="newsletter"], [data-testid="channels"]',
+  NAV_COMMUNITIES: '[data-testid="communities"]',
+  NAV_MEDIA:       '[data-testid="starred-messages-btn"]',
+  NAV_YOU:         '[data-testid="me-from-you"]',
 } as const;
