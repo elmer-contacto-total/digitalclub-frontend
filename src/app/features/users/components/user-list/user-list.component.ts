@@ -17,6 +17,9 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { environment } from '../../../../../environments/environment';
+import { splitPhone, joinPhone, DEFAULT_COUNTRY_CODE } from '../../../../core/utils/phone.util';
+
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
 
 @Component({
   selector: 'app-user-list',
@@ -255,6 +258,37 @@ import { environment } from '../../../../../environments/environment';
                 <!-- Personal Info -->
                 <div class="form-section">
                   <h3>Información Personal</h3>
+
+                  <!-- Avatar Upload -->
+                  <div class="avatar-upload-row">
+                    <div class="avatar-preview" (click)="avatarInput.click()">
+                      @if (avatarPreview()) {
+                        <img [src]="avatarPreview()" alt="Avatar" />
+                      } @else if (existingAvatarUrl()) {
+                        <img [src]="existingAvatarUrl()" alt="Avatar" />
+                      } @else {
+                        <i class="ph ph-user"></i>
+                      }
+                    </div>
+                    <div class="avatar-actions">
+                      <button type="button" class="btn btn-secondary btn-sm" (click)="avatarInput.click()">
+                        <i class="ph ph-camera"></i>
+                        {{ existingAvatarUrl() || avatarPreview() ? 'Cambiar foto' : 'Subir foto' }}
+                      </button>
+                      @if (avatarPreview()) {
+                        <button type="button" class="btn-link" (click)="removeAvatar()">Quitar</button>
+                      }
+                      <span class="field-hint">JPG, PNG, GIF o WebP. Máximo 5MB.</span>
+                    </div>
+                    <input
+                      #avatarInput
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      style="display: none"
+                      (change)="onAvatarSelected($event)"
+                    />
+                  </div>
+
                   <div class="form-row">
                     <div class="form-group">
                       <label>Nombre <span class="required">*</span></label>
@@ -275,21 +309,39 @@ import { environment } from '../../../../../environments/environment';
                   </div>
                   <div class="form-row">
                     <div class="form-group">
-                      <label>Email</label>
+                      <label>Email <span class="required">*</span></label>
                       <input
                         type="email"
-                        [value]="editingUser()?.email"
-                        readonly
-                        class="readonly"
+                        [(ngModel)]="editForm.email"
+                        placeholder="correo@ejemplo.com"
                       />
                     </div>
                     <div class="form-group">
                       <label>Teléfono</label>
+                      <div class="phone-input-row">
+                        <input
+                          type="text"
+                          [(ngModel)]="editForm.phoneCountryCode"
+                          class="phone-code-input"
+                          placeholder="51"
+                        />
+                        <input
+                          type="tel"
+                          [(ngModel)]="editForm.phone"
+                          placeholder="999 999 999"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group full-width">
+                      <label>Nombre en archivo de importación</label>
                       <input
-                        type="tel"
-                        [(ngModel)]="editForm.phone"
-                        placeholder="+51 999 999 999"
+                        type="text"
+                        [(ngModel)]="editForm.importString"
+                        placeholder="Nombre usado para identificar al usuario en importaciones"
                       />
+                      <span class="field-hint">Este nombre se usa para hacer match durante la importación de datos</span>
                     </div>
                   </div>
                 </div>
@@ -840,6 +892,10 @@ import { environment } from '../../../../../environments/environment';
     .form-group {
       margin-bottom: 16px;
 
+      &.full-width {
+        grid-column: 1 / -1;
+      }
+
       label {
         display: block;
         margin-bottom: 6px;
@@ -881,6 +937,83 @@ import { environment } from '../../../../../environments/environment';
 
       select {
         cursor: pointer;
+      }
+
+      .field-hint {
+        display: block;
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--fg-subtle);
+      }
+    }
+
+    /* Phone (código país + número) */
+    .phone-input-row {
+      display: flex;
+      gap: 8px;
+
+      .phone-code-input {
+        width: 64px;
+        flex-shrink: 0;
+      }
+    }
+
+    /* Avatar upload (mismos campos que el formulario completo) */
+    .avatar-upload-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .avatar-preview {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--bg-subtle);
+      border: 2px dashed var(--border-default);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      overflow: hidden;
+      flex-shrink: 0;
+      transition: border-color 0.2s;
+
+      &:hover { border-color: var(--accent-default); }
+
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      i {
+        font-size: 28px;
+        color: var(--fg-subtle);
+      }
+    }
+
+    .avatar-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+
+      .btn-sm {
+        padding: 6px 14px;
+        font-size: 13px;
+      }
+
+      .btn-link {
+        background: none;
+        border: none;
+        color: var(--error-default);
+        cursor: pointer;
+        font-size: 13px;
+        padding: 0;
+        text-align: left;
+
+        &:hover { text-decoration: underline; }
       }
     }
 
@@ -1003,11 +1136,19 @@ export class UserListComponent implements OnInit, OnDestroy {
   editError = signal('');
   availableManagers = signal<UserOption[]>([]);
 
+  // Avatar (mismos campos que el formulario completo de edición)
+  avatarFile = signal<File | null>(null);
+  avatarPreview = signal<string | null>(null);
+  existingAvatarUrl = signal<string | null>(null);
+
   // Edit form data
   editForm = {
     firstName: '',
     lastName: '',
+    email: '',
+    phoneCountryCode: DEFAULT_COUNTRY_CODE,
     phone: '',
+    importString: '',
     role: 0 as UserRole,
     managerId: null as number | null,
     status: 0 as UserStatus
@@ -1209,12 +1350,19 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.editingUser.set(user);
     this.editError.set('');
     this.isLoadingEdit.set(true);
+    this.avatarFile.set(null);
+    this.avatarPreview.set(null);
+    this.existingAvatarUrl.set(user.avatarData || null);
 
-    // Pre-fill form with list data
+    // Pre-fill form with list data (el teléfono se separa en código + número)
+    const listSplit = splitPhone(user.phone);
     this.editForm = {
       firstName: user.firstName || '',
       lastName: user.lastName || '',
-      phone: user.phone || '',
+      email: user.email || '',
+      phoneCountryCode: listSplit.code,
+      phone: listSplit.number,
+      importString: '',
       role: user.role,
       managerId: user.managerId || null,
       status: user.status
@@ -1226,14 +1374,19 @@ export class UserListComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: (response) => {
         const fullUser = response.user || response;
+        const { code, number } = splitPhone(fullUser.phone);
         this.editForm = {
           firstName: fullUser.firstName || '',
           lastName: fullUser.lastName || '',
-          phone: fullUser.phone || '',
+          email: fullUser.email || '',
+          phoneCountryCode: code,
+          phone: number,
+          importString: (fullUser as any).importString || '',
           role: typeof fullUser.role === 'number' ? fullUser.role : 0,
           managerId: fullUser.managerId || null,
           status: typeof fullUser.status === 'number' ? fullUser.status : 0
         };
+        this.existingAvatarUrl.set((fullUser as any).avatarData || null);
         this.isLoadingEdit.set(false);
         this.loadAvailableManagers();
       },
@@ -1248,6 +1401,36 @@ export class UserListComponent implements OnInit, OnDestroy {
   closeEditModal(): void {
     this.editingUser.set(null);
     this.editError.set('');
+    this.avatarFile.set(null);
+    this.avatarPreview.set(null);
+    this.existingAvatarUrl.set(null);
+  }
+
+  onAvatarSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      this.editError.set('Tipo de archivo no permitido. Use JPG, PNG, GIF o WebP.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      this.editError.set('El archivo excede el tamaño máximo de 5MB.');
+      return;
+    }
+
+    this.avatarFile.set(file);
+    const reader = new FileReader();
+    reader.onload = () => this.avatarPreview.set(reader.result as string);
+    reader.readAsDataURL(file);
+    input.value = '';
+  }
+
+  removeAvatar(): void {
+    this.avatarFile.set(null);
+    this.avatarPreview.set(null);
   }
 
   onEditRoleChange(): void {
@@ -1268,9 +1451,11 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   isEditFormValid(): boolean {
+    const email = this.editForm.email?.trim() || '';
     return !!(
       this.editForm.firstName?.trim() &&
-      this.editForm.lastName?.trim()
+      this.editForm.lastName?.trim() &&
+      EMAIL_REGEX.test(email)
     );
   }
 
@@ -1282,22 +1467,31 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.editError.set('');
 
     const request: UpdateUserRequest = {
+      email: this.editForm.email.trim(),
       firstName: this.editForm.firstName.trim(),
       lastName: this.editForm.lastName.trim(),
-      phone: this.editForm.phone?.trim() || '',
+      phone: joinPhone(this.editForm.phoneCountryCode, this.editForm.phone),
       role: this.editForm.role,
       status: this.editForm.status,
-      managerId: this.editForm.managerId || undefined
+      managerId: this.editForm.managerId || undefined,
+      importString: this.editForm.importString?.trim() || undefined
     };
 
     this.userService.updateUser(user.id, request).pipe(
       takeUntil(this.destroy$)
     ).subscribe({
       next: () => {
-        this.isSaving.set(false);
-        this.closeEditModal();
-        this.toast.success('Usuario actualizado correctamente');
-        this.loadUsers();
+        const file = this.avatarFile();
+        if (file) {
+          this.userService.uploadAvatar(user.id, file).pipe(
+            takeUntil(this.destroy$)
+          ).subscribe({
+            next: () => this.finishSave(),
+            error: () => this.finishSave()  // usuario actualizado aunque falle el avatar
+          });
+        } else {
+          this.finishSave();
+        }
       },
       error: (err) => {
         console.error('Error updating user:', err);
@@ -1305,6 +1499,13 @@ export class UserListComponent implements OnInit, OnDestroy {
         this.isSaving.set(false);
       }
     });
+  }
+
+  private finishSave(): void {
+    this.isSaving.set(false);
+    this.closeEditModal();
+    this.toast.success('Usuario actualizado correctamente');
+    this.loadUsers();
   }
 
   getFullName(user: UserListItem): string {

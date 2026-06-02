@@ -13,6 +13,7 @@ import { User, UserRole, UserStatus, UserOption, RoleUtils } from '../../../../c
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { translateError } from '../../../../core/interceptors/error-translations';
 import { environment } from '../../../../../environments/environment';
+import { splitPhone, joinPhone, DEFAULT_COUNTRY_CODE } from '../../../../core/utils/phone.util';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
 
@@ -780,12 +781,16 @@ export class UserFormComponent implements OnInit {
     const roleValue = typeof user.role === 'number' ? user.role : parseInt(String(user.role), 10);
     const statusValue = typeof user.status === 'number' ? user.status : parseInt(String(user.status), 10);
 
+    // El teléfono se guarda en DB con código de país incluido (ej. "51978511383").
+    // Lo separamos para no duplicar el código al guardar.
+    const { code, number } = splitPhone(user.phone);
+
     this.form.patchValue({
       firstName: user.firstName || '',
       lastName: user.lastName || '',
       email: user.email || '',
-      phoneCountryCode: '51',
-      phone: user.phone || '',
+      phoneCountryCode: code || DEFAULT_COUNTRY_CODE,
+      phone: number,
       importString: (user as any).importString || '',
       role: roleValue,
       managerId: user.managerId || null,
@@ -847,10 +852,7 @@ export class UserFormComponent implements OnInit {
   }
 
   private buildFullPhone(): string {
-    const code = (this.form.value.phoneCountryCode || '').replace(/[^0-9]/g, '');
-    const phone = (this.form.value.phone || '').replace(/[^0-9]/g, '');
-    if (!phone) return '';
-    return code ? `${code}${phone}` : phone;
+    return joinPhone(this.form.value.phoneCountryCode, this.form.value.phone);
   }
 
   onSubmit(): void {

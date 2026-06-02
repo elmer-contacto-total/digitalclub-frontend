@@ -95,6 +95,9 @@ export interface UserDetailResponse {
   user: User;
   manager?: UserOption;
   subordinates?: UserListItem[];
+  /** Conteo de subordinados activos (el backend ya no devuelve la lista completa). */
+  subordinatesCount?: number;
+  hasSubordinates?: boolean;
 }
 
 export interface LoginAsResponse {
@@ -181,6 +184,12 @@ export class UserService {
       managerId: request.managerId,
       importString: request.importString
     };
+
+    // El email solo se envía si viene definido; el backend (update) lo aplica
+    // normalizado (lowercase + trim) cuando no está en blanco.
+    if (request.email !== undefined) {
+      backendRequest['email'] = request.email;
+    }
 
     if (request.role !== undefined) {
       backendRequest['role'] = ROLE_TO_STRING[request.role] || 'STANDARD';

@@ -939,10 +939,14 @@ export class UserDetailComponent implements OnInit, OnDestroy {
       next: (response: UserDetailResponse) => {
         this.user.set(response.user);
         this.subordinates.set(response.subordinates || []);
-        this.hasSubordinates.set((response.subordinates || []).length > 0);
+        // El backend ahora devuelve un conteo en vez de la lista completa (perf).
+        // Mantener compatibilidad con la lista por si acaso.
+        const hasSubs = response.hasSubordinates
+          ?? ((response.subordinatesCount ?? response.subordinates?.length ?? 0) > 0);
+        this.hasSubordinates.set(hasSubs);
         this.managerName.set(response.manager?.name || null);
         this.isLoading.set(false);
-        if ((response.subordinates || []).length > 0) {
+        if (hasSubs) {
           this.loadSubordinates();
         }
       },
