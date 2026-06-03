@@ -7,7 +7,7 @@ export const environment = {
   logoPath: null as string | null,
   appName: (_env.appName as string) || 'App',
   title: (_env.title as string) || 'App',
-  version: '1.0.8',
+  version: '1.0.9',
   simplifiedRoles: false,
   smsOtpEnabled: (_env.smsOtpEnabled !== false)
 };

@@ -36,6 +36,27 @@ const PROFILE_ID = profileArg ? profileArg.split('=')[1] : '';
 const userDataName = PROFILE_ID ? `${PRODUCT_NAME} - Perfil ${PROFILE_ID}` : PRODUCT_NAME;
 app.setPath('userData', path.join(app.getPath('appData'), userDataName));
 
+// FIX "el QR de WhatsApp nunca se muestra":
+// Si se abría una segunda instancia del MISMO perfil (doble-clic, relanzar antes
+// de cerrar, o un proceso zombie), las dos compartían la partición persist:whatsapp
+// y la segunda no podía abrir la caché ("Unable to move the cache: Acceso denegado"),
+// dejando WhatsApp Web sin poder inicializar el QR. Forzamos una sola instancia por
+// perfil. Los perfiles explícitos (--profile=N) SÍ pueden correr en paralelo.
+const singleInstanceOk = PROFILE_ID ? true : app.requestSingleInstanceLock();
+if (!singleInstanceOk) {
+  console.log('[MWS] Otra instancia ya está abierta — cerrando esta para evitar conflicto de WhatsApp.');
+  app.quit();
+} else {
+  // Si el usuario intenta abrir otra instancia, enfocamos la ventana existente.
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 // Stored update info (so renderer can pull it if it missed the push)
 let pendingUpdateInfo: any = null;
 let lastHealthReport: any = null;
@@ -1175,7 +1196,11 @@ let waActionReason: string | null = null;
 // DEFENSA: tras este timestamp bloqueamos reloads de nivel superior iniciados por
 // la propia página de WhatsApp (will-navigate). Antes (arranque/login) se permiten.
 let waGuardArmedAt = 0;
-const WA_RELOAD_GUARD = true; // toggle para probar con/sin defensa
+// DESACTIVADO: bloqueaba reloads legítimos de WhatsApp (logout→QR, re-sync tras
+// update, recuperación de estado corrupto) → lista de chats sin actualizar, logout
+// trabado sin QR, y vista en negro al reabrir. Se deja en false; el will-navigate
+// solo registra para diagnóstico, no bloquea.
+const WA_RELOAD_GUARD = false; // toggle para probar con/sin defensa
 
 function logWaDiag(event: string, detail?: unknown): void {
   const ts = new Date().toISOString();
@@ -3321,6 +3346,9 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
 
 // App lifecycle
 app.whenReady().then(async () => {
+  // Segunda instancia del mismo perfil: ya llamamos app.quit(), no inicializar nada.
+  if (!singleInstanceOk) return;
+
   // Generar o cargar fingerprint único para esta instalación
   userFingerprint = getOrCreateFingerprint();
 
