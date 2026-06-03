@@ -233,6 +233,7 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
           title="Desactivar Usuario"
           [message]="'¿Estás seguro de desactivar a ' + getFullName(userToDelete()!) + '? El usuario no podrá iniciar sesión.'"
           type="danger"
+          [showIcon]="false"
           confirmLabel="Desactivar"
           (confirmed)="deleteUser()"
           (cancelled)="userToDelete.set(null)"

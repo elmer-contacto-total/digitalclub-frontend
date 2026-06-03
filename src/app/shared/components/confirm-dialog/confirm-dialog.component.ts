@@ -19,9 +19,11 @@ export type ConfirmDialogType = 'info' | 'warning' | 'danger';
       (closed)="onCancel()"
     >
       <div class="confirm-content">
-        <div class="confirm-icon" [ngClass]="'confirm-icon-' + type()">
-          <i class="ph {{ getIcon() }}"></i>
-        </div>
+        @if (showIcon()) {
+          <div class="confirm-icon" [ngClass]="'confirm-icon-' + type()">
+            <i class="ph {{ getIcon() }}"></i>
+          </div>
+        }
         <p class="confirm-message">{{ message() }}</p>
       </div>
 
@@ -120,6 +122,7 @@ export class ConfirmDialogComponent {
   confirmLabel = input<string>('Confirmar');
   cancelLabel = input<string>('Cancelar');
   isLoading = input<boolean>(false);
+  showIcon = input<boolean>(true);
 
   confirmed = output<void>();
   cancelled = output<void>();

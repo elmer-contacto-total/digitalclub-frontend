@@ -287,6 +287,7 @@ import { ModalComponent } from '../../../../shared/components/modal/modal.compon
           title="Desactivar Usuario"
           [message]="'¿Estás seguro de desactivar a ' + getFullName(user()!) + '? El usuario no podrá iniciar sesión.'"
           type="danger"
+          [showIcon]="false"
           confirmLabel="Desactivar"
           (confirmed)="deleteUser()"
           (cancelled)="showDeleteConfirm.set(false)"

@@ -1165,10 +1165,72 @@ function showRecoveryOverlay(): void {
   mainWindow.webContents.executeJavaScript(recoveryHTML);
 }
 
+// ============================================================
+// DIAGNÓSTICO: detectar cuándo y por qué se "refresca" WhatsApp
+// Loguea a consola y a userData/wa-diagnostics.log con timestamp.
+// `waActionReason` lo setea NUESTRO código antes de provocar una
+// navegación/recreación, para distinguir refresh propio vs de WA.
+// ============================================================
+let waActionReason: string | null = null;
+// DEFENSA: tras este timestamp bloqueamos reloads de nivel superior iniciados por
+// la propia página de WhatsApp (will-navigate). Antes (arranque/login) se permiten.
+let waGuardArmedAt = 0;
+const WA_RELOAD_GUARD = true; // toggle para probar con/sin defensa
+
+function logWaDiag(event: string, detail?: unknown): void {
+  const ts = new Date().toISOString();
+  const reason = waActionReason ? ` reason=${waActionReason}` : '';
+  const extra = detail !== undefined ? ' ' + (() => { try { return JSON.stringify(detail); } catch { return String(detail); } })() : '';
+  const line = `[WA-DIAG ${ts}] ${event}${reason}${extra}`;
+  console.log(line);
+  try {
+    fs.appendFileSync(path.join(app.getPath('userData'), 'wa-diagnostics.log'), line + '\n');
+  } catch { /* ignore */ }
+}
+
+function attachWhatsAppDiagnostics(view: BrowserView): void {
+  const wc = view.webContents;
+
+  // Navegación de nivel superior = posible "refresh" de la página.
+  wc.on('did-start-navigation', (_e, url, isInPlace, isMainFrame) => {
+    if (!isMainFrame) return;
+    logWaDiag('did-start-navigation', { url, isInPlace });
+    // isInPlace=false => recarga/navegación completa (lo que el usuario ve como refresh)
+  });
+  wc.on('will-navigate', (e, url) => {
+    const isWa = url.includes('web.whatsapp.com');
+    const pastGrace = waGuardArmedAt > 0 && Date.now() > waGuardArmedAt;
+    // Bloquear SOLO reloads que: (a) son a WhatsApp, (b) ya pasó el periodo de
+    // gracia (arranque/login), y (c) NO los inició nuestro código.
+    if (WA_RELOAD_GUARD && isWa && pastGrace && !waActionReason) {
+      e.preventDefault();
+      logWaDiag('BLOCKED-wa-self-reload (will-navigate preventDefault)', { url });
+      return;
+    }
+    logWaDiag('will-navigate', { url });
+  });
+  wc.on('did-navigate', (_e, url) => { logWaDiag('did-navigate', { url }); waActionReason = null; });
+  wc.on('did-navigate-in-page', (_e, url) => logWaDiag('did-navigate-in-page', { url }));
+  wc.on('did-finish-load', () => logWaDiag('did-finish-load', { url: wc.getURL() }));
+  wc.on('did-fail-load', (_e, code, desc, url, mainFrame) =>
+    logWaDiag('did-fail-load', { code, desc, url, mainFrame }));
+  wc.on('render-process-gone', (_e, details) => logWaDiag('render-process-gone', details));
+  wc.on('unresponsive', () => logWaDiag('unresponsive'));
+  wc.on('responsive', () => logWaDiag('responsive'));
+  wc.on('destroyed', () => logWaDiag('webcontents-destroyed'));
+  // Reflejar los console.log de la página WA (incl. los reload internos de WA si los logueara)
+  wc.on('console-message', (_e, level, message) => {
+    if (/reload|refresh|navigat|crash|conflict|usar aqu|use here/i.test(message)) {
+      logWaDiag('wa-console', { level, message: message.slice(0, 200) });
+    }
+  });
+}
+
 function createWhatsAppView(): void {
   if (!mainWindow || whatsappView) return;
 
   console.log('[MWS] Creando WhatsApp BrowserView...');
+  logWaDiag('createWhatsAppView()', { reason: waActionReason });
 
   // Usar partición persistente para guardar sesión
   const whatsappSession = session.fromPartition('persist:whatsapp');
@@ -1202,6 +1264,9 @@ function createWhatsAppView(): void {
   });
 
   mainWindow.addBrowserView(whatsappView);
+
+  // Instrumentación de diagnóstico (detectar refresh de WhatsApp)
+  attachWhatsAppDiagnostics(whatsappView);
 
   // ===== INICIALIZAR SISTEMA DE SEGURIDAD DE MEDIOS =====
   // Filtrar del backup los IDs ya pendientes de notificar eliminación (evita re-detección)
@@ -1373,6 +1438,10 @@ function createWhatsAppView(): void {
   });
 
   // Cargar WhatsApp Web
+  waActionReason = 'initial-load (createWhatsAppView)';
+  // Armar la defensa 2 min después: deja pasar arranque + login + doble-carga
+  // inicial de WA, y a partir de ahí bloquea auto-reloads de la página.
+  waGuardArmedAt = Date.now() + 120000;
   whatsappView.webContents.loadURL('https://web.whatsapp.com');
 
   // DevTools para WhatsApp BrowserView (debug)
@@ -1493,6 +1562,7 @@ function showWhatsAppView(): void {
 
   // Crear si no existe
   if (!whatsappView) {
+    waActionReason = 'showWhatsAppView (vista no existía → se recrea)';
     createWhatsAppView();
   }
 
@@ -3125,6 +3195,7 @@ function setupIPC(): void {
 
       // 4. Destruir WhatsApp view si existe
       if (whatsappView && mainWindow) {
+        logWaDiag('destroy via full-reset IPC');
         mainWindow.removeBrowserView(whatsappView);
         whatsappView = null;
         whatsappVisible = false;
@@ -3156,6 +3227,7 @@ function setupIPC(): void {
       stopSessionMonitor();
 
       if (whatsappView) {
+        logWaDiag('destroy via whatsapp:reset-session IPC (fin de impersonación/logout)');
         if (mainWindow && mainWindow.getBrowserViews().includes(whatsappView)) {
           mainWindow.removeBrowserView(whatsappView);
         }
