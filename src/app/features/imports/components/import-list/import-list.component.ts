@@ -15,6 +15,8 @@ import { LoadingSpinnerComponent } from '../../../../shared/components/loading-s
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 @Component({
   selector: 'app-import-list',
@@ -25,7 +27,8 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     LoadingSpinnerComponent,
     EmptyStateComponent,
     PaginationComponent,
-    ConfirmDialogComponent
+    ConfirmDialogComponent,
+    SortHeaderDirective
   ],
   template: `
     <div class="imports-page">
@@ -73,20 +76,20 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
           <table class="data-table">
             <thead>
               <tr>
-                <th>Fecha</th>
-                <th>Usuario</th>
+                <th [appSort]="'fecha'" [appSortState]="sort()" (appSortChange)="onSort($event)">Fecha</th>
+                <th [appSort]="'usuario'" [appSortState]="sort()" (appSortChange)="onSort($event)">Usuario</th>
                 @if (isSuperAdmin()) {
-                  <th>Cliente</th>
+                  <th [appSort]="'cliente'" [appSortState]="sort()" (appSortChange)="onSort($event)">Cliente</th>
                 }
-                <th>Tipo</th>
-                <th>Archivo</th>
-                <th class="text-right">Registros</th>
-                <th>Estado</th>
+                <th [appSort]="'tipo'" [appSortState]="sort()" (appSortChange)="onSort($event)">Tipo</th>
+                <th [appSort]="'archivo'" [appSortState]="sort()" (appSortChange)="onSort($event)">Archivo</th>
+                <th class="text-right" [appSort]="'registros'" [appSortState]="sort()" (appSortChange)="onSort($event)">Registros</th>
+                <th [appSort]="'estado'" [appSortState]="sort()" (appSortChange)="onSort($event)">Estado</th>
                 <th class="col-actions"></th>
               </tr>
             </thead>
             <tbody>
-              @for (importItem of imports(); track importItem.id) {
+              @for (importItem of sortedImports(); track importItem.id) {
                 <tr>
                   <td class="text-nowrap">{{ formatDate(importItem.createdAt) }}</td>
                   <td>{{ importItem.userName || '-' }}</td>
@@ -398,6 +401,24 @@ export class ImportListComponent implements OnInit, OnDestroy {
   totalRecords = signal(0);
   isLoading = signal(false);
   importToDelete = signal<Import | null>(null);
+
+  // Orden client-side de la página visible
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedImports = computed(() => sortRows(this.imports(), this.sort(), (item, col) => {
+    switch (col) {
+      case 'fecha': return item.createdAt;
+      case 'usuario': return item.userName;
+      case 'cliente': return item.clientName;
+      case 'tipo': return this.getImportTypeLabel(item.importType);
+      case 'archivo': return item.importFileName;
+      case 'registros': return item.totRecords;
+      case 'estado': return this.getStatusLabel(item.status);
+      default: return (item as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
 
   // Pagination
   currentPage = signal(1);

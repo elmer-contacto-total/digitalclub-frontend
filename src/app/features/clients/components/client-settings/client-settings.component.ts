@@ -116,8 +116,35 @@ export class ClientSettingsComponent implements OnInit, HasUnsavedChanges {
     return this.settings().filter(s => s.type === 'boolean' && s.value === true).length;
   }
 
+  // Nombres en español de cada configuración (PARIDAD: client_settings.localized_name).
+  // Si una clave no está aquí, se hace un fallback a Title Case legible.
+  private static readonly LABELS_ES: Record<string, string> = {
+    agents_go_offline: 'Los agentes tienen horarios fuera de línea',
+    alert_time_not_responded_conversation: 'Tiempo (min) para alerta de mensaje no respondido',
+    available_categories: 'Categorías disponibles',
+    create_user_from_prospect: 'Crear usuario desde un prospecto',
+    online_monday: 'Horario en línea — lunes (ej. 9am - 5pm)',
+    online_tuesday: 'Horario en línea — martes (ej. 9am - 5pm)',
+    online_wednesday: 'Horario en línea — miércoles (ej. 9am - 5pm)',
+    online_thursday: 'Horario en línea — jueves (ej. 9am - 5pm)',
+    online_friday: 'Horario en línea — viernes (ej. 9am - 5pm)',
+    online_saturday: 'Horario en línea — sábado (ej. en blanco)',
+    online_sunday: 'Horario en línea — domingo (ej. en blanco)',
+    templates_language: 'Idioma de plantillas',
+    ticket_close_types: 'Tipos de cierre de casos',
+    time_for_ticket_autoclose: 'Tiempo (horas) para cierre automático de caso',
+    whatsapp_account_id: 'ID de cuenta de WhatsApp',
+    whatsapp_business_account_id: 'ID de cuenta de negocio de WhatsApp',
+    whatsapp_api_token: 'Token de API de WhatsApp',
+    whatsapp_access_token: 'Token de acceso de WhatsApp',
+    whatsapp_phone_number_id: 'ID del número de WhatsApp',
+    whatsapp_webhook_verify_token: 'Token de verificación del webhook de WhatsApp'
+  };
+
   formatKey(key: string): string {
-    // Convert snake_case to Title Case
+    const label = ClientSettingsComponent.LABELS_ES[key];
+    if (label) return label;
+    // Fallback: snake_case -> Title Case legible
     return key
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
