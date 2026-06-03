@@ -953,6 +953,7 @@ export class AppVersionFormComponent implements OnInit, OnDestroy {
     fileSize: null as number | null,
     sha256Hash: '',
     s3Key: '',
+    originalFilename: '',
     mandatory: false,
     active: true,
     publishedAt: ''
@@ -990,6 +991,7 @@ export class AppVersionFormComponent implements OnInit, OnDestroy {
             fileSize: version.fileSize,
             sha256Hash: version.sha256Hash || '',
             s3Key: version.s3Key || '',
+            originalFilename: version.originalFilename || '',
             mandatory: version.mandatory,
             active: version.active,
             publishedAt: version.publishedAt ? this.formatDateForInput(new Date(version.publishedAt)) : ''
@@ -997,7 +999,7 @@ export class AppVersionFormComponent implements OnInit, OnDestroy {
 
           // If version has s3Key, show the uploaded file state
           if (version.s3Key) {
-            const fileName = version.s3Key.split('/').pop() || 'archivo subido';
+            const fileName = version.originalFilename || version.s3Key.split('/').pop() || 'archivo subido';
             this.uploadedFileName.set(fileName);
           } else {
             // Existing version without s3Key - show manual URL mode
@@ -1095,6 +1097,9 @@ export class AppVersionFormComponent implements OnInit, OnDestroy {
               this.formData.s3Key = body.s3Key;
               this.formData.fileSize = body.fileSize;
               this.formData.downloadUrl = body.downloadUrl;
+              // Guardar el nombre original para que la descarga conserve
+              // "MWS-Desktop.exe" en vez de la clave UUID de S3.
+              this.formData.originalFilename = body.originalFilename || body.fileName;
               this.uploadedFileName.set(body.fileName);
               this.toastService.success('Instalador subido correctamente');
             }
@@ -1114,6 +1119,7 @@ export class AppVersionFormComponent implements OnInit, OnDestroy {
     this.formData.s3Key = '';
     this.formData.downloadUrl = '';
     this.formData.fileSize = null;
+    this.formData.originalFilename = '';
     this.uploadedFileName.set('');
     this.uploadError.set('');
   }
@@ -1133,6 +1139,7 @@ export class AppVersionFormComponent implements OnInit, OnDestroy {
       fileSize: this.formData.fileSize || undefined,
       sha256Hash: this.formData.sha256Hash || undefined,
       s3Key: this.formData.s3Key || undefined,
+      originalFilename: this.formData.originalFilename || undefined,
       mandatory: this.formData.mandatory,
       active: this.formData.active,
       publishedAt: this.formData.publishedAt || undefined

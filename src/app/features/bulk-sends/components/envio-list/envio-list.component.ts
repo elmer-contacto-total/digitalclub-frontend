@@ -1,8 +1,10 @@
-import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { BulkSendService, BulkSend } from '../../../../core/services/bulk-send.service';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 import { ElectronService } from '../../../../core/services/electron.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { WebSocketService } from '../../../../core/services/websocket.service';
@@ -14,7 +16,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
 @Component({
   selector: 'app-envio-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, LoadingSpinnerComponent, DatePipe, PaginationComponent],
+  imports: [CommonModule, RouterLink, LoadingSpinnerComponent, DatePipe, PaginationComponent, SortHeaderDirective],
   template: `
     <div class="envio-list-container">
       <div class="page-header">
@@ -73,21 +75,21 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           <table class="data-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Mensaje</th>
-                <th>Agente</th>
+                <th [appSort]="'id'" [appSortState]="sort()" (appSortChange)="onSort($event)">ID</th>
+                <th [appSort]="'message_preview'" [appSortState]="sort()" (appSortChange)="onSort($event)">Mensaje</th>
+                <th [appSort]="'agent'" [appSortState]="sort()" (appSortChange)="onSort($event)">Agente</th>
                 @if (isSupervisor()) {
-                  <th>Creador</th>
+                  <th [appSort]="'creator'" [appSortState]="sort()" (appSortChange)="onSort($event)">Creador</th>
                 }
-                <th>Destinatarios</th>
-                <th>Progreso</th>
-                <th>Estado</th>
-                <th>Fecha</th>
+                <th [appSort]="'total_recipients'" [appSortState]="sort()" (appSortChange)="onSort($event)">Destinatarios</th>
+                <th [appSort]="'progress'" [appSortState]="sort()" (appSortChange)="onSort($event)">Progreso</th>
+                <th [appSort]="'status'" [appSortState]="sort()" (appSortChange)="onSort($event)">Estado</th>
+                <th [appSort]="'created_at'" [appSortState]="sort()" (appSortChange)="onSort($event)">Fecha</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              @for (bs of bulkSends(); track bs.id) {
+              @for (bs of sortedBulkSends(); track bs.id) {
                 <tr>
                   <td class="id-cell">#{{ bs.id }}</td>
                   <td class="msg-cell">
@@ -273,6 +275,20 @@ export class EnvioListComponent implements OnInit, OnDestroy {
   isLoading = signal(false);
   loadError = signal('');
   bulkSends = signal<BulkSend[]>([]);
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedBulkSends = computed(() => sortRows(this.bulkSends(), this.sort(), (bs: BulkSend, col: string) => {
+    switch (col) {
+      case 'agent': return bs.assigned_agent_name;
+      case 'creator': return bs.user_name;
+      case 'progress': return bs.progress_percent;
+      case 'status': return this.bulkSendService.getStatusLabel(bs.status);
+      case 'created_at': return bs.created_at;
+      default: return (bs as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
   statusFilter = signal('');
   currentPage = signal(1);
   totalPages = signal(0);

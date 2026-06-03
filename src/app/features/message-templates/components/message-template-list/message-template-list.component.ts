@@ -11,6 +11,8 @@ import { Subject, takeUntil, debounceTime, distinctUntilChanged } from 'rxjs';
 import { MessageTemplateService, MessageTemplate, TemplateStatus } from '../../../../core/services/message-template.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 @Component({
   selector: 'app-message-template-list',
@@ -19,7 +21,8 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
     CommonModule,
     RouterLink,
     FormsModule,
-    PaginationComponent
+    PaginationComponent,
+    SortHeaderDirective
   ],
   template: `
     <div class="template-list-container">
@@ -93,19 +96,19 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
             <table class="table">
               <thead>
                 <tr>
-                  <th>Nombre</th>
-                  <th>Tipo</th>
-                  <th>Categoría</th>
-                  <th>Estado WhatsApp</th>
-                  <th class="hide-mobile">Idioma</th>
-                  <th class="hide-mobile">Última Actualización</th>
+                  <th [appSort]="'name'" [appSortState]="sort()" (appSortChange)="onSort($event)">Nombre</th>
+                  <th [appSort]="'type'" [appSortState]="sort()" (appSortChange)="onSort($event)">Tipo</th>
+                  <th [appSort]="'category'" [appSortState]="sort()" (appSortChange)="onSort($event)">Categoría</th>
+                  <th [appSort]="'status'" [appSortState]="sort()" (appSortChange)="onSort($event)">Estado WhatsApp</th>
+                  <th class="hide-mobile" [appSort]="'language'" [appSortState]="sort()" (appSortChange)="onSort($event)">Idioma</th>
+                  <th class="hide-mobile" [appSort]="'updatedAt'" [appSortState]="sort()" (appSortChange)="onSort($event)">Última Actualización</th>
                   <th>Estado</th>
-                  <th>Estado Parámetros</th>
+                  <th [appSort]="'paramsStatus'" [appSortState]="sort()" (appSortChange)="onSort($event)">Estado Parámetros</th>
                   <th class="col-actions"></th>
                 </tr>
               </thead>
               <tbody>
-                @for (template of templates(); track template.id) {
+                @for (template of sortedTemplates(); track template.id) {
                   <tr>
                     <td class="col-name">{{ template.name }}</td>
                     <td>{{ getTemplateTypeLabel(template.templateWhatsappType) }}</td>
@@ -532,6 +535,22 @@ export class MessageTemplateListComponent implements OnInit, OnDestroy {
   templates = signal<(MessageTemplate & { messagesSent?: number })[]>([]);
   totalRecords = signal(0);
   isLoading = signal(false);
+
+  // Sorting (client-side)
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedTemplates = computed(() => sortRows(this.templates(), this.sort(), (t: MessageTemplate & { messagesSent?: number }, col: string) => {
+    switch (col) {
+      case 'type': return this.getTemplateTypeLabel(t.templateWhatsappType);
+      case 'category': return this.getCategoryLabel(t.category);
+      case 'status': return this.getStatusLabel(t.status);
+      case 'language': return t.languageName || t.language;
+      case 'updatedAt': return t.updatedAt;
+      default: return (t as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
 
   // Sync status
   isSyncing = signal(false);

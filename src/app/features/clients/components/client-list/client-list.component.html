@@ -52,17 +52,17 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>Nombre</th>
-              <th>Empresa</th>
-              <th>Tipo de Documento</th>
-              <th>Número de Documento</th>
-              <th>Plataforma</th>
-              <th>Estado</th>
+              <th [appSort]="'name'" [appSortState]="sort()" (appSortChange)="onSort($event)">Nombre</th>
+              <th [appSort]="'companyName'" [appSortState]="sort()" (appSortChange)="onSort($event)">Empresa</th>
+              <th [appSort]="'docType'" [appSortState]="sort()" (appSortChange)="onSort($event)">Tipo de Documento</th>
+              <th [appSort]="'docNumber'" [appSortState]="sort()" (appSortChange)="onSort($event)">Número de Documento</th>
+              <th [appSort]="'clientType'" [appSortState]="sort()" (appSortChange)="onSort($event)">Plataforma</th>
+              <th [appSort]="'status'" [appSortState]="sort()" (appSortChange)="onSort($event)">Estado</th>
               <th class="actions-col">Acciones</th>
             </tr>
           </thead>
           <tbody>
-            @for (client of filteredClients(); track client.id) {
+            @for (client of sortedClients(); track client.id) {
               <tr>
                 <td>
                   <div class="cell-primary">{{ client.name }}</div>

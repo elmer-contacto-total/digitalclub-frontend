@@ -19,6 +19,8 @@ import { ChatPanelComponent } from '../../../chat/components/chat-panel/chat-pan
 import { UserListItem, UserOption } from '../../../../core/models/user.model';
 import { ConversationDetail } from '../../../../core/models/conversation.model';
 import { environment } from '../../../../../environments/environment';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 // Interface for client details response
 interface ClientDetailsResponse {
@@ -46,7 +48,7 @@ type MessageFilter = 'all' | 'to_respond' | 'responded';
 @Component({
   selector: 'app-supervisor-clients',
   standalone: true,
-  imports: [CommonModule, FormsModule, ChatPanelComponent],
+  imports: [CommonModule, FormsModule, ChatPanelComponent, SortHeaderDirective],
   template: `
     <!-- PARIDAD RAILS: supervisor_clients.html.erb + _clients_chat_view.html.erb -->
     <div class="supervisor-clients-layout">
@@ -146,9 +148,9 @@ type MessageFilter = 'all' | 'to_respond' | 'responded';
             <table class="table table-striped table-bordered table-hover">
               <thead>
                 <tr>
-                  <th class="col-nombre">Nombre</th>
-                  <th class="col-movil">Movil</th>
-                  <th class="col-codigo">Codigo</th>
+                  <th class="col-nombre" [appSort]="'name'" [appSortState]="sort()" (appSortChange)="onSort($event)">Nombre</th>
+                  <th class="col-movil" [appSort]="'phone'" [appSortState]="sort()" (appSortChange)="onSort($event)">Movil</th>
+                  <th class="col-codigo" [appSort]="'codigo'" [appSortState]="sort()" (appSortChange)="onSort($event)">Codigo</th>
                   <th class="col-action"></th>
                 </tr>
               </thead>
@@ -167,7 +169,7 @@ type MessageFilter = 'all' | 'to_respond' | 'responded';
                     </td>
                   </tr>
                 } @else {
-                  @for (client of clients(); track client.id) {
+                  @for (client of sortedClients(); track client.id) {
                     <tr
                       class="client-row"
                       [class.selected]="selectedClientId() === client.id"
@@ -365,6 +367,16 @@ export class SupervisorClientsComponent implements OnInit, OnDestroy {
   // State
   clients = signal<UserListItem[]>([]);
   agents = signal<UserOption[]>([]);  // Subordinate agents for filter
+
+  // Orden client-side de la página visible
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedClients = computed(() => sortRows(this.clients(), this.sort(), (c: UserListItem, col: string) => {
+    switch (col) {
+      case 'name': return c.fullName || this.getFullName(c);
+      default: return (c as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void { this.sort.set(toggleSort(this.sort(), column)); }
   isLoading = signal(false);
   isExporting = signal(false);
   hasMore = signal(true);

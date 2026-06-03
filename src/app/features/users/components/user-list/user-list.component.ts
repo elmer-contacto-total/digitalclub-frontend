@@ -18,6 +18,8 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { environment } from '../../../../../environments/environment';
 import { splitPhone, joinPhone, DEFAULT_COUNTRY_CODE } from '../../../../core/utils/phone.util';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
 
@@ -30,7 +32,8 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
     FormsModule,
     LoadingSpinnerComponent,
     EmptyStateComponent,
-    ConfirmDialogComponent
+    ConfirmDialogComponent,
+    SortHeaderDirective
   ],
   template: `
     <div class="user-list-container">
@@ -94,17 +97,17 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
             <table class="table table-striped table-bordered table-hover">
               <thead>
                 <tr>
-                  <th>Nombre</th>
-                  <th>Email</th>
-                  <th class="hide-mobile">Teléfono</th>
-                  <th>Rol</th>
-                  <th class="hide-mobile">Manager</th>
-                  <th>Estado</th>
+                  <th [appSort]="'name'" [appSortState]="sort()" (appSortChange)="onSort($event)">Nombre</th>
+                  <th [appSort]="'email'" [appSortState]="sort()" (appSortChange)="onSort($event)">Email</th>
+                  <th class="hide-mobile" [appSort]="'phone'" [appSortState]="sort()" (appSortChange)="onSort($event)">Teléfono</th>
+                  <th [appSort]="'role'" [appSortState]="sort()" (appSortChange)="onSort($event)">Rol</th>
+                  <th class="hide-mobile" [appSort]="'manager'" [appSortState]="sort()" (appSortChange)="onSort($event)">Manager</th>
+                  <th [appSort]="'status'" [appSortState]="sort()" (appSortChange)="onSort($event)">Estado</th>
                   <th class="col-actions"></th>
                 </tr>
               </thead>
               <tbody>
-                @for (user of users(); track user.id) {
+                @for (user of sortedUsers(); track user.id) {
                   <tr>
                     <td class="col-name">
                       <div class="user-name">
@@ -1110,6 +1113,20 @@ export class UserListComponent implements OnInit, OnDestroy {
   totalRecords = signal(0);
   isLoading = signal(false);
   userToDelete = signal<UserListItem | null>(null);
+
+  // Orden client-side de la página visible
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedUsers = computed(() => sortRows(this.users(), this.sort(), (u: UserListItem, col: string) => {
+    switch (col) {
+      case 'name': return getFullName(u);
+      case 'role': return u.friendlyRole || RoleUtils.getDisplayName(u.role);
+      case 'manager': return u.managerName;
+      default: return (u as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
 
   // Filters
   searchTerm = signal('');

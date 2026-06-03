@@ -3,7 +3,7 @@
  * PARIDAD: Rails admin/bulk_messages/index.html.erb
  * Lista de mensajes masivos predefinidos
  */
-import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
@@ -13,6 +13,8 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { UserRole } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 @Component({
   selector: 'app-bulk-message-list',
@@ -21,7 +23,8 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
     CommonModule,
     RouterLink,
     LoadingSpinnerComponent,
-    EmptyStateComponent
+    EmptyStateComponent,
+    SortHeaderDirective
   ],
   template: `
     <div class="bulk-message-list-container">
@@ -64,7 +67,7 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
           <table class="table table-striped table-bordered table-hover">
             <thead>
               <tr>
-                <th>Mensaje</th>
+                <th [appSort]="'message'" [appSortState]="sort()" (appSortChange)="onSort($event)">Mensaje</th>
                 @if (canEdit()) {
                   <th class="no-sort">Editar</th>
                   <th class="no-sort">Eliminar</th>
@@ -74,7 +77,7 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
               </tr>
             </thead>
             <tbody>
-              @for (message of bulkMessages(); track message.id) {
+              @for (message of sortedBulkMessages(); track message.id) {
                 <tr>
                   <td class="message-cell">{{ message.message }}</td>
                   @if (canEdit()) {
@@ -410,6 +413,13 @@ export class BulkMessageListComponent implements OnInit, OnDestroy {
   // Data
   bulkMessages = signal<BulkMessage[]>([]);
   isLoading = signal(false);
+
+  // Orden client-side de la página visible
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedBulkMessages = computed(() => sortRows(this.bulkMessages(), this.sort()));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
 
   // Delete modal
   showDeleteModal = signal(false);

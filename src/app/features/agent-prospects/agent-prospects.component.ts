@@ -18,6 +18,8 @@ import { ChatPanelComponent } from '../chat/components/chat-panel/chat-panel.com
 import { ConversationDetail } from '../../core/models/conversation.model';
 import { environment } from '../../../environments/environment';
 import { UserRole, RoleUtils } from '../../core/models/user.model';
+import { SortHeaderDirective } from '../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../core/utils/table-sort';
 
 // Prospect interface matching backend response
 interface Prospect {
@@ -87,7 +89,7 @@ interface GenerateImportCsvResponse {
 @Component({
   selector: 'app-agent-prospects',
   standalone: true,
-  imports: [CommonModule, FormsModule, ChatPanelComponent],
+  imports: [CommonModule, FormsModule, ChatPanelComponent, SortHeaderDirective],
   styleUrl: './agent-prospects.component.scss',
   template: `
     <!-- PARIDAD RAILS: agent_prospects.html.erb + _clients_chat_view.html.erb -->
@@ -173,8 +175,8 @@ interface GenerateImportCsvResponse {
             <table class="table table-striped table-bordered table-hover">
               <thead>
                 <tr>
-                  <th class="col-nombre">Nombre</th>
-                  <th class="col-movil">Movil</th>
+                  <th class="col-nombre" [appSort]="'name'" [appSortState]="sort()" (appSortChange)="onSort($event)">Nombre</th>
+                  <th class="col-movil" [appSort]="'phone'" [appSortState]="sort()" (appSortChange)="onSort($event)">Movil</th>
                   <th class="col-codigo">Codigo</th>
                   <th class="col-action"></th>
                 </tr>
@@ -194,7 +196,7 @@ interface GenerateImportCsvResponse {
                     </td>
                   </tr>
                 } @else {
-                  @for (prospect of prospects(); track prospect.id) {
+                  @for (prospect of sortedProspects(); track prospect.id) {
                     <tr
                       class="prospect-row"
                       [class.selected]="selectedProspectId() === prospect.id"
@@ -531,6 +533,16 @@ export class AgentProspectsComponent implements OnInit, OnDestroy {
 
   // State
   prospects = signal<Prospect[]>([]);
+
+  // Orden client-side de la página visible
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedProspects = computed(() => sortRows(this.prospects(), this.sort(), (p: Prospect, col: string) => {
+    return (p as unknown as Record<string, unknown>)[col];
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
+
   managers = signal<{ id: number; name: string }[]>([]);
   isLoading = signal(false);
   isExporting = signal(false);

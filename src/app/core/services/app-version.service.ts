@@ -15,6 +15,7 @@ export interface AppVersion {
   fileSize: number | null;
   sha256Hash: string | null;
   s3Key: string | null;
+  originalFilename: string | null;
   mandatory: boolean;
   active: boolean;
   publishedAt: string;
@@ -45,6 +46,7 @@ export interface CreateAppVersionRequest {
   fileSize?: number;
   sha256Hash?: string;
   s3Key?: string;
+  originalFilename?: string;
   mandatory?: boolean;
   active?: boolean;
   publishedAt?: string;
@@ -61,6 +63,7 @@ export interface UpdateAppVersionRequest {
   fileSize?: number;
   sha256Hash?: string;
   s3Key?: string;
+  originalFilename?: string;
   mandatory?: boolean;
   active?: boolean;
   publishedAt?: string;
@@ -73,6 +76,7 @@ export interface UploadInstallerResponse {
   s3Key: string;
   fileSize: number;
   fileName: string;
+  originalFilename: string;
   downloadUrl: string;
 }
 

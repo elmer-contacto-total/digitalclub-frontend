@@ -3,7 +3,7 @@
  * Lista de clientes/organizaciones con DataTable
  * PARIDAD RAILS: admin/clients/index.html.erb
  */
-import { Component, inject, signal, OnInit, OnDestroy, HostListener, ElementRef } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy, HostListener, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -14,6 +14,8 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 @Component({
   selector: 'app-client-list',
@@ -24,7 +26,8 @@ import { ConfirmDialogComponent } from '../../../../shared/components/confirm-di
     FormsModule,
     LoadingSpinnerComponent,
     EmptyStateComponent,
-    ConfirmDialogComponent
+    ConfirmDialogComponent,
+    SortHeaderDirective
   ],
   templateUrl: './client-list.component.html',
   styleUrl: './client-list.component.scss'
@@ -42,6 +45,20 @@ export class ClientListComponent implements OnInit, OnDestroy {
   isLoading = signal(false);
   searchTerm = signal('');
   filteredClients = signal<Client[]>([]);
+
+  // Orden client-side sobre las filas filtradas/renderizadas
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedClients = computed(() => sortRows(this.filteredClients(), this.sort(), (c: Client, col: string) => {
+    switch (col) {
+      case 'docType': return this.getDocTypeLabel(c.docType);
+      case 'clientType': return this.getClientTypeLabel(c.clientType);
+      case 'status': return c.status === ClientStatus.ACTIVE ? 'Activo' : 'Inactivo';
+      default: return (c as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
 
   // Dialogs
   clientToDelete = signal<Client | null>(null);

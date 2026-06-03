@@ -3,13 +3,15 @@
  * Two tabs: Incoming messages / Outgoing messages
  * PARIDAD RAILS: app/views/admin/messages/index.html.erb
  */
-import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Subject, takeUntil, debounceTime, distinctUntilChanged } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
+import { SortHeaderDirective } from '../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../core/utils/table-sort';
 
 // Message item for list display
 interface MessageListItem {
@@ -37,7 +39,7 @@ type MessageDirection = 'incoming' | 'outgoing';
 @Component({
   selector: 'app-messages-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, PaginationComponent],
+  imports: [CommonModule, FormsModule, PaginationComponent, SortHeaderDirective],
   template: `
     <div class="messages-list-container">
       <!-- Page Header (PARIDAD RAILS: "Lista de Mensajes") -->
@@ -115,28 +117,19 @@ type MessageDirection = 'incoming' | 'outgoing';
             <table class="data-table">
               <thead>
                 <tr>
-                  <th class="col-person sortable" (click)="toggleSort('sender.firstName')">
-                    <span class="th-content">
-                      {{ activeTab() === 'incoming' ? 'Enviado por' : 'Enviado por' }}
-                      <i class="sort-icon" [ngClass]="getSortIcon('sender.firstName')"></i>
-                    </span>
+                  <th class="col-person" [appSort]="'senderName'" [appSortState]="sort()" (appSortChange)="onSort($event)">
+                    Enviado por
                   </th>
-                  <th class="col-message sortable" (click)="toggleSort('content')">
-                    <span class="th-content">
-                      Mensaje
-                      <i class="sort-icon" [ngClass]="getSortIcon('content')"></i>
-                    </span>
+                  <th class="col-message" [appSort]="'content'" [appSortState]="sort()" (appSortChange)="onSort($event)">
+                    Mensaje
                   </th>
-                  <th class="col-date sortable" (click)="toggleSort('sentAt')">
-                    <span class="th-content">
-                      Fecha
-                      <i class="sort-icon" [ngClass]="getSortIcon('sentAt')"></i>
-                    </span>
+                  <th class="col-date" [appSort]="'sentAt'" [appSortState]="sort()" (appSortChange)="onSort($event)">
+                    Fecha
                   </th>
                 </tr>
               </thead>
               <tbody>
-                @for (message of messages(); track message.id) {
+                @for (message of sortedMessages(); track message.id) {
                   <tr class="message-row" [class.loading]="isLoading()">
                     <td class="col-person">
                       <div class="person-cell">
@@ -194,9 +187,14 @@ export class MessagesListComponent implements OnInit, OnDestroy {
   isLoading = signal(false);
   searchTerm = '';
 
-  // Sorting
-  sortBy = 'sentAt';
-  sortDir: 'asc' | 'desc' = 'desc';
+  // Orden client-side de la página visible
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedMessages = computed(() => sortRows(this.messages(), this.sort(), (m: MessageListItem, col: string) => {
+    return (m as unknown as Record<string, unknown>)[col];
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
 
   // Pagination (1-based for PaginationComponent)
   currentPage = 1;
@@ -236,25 +234,6 @@ export class MessagesListComponent implements OnInit, OnDestroy {
   clearSearch(): void {
     this.searchTerm = '';
     this.resetAndLoad();
-  }
-
-  // Sorting
-  toggleSort(column: string): void {
-    if (this.sortBy === column) {
-      this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-      this.sortBy = column;
-      this.sortDir = 'desc';
-    }
-    this.currentPage = 1;
-    this.loadMessages();
-  }
-
-  getSortIcon(column: string): string {
-    if (this.sortBy !== column) {
-      return 'ph ph-arrows-down-up';
-    }
-    return this.sortDir === 'asc' ? 'ph ph-arrow-up' : 'ph ph-arrow-down';
   }
 
   // Pagination handlers
@@ -308,9 +287,7 @@ export class MessagesListComponent implements OnInit, OnDestroy {
     let params = new HttpParams()
       .set('direction', this.activeTab())
       .set('page', (this.currentPage - 1).toString())
-      .set('pageSize', this.pageSize.toString())
-      .set('sortBy', this.sortBy)
-      .set('sortDir', this.sortDir);
+      .set('pageSize', this.pageSize.toString());
 
     if (this.searchTerm) {
       params = params.set('search', this.searchTerm);

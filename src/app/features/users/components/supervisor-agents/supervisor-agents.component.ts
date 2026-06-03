@@ -10,6 +10,8 @@ import { RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { UserService, PaginationParams } from '../../../../core/services/user.service';
 import { UserListItem, UserRole, UserStatus, RoleUtils, getFullName } from '../../../../core/models/user.model';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 interface AgentClient {
   id: number;
@@ -21,7 +23,7 @@ interface AgentClient {
 @Component({
   selector: 'app-supervisor-agents',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, SortHeaderDirective],
   template: `
     <div class="supervisor-agents-container">
       <!-- Page Header -->
@@ -171,14 +173,14 @@ interface AgentClient {
                 <table class="clients-table">
                   <thead>
                     <tr>
-                      <th>Nombre</th>
-                      <th>Teléfono</th>
-                      <th>Último mensaje</th>
+                      <th [appSort]="'name'" [appSortState]="clientSort()" (appSortChange)="onClientSort($event)">Nombre</th>
+                      <th [appSort]="'phone'" [appSortState]="clientSort()" (appSortChange)="onClientSort($event)">Teléfono</th>
+                      <th [appSort]="'lastMessageAt'" [appSortState]="clientSort()" (appSortChange)="onClientSort($event)">Último mensaje</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    @for (client of clients(); track client.id) {
+                    @for (client of sortedClients(); track client.id) {
                       <tr>
                         <td class="client-name">{{ client.name }}</td>
                         <td class="client-phone">{{ client.phone || '-' }}</td>
@@ -344,6 +346,11 @@ export class SupervisorAgentsComponent implements OnInit, OnDestroy {
   currentClientPage = signal(1);
   clientPageSize = 25;
   totalClients = signal(0);
+
+  // Orden client-side de la tabla de clientes
+  clientSort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedClients = computed(() => sortRows(this.clients(), this.clientSort()));
+  onClientSort(column: string): void { this.clientSort.set(toggleSort(this.clientSort(), column)); }
 
   // Modal
   showAgentModal = signal(false);

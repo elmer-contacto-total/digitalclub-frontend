@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -7,11 +7,13 @@ import { AppVersionService, AppVersion } from '../../../../core/services/app-ver
 import { ToastService } from '../../../../core/services/toast.service';
 import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog.component';
 import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 @Component({
   selector: 'app-app-version-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, ConfirmDialogComponent, PaginationComponent],
+  imports: [CommonModule, RouterLink, FormsModule, ConfirmDialogComponent, PaginationComponent, SortHeaderDirective],
   template: `
     <div class="page-container">
       <!-- Header -->
@@ -65,18 +67,18 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Versión</th>
-                  <th>Plataforma</th>
-                  <th>Origen</th>
-                  <th>Tamaño</th>
-                  <th>Obligatoria</th>
-                  <th>Estado</th>
-                  <th>Publicada</th>
+                  <th [appSort]="'version'" [appSortState]="sort()" (appSortChange)="onSort($event)">Versión</th>
+                  <th [appSort]="'platform'" [appSortState]="sort()" (appSortChange)="onSort($event)">Plataforma</th>
+                  <th [appSort]="'origin'" [appSortState]="sort()" (appSortChange)="onSort($event)">Origen</th>
+                  <th [appSort]="'fileSize'" [appSortState]="sort()" (appSortChange)="onSort($event)">Tamaño</th>
+                  <th [appSort]="'mandatory'" [appSortState]="sort()" (appSortChange)="onSort($event)">Obligatoria</th>
+                  <th [appSort]="'active'" [appSortState]="sort()" (appSortChange)="onSort($event)">Estado</th>
+                  <th [appSort]="'publishedAt'" [appSortState]="sort()" (appSortChange)="onSort($event)">Publicada</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                @for (version of versions(); track version.id) {
+                @for (version of sortedVersions(); track version.id) {
                   <tr>
                     <td>
                       <span class="version-badge">v{{ version.version }}</span>
@@ -479,6 +481,19 @@ export class AppVersionListComponent implements OnInit, OnDestroy {
   // State
   versions = signal<AppVersion[]>([]);
   isLoading = signal(false);
+
+  // Orden client-side de la página visible
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedVersions = computed(() => sortRows(this.versions(), this.sort(), (v: AppVersion, col: string) => {
+    switch (col) {
+      case 'origin': return v.s3Key ? 'S3' : 'URL';
+      default: return (v as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
+
   currentPage = signal(1);
   pageSize = signal(10);
   totalItems = signal(0);

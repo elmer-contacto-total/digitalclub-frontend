@@ -3,11 +3,13 @@
  * PARIDAD: Rails admin/template_bulk_sends/index.html.erb
  * Lista de envíos masivos de plantillas
  */
-import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 import { TemplateBulkSendService, BulkSendJobSummary } from '../../../../core/services/template-bulk-send.service';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 import { AuthService } from '../../../../core/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { UserRole } from '../../../../core/models/user.model';
@@ -21,7 +23,8 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
     CommonModule,
     RouterLink,
     LoadingSpinnerComponent,
-    EmptyStateComponent
+    EmptyStateComponent,
+    SortHeaderDirective
   ],
   template: `
     <div class="template-bulk-send-list-container">
@@ -64,16 +67,16 @@ import { EmptyStateComponent } from '../../../../shared/components/empty-state/e
           <table class="table table-striped table-bordered table-hover">
             <thead>
               <tr>
-                <th>Job ID</th>
-                <th>Estado</th>
-                <th>Cant Planificada</th>
-                <th>Cant Enviada</th>
-                <th>Fallidos</th>
-                <th>Fecha de Envío</th>
+                <th [appSort]="'job_id'" [appSortState]="sort()" (appSortChange)="onSort($event)">Job ID</th>
+                <th [appSort]="'status'" [appSortState]="sort()" (appSortChange)="onSort($event)">Estado</th>
+                <th [appSort]="'total'" [appSortState]="sort()" (appSortChange)="onSort($event)">Cant Planificada</th>
+                <th [appSort]="'sent'" [appSortState]="sort()" (appSortChange)="onSort($event)">Cant Enviada</th>
+                <th [appSort]="'failed'" [appSortState]="sort()" (appSortChange)="onSort($event)">Fallidos</th>
+                <th [appSort]="'started_at'" [appSortState]="sort()" (appSortChange)="onSort($event)">Fecha de Envío</th>
               </tr>
             </thead>
             <tbody>
-              @for (job of jobs(); track job.job_id) {
+              @for (job of sortedJobs(); track job.job_id) {
                 <tr>
                   <td class="job-id-cell">{{ job.job_id.substring(0, 8) }}...</td>
                   <td>
@@ -235,6 +238,19 @@ export class TemplateBulkSendListComponent implements OnInit, OnDestroy {
   // Data
   jobs = signal<BulkSendJobSummary[]>([]);
   isLoading = signal(false);
+
+  // Sorting (client-side)
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedJobs = computed(() => sortRows(this.jobs(), this.sort(), (job: BulkSendJobSummary, col: string) => {
+    switch (col) {
+      case 'status': return this.getStatusLabel(job.status);
+      case 'started_at': return job.started_at;
+      default: return (job as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
 
   // Permissions
   canCreate = signal(false);

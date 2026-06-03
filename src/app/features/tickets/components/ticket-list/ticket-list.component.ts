@@ -12,6 +12,8 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 interface MessageItem {
   id: number;
@@ -25,7 +27,7 @@ interface MessageItem {
 @Component({
   selector: 'app-ticket-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, LoadingSpinnerComponent, EmptyStateComponent, PaginationComponent],
+  imports: [CommonModule, FormsModule, LoadingSpinnerComponent, EmptyStateComponent, PaginationComponent, SortHeaderDirective],
   template: `
     <div class="message-list-container">
       <!-- Header - PARIDAD: Rails admin/messages/index.html.erb -->
@@ -85,16 +87,16 @@ interface MessageItem {
                 <thead>
                   <tr>
                     @if (activeTab() === 'incoming') {
-                      <th>Enviado por</th>
+                      <th [appSort]="'person'" [appSortState]="sort()" (appSortChange)="onSort($event)">Enviado por</th>
                     } @else {
-                      <th>Recibido por</th>
+                      <th [appSort]="'person'" [appSortState]="sort()" (appSortChange)="onSort($event)">Recibido por</th>
                     }
-                    <th>Mensaje</th>
-                    <th>Fecha</th>
+                    <th [appSort]="'content'" [appSortState]="sort()" (appSortChange)="onSort($event)">Mensaje</th>
+                    <th [appSort]="'createdAt'" [appSortState]="sort()" (appSortChange)="onSort($event)">Fecha</th>
                   </tr>
                 </thead>
                 <tbody>
-                  @for (message of messages(); track message.id) {
+                  @for (message of sortedMessages(); track message.id) {
                     <tr>
                       <td>
                         @if (activeTab() === 'incoming') {
@@ -341,6 +343,18 @@ export class TicketListComponent implements OnInit, OnDestroy {
 
   // Tab state
   activeTab = signal<'incoming' | 'outgoing'>('incoming');
+
+  // Orden client-side de la página visible
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedMessages = computed(() => sortRows(this.messages(), this.sort(), (m: MessageItem, col: string) => {
+    switch (col) {
+      case 'person': return this.activeTab() === 'incoming' ? m.senderName : m.receiverName;
+      default: return (m as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
 
   // Pagination
   currentPage = signal(1);

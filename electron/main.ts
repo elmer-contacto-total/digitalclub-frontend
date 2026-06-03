@@ -1245,53 +1245,79 @@ function createWhatsAppView(): void {
   // Inyectar anti-fingerprinting único ANTES de que cargue cualquier script de WhatsApp
   const evasionScript = generateEvasionScript(userFingerprint);
 
-  // CSS para ocultar botones del nav superior de WhatsApp Web que no se usan:
-  // Estados / Status, Canales / Channels, Comunidades / Communities,
-  // Contenido multimedia / Media y Tú / You (perfil propio).
-  // Estrategia multicapa: data-testid + aria-label en ES e EN + ícono svg title.
-  const hideNavButtonsCSS = `
+  // Ocultar botones del nav de WhatsApp Web que no se usan:
+  // Estados/Status/Novedades, Canales/Channels, Comunidades/Communities,
+  // Contenido multimedia/Mensajes destacados y Tú/You (perfil).
+  //
+  // WhatsApp Web cambia sus data-testid seguido y re-renderiza el nav (SPA),
+  // por eso el CSS estático fallaba. Aquí ocultamos por NOMBRE ACCESIBLE
+  // (aria-label/title/texto) normalizado, y re-aplicamos con un MutationObserver
+  // cada vez que WA repinta. Idempotente (guarda window.__mwsNavHider).
+  const hideNavButtonsScript = `
     (function() {
-      const style = document.createElement('style');
-      style.textContent = \`
-        /* Estados / Status */
-        [data-testid="status"],
-        [data-testid="status-v3"],
-        button[aria-label="Estado"],
-        button[aria-label="Status"],
-        li[title="Estado"],
-        li[title="Status"] { display: none !important; }
+      if (window.__mwsNavHider) { window.__mwsNavHider(); return; }
 
-        /* Canales / Channels (newsletter) */
-        [data-testid="newsletter"],
-        [data-testid="channels"],
-        button[aria-label="Canales"],
-        button[aria-label="Channels"],
-        li[title="Canales"],
-        li[title="Channels"] { display: none !important; }
+      // Etiquetas objetivo (normalizadas: sin tildes, minúsculas).
+      var TARGETS = new Set([
+        'estado','estados','status','novedades','updates','novedad',
+        'canal','canales','channels',
+        'comunidad','comunidades','communities',
+        'contenido multimedia','mensajes destacados','destacados','starred','starred messages','media',
+        'tu','perfil','profile','you','mi perfil','my profile'
+      ]);
 
-        /* Comunidades / Communities */
-        [data-testid="communities"],
-        button[aria-label="Comunidades"],
-        button[aria-label="Communities"],
-        li[title="Comunidades"],
-        li[title="Communities"] { display: none !important; }
+      function norm(s) {
+        return (s || '')
+          .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+          .toLowerCase().replace(/\\s+/g, ' ').trim();
+      }
 
-        /* Contenido multimedia / Starred messages (Media) */
-        [data-testid="starred-messages-btn"],
-        button[aria-label="Contenido multimedia"],
-        button[aria-label="Media"],
-        li[title="Contenido multimedia"],
-        li[title="Media"] { display: none !important; }
+      function accName(el) {
+        var n = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+        if (!n) {
+          var t = (el.textContent || '').trim();
+          if (t && t.length <= 30) n = t;
+        }
+        return norm(n);
+      }
 
-        /* Tú / You (perfil propio — icono de la esquina) */
-        [data-testid="me-from-you"],
-        button[aria-label="Tú"],
-        button[aria-label="You"],
-        li[title="Tú"],
-        li[title="You"] { display: none !important; }
-      \`;
-      document.head.appendChild(style);
-      console.log('[MWS] Botones de nav WhatsApp ocultados');
+      function hideMatching() {
+        var nodes = document.querySelectorAll('button, [role="button"], a[role="button"], [aria-label], [title]');
+        for (var i = 0; i < nodes.length; i++) {
+          var el = nodes[i];
+          if (el.getAttribute('data-mws-hidden')) continue;
+          // No tocar la lista de chats ni la conversación (evita ocultar chats/mensajes).
+          if (el.closest('#pane-side') || el.closest('#main')) continue;
+          if (TARGETS.has(accName(el))) {
+            // Ocultar el ítem clickeable completo (no solo el span con la etiqueta).
+            var target = el.closest('button, [role="button"], li, [role="listitem"]') || el;
+            target.style.setProperty('display', 'none', 'important');
+            target.setAttribute('data-mws-hidden', '1');
+            el.setAttribute('data-mws-hidden', '1');
+          }
+        }
+      }
+
+      var scheduled = false;
+      function schedule() {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(function() { scheduled = false; hideMatching(); });
+      }
+
+      window.__mwsNavHider = schedule;
+
+      hideMatching();
+
+      try {
+        var obs = new MutationObserver(schedule);
+        obs.observe(document.body, { childList: true, subtree: true });
+      } catch (e) {}
+
+      // Respaldo: re-aplicar periódicamente por si el observer pierde algún repintado.
+      setInterval(hideMatching, 1500);
+
+      console.log('[MWS] Nav hider de WhatsApp instalado');
     })();
   `;
 
@@ -1325,7 +1351,7 @@ function createWhatsAppView(): void {
       .catch(err => console.error('[MWS] Error aplicando anti-fingerprinting:', err));
 
     // Ocultar botones de nav (Estados, Canales, Comunidades, Multimedia, Tú)
-    whatsappView?.webContents.executeJavaScript(hideNavButtonsCSS, true)
+    whatsappView?.webContents.executeJavaScript(hideNavButtonsScript, true)
       .catch(err => console.error('[MWS] Error ocultando botones de nav:', err));
 
     // Ocultar botón de adjuntar

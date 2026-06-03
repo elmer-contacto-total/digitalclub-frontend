@@ -14,6 +14,8 @@ import { UserListItem, UserRole, UserStatus, RoleUtils, getFullName } from '../.
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
+import { SortHeaderDirective } from '../../../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 @Component({
   selector: 'app-internal-users',
@@ -24,7 +26,8 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
     FormsModule,
     LoadingSpinnerComponent,
     EmptyStateComponent,
-    PaginationComponent
+    PaginationComponent,
+    SortHeaderDirective
   ],
   template: `
     <div class="internal-users-container">
@@ -73,16 +76,16 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           <table class="data-table">
             <thead>
               <tr>
-                <th>Nombre</th>
-                <th>Email</th>
-                <th>Teléfono</th>
-                <th>Rol</th>
-                <th>Estado</th>
+                <th [appSort]="'name'" [appSortState]="sort()" (appSortChange)="onSort($event)">Nombre</th>
+                <th [appSort]="'email'" [appSortState]="sort()" (appSortChange)="onSort($event)">Email</th>
+                <th [appSort]="'phone'" [appSortState]="sort()" (appSortChange)="onSort($event)">Teléfono</th>
+                <th [appSort]="'role'" [appSortState]="sort()" (appSortChange)="onSort($event)">Rol</th>
+                <th [appSort]="'status'" [appSortState]="sort()" (appSortChange)="onSort($event)">Estado</th>
                 <th class="actions-col">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              @for (user of users(); track user.id) {
+              @for (user of sortedUsers(); track user.id) {
                 <tr>
                   <td>
                     <div class="user-cell">
@@ -210,6 +213,19 @@ export class InternalUsersComponent implements OnInit {
 
   users = signal<UserListItem[]>([]);
   totalRecords = signal(0);
+
+  // Orden client-side de la página visible
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedUsers = computed(() => sortRows(this.users(), this.sort(), (u: UserListItem, col: string) => {
+    switch (col) {
+      case 'name': return getFullName(u);
+      case 'role': return this.getRoleDisplayName(u.role);
+      case 'status': return this.getStatusDisplayName(u.status);
+      default: return (u as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void { this.sort.set(toggleSort(this.sort(), column)); }
+
   userToDeactivate = signal<UserListItem | null>(null);
   isLoading = signal(false);
   searchTerm = signal('');

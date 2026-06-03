@@ -20,6 +20,8 @@ import { ToastService } from '../../core/services/toast.service';
 import { MediaAuditLog, MediaAuditStatsResponse } from '../../core/models/media-audit.model';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
+import { SortHeaderDirective } from '../../shared/directives/sort-header.directive';
+import { SortState, toggleSort, sortRows } from '../../core/utils/table-sort';
 
 interface Agent {
   id: number;
@@ -29,7 +31,7 @@ interface Agent {
 @Component({
   selector: 'app-media-audit-logs',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SortHeaderDirective],
   template: `
     <div class="container-fluid py-4">
       <!-- Page Header -->
@@ -168,14 +170,14 @@ interface Agent {
             <table class="table table-striped table-bordered table-hover mb-0">
               <thead class="table-light">
                 <tr>
-                  <th style="width:50px;">#</th>
-                  <th>Agente</th>
-                  <th>Acción</th>
-                  <th>Archivo</th>
-                  <th>Tipo</th>
-                  <th>Chat</th>
-                  <th>IP</th>
-                  <th>Fecha</th>
+                  <th style="width:50px;" [appSort]="'id'" [appSortState]="sort()" (appSortChange)="onSort($event)">#</th>
+                  <th [appSort]="'agentName'" [appSortState]="sort()" (appSortChange)="onSort($event)">Agente</th>
+                  <th [appSort]="'action'" [appSortState]="sort()" (appSortChange)="onSort($event)">Acción</th>
+                  <th [appSort]="'fileName'" [appSortState]="sort()" (appSortChange)="onSort($event)">Archivo</th>
+                  <th [appSort]="'fileType'" [appSortState]="sort()" (appSortChange)="onSort($event)">Tipo</th>
+                  <th [appSort]="'chatPhone'" [appSortState]="sort()" (appSortChange)="onSort($event)">Chat</th>
+                  <th [appSort]="'clientIp'" [appSortState]="sort()" (appSortChange)="onSort($event)">IP</th>
+                  <th [appSort]="'eventTimestamp'" [appSortState]="sort()" (appSortChange)="onSort($event)">Fecha</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,7 +188,7 @@ interface Agent {
                     </td>
                   </tr>
                 } @else {
-                  @for (log of logs(); track log.id) {
+                  @for (log of sortedLogs(); track log.id) {
                     <tr class="cursor-pointer" (click)="showDetail(log)">
                       <td>{{ log.id }}</td>
                       <td>{{ log.agentName || '-' }}</td>
@@ -392,6 +394,18 @@ export class MediaAuditLogsComponent implements OnInit, OnDestroy {
   // Modal
   showDetailModal = signal(false);
   selectedLog = signal<MediaAuditLog | null>(null);
+
+  // Orden client-side de la página visible
+  sort = signal<SortState>({ column: null, dir: 'asc' });
+  sortedLogs = computed(() => sortRows(this.logs(), this.sort(), (log: MediaAuditLog, col: string) => {
+    switch (col) {
+      case 'action': return this.getActionLabel(log.action);
+      default: return (log as unknown as Record<string, unknown>)[col];
+    }
+  }));
+  onSort(column: string): void {
+    this.sort.set(toggleSort(this.sort(), column));
+  }
 
   // Computed
   blockedCount = computed(() => {
