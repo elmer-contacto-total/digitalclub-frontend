@@ -59,7 +59,9 @@ export class DashboardService {
   ): IndividualKpiRow[] {
     return Object.entries(kpis).map(([userId, kpiData]) => ({
       userId: parseInt(userId),
-      userName: userNames.get(parseInt(userId)) || `Usuario ${userId}`,
+      // Preferir el nombre que viene en la fila (backend); el dropdown solo coincide
+      // para object=agente. Para Cliente/Supervisor el id no está en el dropdown.
+      userName: kpiData?.name || userNames.get(parseInt(userId)) || `Usuario ${userId}`,
       kpis: kpiData
     }));
   }
