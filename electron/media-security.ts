@@ -2709,9 +2709,20 @@ const MEDIA_CAPTURE_SCRIPT = `
                   }, INCOMING_DEBOUNCE_MS);
                 }
               } else if (isOutgoing && isOneOnOneMessage(messageEl)) {
-                // Mensaje saliente del agente — emitir señal para habilitar botones de cierre
+                // Mensaje saliente del agente — emitir señal para habilitar botones de cierre.
+                // FIX: igual que en entrantes, SOLO si es el ÚLTIMO mensaje del chat. Si no,
+                // es un mensaje viejo que entró al DOM por scroll-load y NO debe limpiar
+                // requireResponse (bug: al scrollear hacia arriba se activaban los botones de
+                // cerrar ticket porque una respuesta antigua se detectaba como "recién enviada").
                 notifiedIncomingIds.add(msgKey);
-                console.log('[HABLAPE_OUTGOING_DETECTED]' + (window.__hablapeCurrentChatPhone || ''));
+                var chatContainerOut = messageEl.closest('div#main') || messageEl.closest('[data-testid="conversation-panel-body"]');
+                var allMsgsOut = chatContainerOut ? getMessageNodes(chatContainerOut) : [];
+                var isLastMessageOut = allMsgsOut.length > 0 && allMsgsOut[allMsgsOut.length - 1] === messageEl;
+                if (!isLastMessageOut) {
+                  console.log('[MWS Outgoing] Ignorado (no es último msg, probable scroll-load)');
+                } else {
+                  console.log('[HABLAPE_OUTGOING_DETECTED]' + (window.__hablapeCurrentChatPhone || ''));
+                }
               }
             }
           }
