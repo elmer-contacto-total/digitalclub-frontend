@@ -1260,6 +1260,30 @@ function createWhatsAppView(): void {
   // Usar partición persistente para guardar sesión
   const whatsappSession = session.fromPartition('persist:whatsapp');
 
+  // FIX crash al presionar el botón de audio (nota de voz):
+  // WhatsApp llama getUserMedia({audio}) y, con la GPU deshabilitada
+  // (disable-gpu + disable-software-rasterizer), el pipeline de captura/forma de
+  // onda crashea el renderer. Denegamos la captura de micrófono/cámara: getUserMedia
+  // se rechaza limpio (sin crash). La REPRODUCCIÓN de audios recibidos NO usa
+  // getUserMedia, así que no se ve afectada. Además, esta herramienta no permite
+  // enviar audio (igual que adjuntos están bloqueados).
+  const isMediaCapture = (permission: string, details?: { mediaTypes?: string[] }) =>
+    permission === 'media' || permission === 'audioCapture' || permission === 'videoCapture' ||
+    !!details?.mediaTypes?.some(t => t === 'audio' || t === 'video');
+
+  whatsappSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
+    if (isMediaCapture(permission, details as { mediaTypes?: string[] })) {
+      console.log('[MWS] Permiso de captura de medios DENEGADO (anti-crash audio):', permission);
+      callback(false);
+      return;
+    }
+    callback(true);
+  });
+  whatsappSession.setPermissionCheckHandler((_wc, permission, _origin, details) => {
+    if (isMediaCapture(permission, details as { mediaTypes?: string[] })) return false;
+    return true;
+  });
+
   // Extraer versión de Chrome del fingerprint
   const chromeVersion = userFingerprint.chromeVersion.split('.')[0]; // "120"
 
