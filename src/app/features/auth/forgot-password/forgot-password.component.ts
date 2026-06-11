@@ -24,6 +24,10 @@ export class ForgotPasswordComponent {
   forgotForm: FormGroup;
   isLoading = signal(false);
   emailSent = signal(false);
+  // Mensaje de error inline: los toasts no se renderizan en las páginas de auth
+  // (el contenedor de toasts vive solo en el admin-layout), así que aquí mostramos
+  // el feedback dentro del propio componente.
+  errorMessage = signal<string | null>(null);
 
   constructor() {
     this.forgotForm = this.fb.group({
@@ -38,6 +42,7 @@ export class ForgotPasswordComponent {
     }
 
     this.isLoading.set(true);
+    this.errorMessage.set(null);
     const { email } = this.forgotForm.value;
 
     this.authService.forgotPassword(email).subscribe({
@@ -48,13 +53,13 @@ export class ForgotPasswordComponent {
           this.emailSent.set(true);
           this.toastService.success('Se han enviado las instrucciones a su correo');
         } else {
-          // Correo no registrado: NO mostrar "Correo Enviado", solo avisar
-          this.toastService.error('El correo no está registrado');
+          // Correo no registrado: NO mostrar "Correo Enviado", avisar inline
+          this.errorMessage.set('El correo no está registrado');
         }
       },
       error: () => {
         this.isLoading.set(false);
-        this.toastService.error('No se pudo procesar la solicitud. Intente nuevamente.');
+        this.errorMessage.set('No se pudo procesar la solicitud. Intente nuevamente.');
       }
     });
   }
