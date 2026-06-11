@@ -41,16 +41,20 @@ export class ForgotPasswordComponent {
     const { email } = this.forgotForm.value;
 
     this.authService.forgotPassword(email).subscribe({
-      next: () => {
+      next: (res) => {
         this.isLoading.set(false);
-        this.emailSent.set(true);
-        this.toastService.success('Se han enviado las instrucciones a su correo');
+        if (res?.emailSent) {
+          // El correo existe y se envió: mostrar pantalla "Correo Enviado"
+          this.emailSent.set(true);
+          this.toastService.success('Se han enviado las instrucciones a su correo');
+        } else {
+          // Correo no registrado: NO mostrar "Correo Enviado", solo avisar
+          this.toastService.error('El correo no está registrado');
+        }
       },
-      error: (err) => {
+      error: () => {
         this.isLoading.set(false);
-        // Even on error, show success to prevent email enumeration
-        this.emailSent.set(true);
-        this.toastService.success('Si el correo existe, recibirá las instrucciones');
+        this.toastService.error('No se pudo procesar la solicitud. Intente nuevamente.');
       }
     });
   }

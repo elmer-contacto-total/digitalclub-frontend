@@ -202,8 +202,8 @@ export class AuthService {
   /**
    * Request password reset email
    */
-  forgotPassword(email: string): Observable<{ success: boolean }> {
-    return this.api.post<{ success: boolean }>('/api/v1/password/forgot', { email });
+  forgotPassword(email: string): Observable<{ success: boolean; emailSent: boolean; message?: string }> {
+    return this.api.post<{ success: boolean; emailSent: boolean; message?: string }>('/api/v1/password/forgot', { email });
   }
 
   /**
