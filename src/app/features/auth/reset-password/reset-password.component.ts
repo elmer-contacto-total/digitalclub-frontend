@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
@@ -14,7 +14,7 @@ import { LogoComponent } from '../../../shared/components/logo/logo.component';
   templateUrl: './reset-password.component.html',
   styleUrl: './reset-password.component.scss'
 })
-export class ResetPasswordComponent implements OnInit {
+export class ResetPasswordComponent implements OnInit, OnDestroy {
   private fb = inject(FormBuilder);
   private authService = inject(AuthService);
   private router = inject(Router);
@@ -28,6 +28,10 @@ export class ResetPasswordComponent implements OnInit {
   resetToken = signal<string | null>(null);
   tokenValid = signal(true);
   resetSuccess = signal(false);
+  // Segundos restantes antes de cerrar la pestaña automáticamente
+  readonly closeSeconds = 10;
+  countdown = signal(this.closeSeconds);
+  private countdownTimer?: ReturnType<typeof setInterval>;
 
   readonly minPasswordLength = 6;
 
@@ -122,11 +126,30 @@ export class ResetPasswordComponent implements OnInit {
   }
 
   /**
-   * Cierra la pestaña del navegador automáticamente tras un breve instante,
-   * de modo que el usuario vuelva a la aplicación de escritorio.
+   * Inicia una cuenta regresiva visible (10 s) y, al terminar, cierra la pestaña
+   * para que el usuario vuelva a la aplicación de escritorio.
    */
   private attemptCloseTab(): void {
-    setTimeout(() => this.closeTab(), 1200);
+    this.countdown.set(this.closeSeconds);
+    this.countdownTimer = setInterval(() => {
+      const remaining = this.countdown() - 1;
+      this.countdown.set(remaining);
+      if (remaining <= 0) {
+        this.clearCountdown();
+        this.closeTab();
+      }
+    }, 1000);
+  }
+
+  private clearCountdown(): void {
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer);
+      this.countdownTimer = undefined;
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.clearCountdown();
   }
 
   /**
@@ -135,6 +158,7 @@ export class ResetPasswordComponent implements OnInit {
    * casos, y si falla el usuario verá el mensaje para cerrarla manualmente.
    */
   closeTab(): void {
+    this.clearCountdown();
     try {
       window.close();
       window.open('', '_self');
