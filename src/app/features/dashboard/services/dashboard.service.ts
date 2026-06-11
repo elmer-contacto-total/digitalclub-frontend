@@ -82,7 +82,7 @@ export class DashboardService {
   downloadExport(params: ExportKpiParams): void {
     this.exportKpis(params).subscribe({
       next: (blob) => {
-        this.downloadFile(blob, `kpi_export_${new Date().toISOString().split('T')[0]}.csv`);
+        this.downloadFile(blob, `kpi_export_${new Date().toISOString().split('T')[0]}.xlsx`);
       },
       error: (err) => {
         console.error('Error exporting KPIs:', err);
