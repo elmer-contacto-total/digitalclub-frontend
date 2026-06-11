@@ -377,19 +377,29 @@ interface GenerateImportCsvResponse {
                                 <i class="ph ph-x"></i>
                               </button>
                             }
-                            <button class="btn btn-sm btn-outline" (click)="toggleSearch(gIdx, iIdx)" title="Buscar usuario">
+                            <button class="btn btn-sm btn-outline" [class.active]="item.showSearch" (click)="toggleSearch(gIdx, iIdx)" title="Buscar usuario">
                               <i class="ph ph-magnifying-glass"></i>
                             </button>
-                            @if (item.showSearch) {
+                          </td>
+                        </tr>
+                        @if (item.showSearch) {
+                          <tr class="user-search-row">
+                            <td colspan="4">
                               <div class="user-search-panel" (click)="$event.stopPropagation()">
-                                <input
-                                  type="text"
-                                  class="form-control form-control-sm"
-                                  placeholder="Buscar por nombre, teléfono o código..."
-                                  [value]="item.searchTerm"
-                                  (input)="onUserSearchChange(gIdx, iIdx, $any($event.target).value)"
-                                  autofocus
-                                />
+                                <div class="user-search-input">
+                                  <i class="ph ph-magnifying-glass"></i>
+                                  <input
+                                    type="text"
+                                    class="form-control form-control-sm"
+                                    placeholder="Buscar usuario por nombre, teléfono o código..."
+                                    [value]="item.searchTerm"
+                                    (input)="onUserSearchChange(gIdx, iIdx, $any($event.target).value)"
+                                    autofocus
+                                  />
+                                  <button class="user-search-close" (click)="toggleSearch(gIdx, iIdx)" title="Cerrar">
+                                    <i class="ph ph-x"></i>
+                                  </button>
+                                </div>
                                 @if (item.searchResults.length > 0) {
                                   <div class="search-results-dropdown">
                                     @for (u of item.searchResults; track u.id) {
@@ -402,11 +412,13 @@ interface GenerateImportCsvResponse {
                                       </div>
                                     }
                                   </div>
+                                } @else if (item.searchTerm && item.searchTerm.length >= 2) {
+                                  <div class="search-empty">Sin resultados para "{{ item.searchTerm }}"</div>
                                 }
                               </div>
-                            }
-                          </td>
-                        </tr>
+                            </td>
+                          </tr>
+                        }
                         }
                       }
                       @if (hasNoVisibleItems(group)) {

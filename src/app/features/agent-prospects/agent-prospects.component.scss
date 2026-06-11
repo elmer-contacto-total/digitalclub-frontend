@@ -116,21 +116,27 @@ h1 {
   &:hover:not(:disabled) {
     background: var(--bg-subtle);
   }
+
+  &.active {
+    background: var(--accent-subtle);
+    border-color: var(--accent-default);
+    color: var(--accent-default);
+  }
 }
 
 .btn-outline-danger {
   background: transparent;
-  border-color: var(--danger-border, #f87171);
-  color: var(--danger-fg, #dc2626);
+  border-color: var(--error-default);
+  color: var(--error-text);
 
   &:hover:not(:disabled) {
-    background: var(--danger-subtle, #fee2e2);
+    background: var(--error-subtle);
   }
 }
 
 .btn-danger {
-  background-color: var(--danger-default, #dc2626);
-  border-color: var(--danger-default, #dc2626);
+  background-color: var(--error-default);
+  border-color: var(--error-default);
   color: white;
 }
 
@@ -514,23 +520,59 @@ h1 {
   color: var(--fg-subtle);
 }
 
+// Fila expandible del buscador de usuario (inline, no overlay → nunca se recorta
+// ni requiere scroll para verse, a diferencia del dropdown absoluto anterior).
+.user-search-row > td {
+  background: var(--bg-subtle);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-default);
+}
+
 .user-search-panel {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 100;
-  width: 300px;
   background: var(--card-bg);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-sm);
   padding: var(--space-2);
 
-  .form-control-sm {
-    width: 100%;
-    padding: var(--space-1) var(--space-2);
-    font-size: var(--text-sm);
+  .user-search-input {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+
+    > i {
+      color: var(--fg-muted);
+      flex-shrink: 0;
+    }
+
+    .form-control-sm {
+      flex: 1;
+      min-width: 0;
+      padding: var(--space-1) var(--space-2);
+      font-size: var(--text-sm);
+    }
   }
+
+  .user-search-close {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--fg-muted);
+    padding: var(--space-1);
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+
+    &:hover { background: var(--bg-muted); color: var(--fg-default); }
+  }
+}
+
+.search-empty {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--fg-subtle);
+  text-align: center;
 }
 
 .search-results-dropdown {
@@ -578,7 +620,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   margin-left: var(--space-1);
-  color: var(--success-fg, #16a34a);
+  color: var(--success-text);
   font-size: 14px;
   vertical-align: middle;
 }
@@ -697,10 +739,10 @@ h1 {
 // Panel de omitidos post-generación
 .skipped-panel {
   margin-top: var(--space-4);
-  border: 1px solid var(--warning-border, #fbbf24);
+  border: 1px solid var(--warning-text);
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--warning-subtle, #fffbeb);
+  background: var(--warning-subtle);
 }
 
 .skipped-panel-header {
@@ -708,11 +750,11 @@ h1 {
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3) var(--space-4);
-  background: var(--warning-muted, #fef3c7);
-  border-bottom: 1px solid var(--warning-border, #fbbf24);
+  background: var(--warning-subtle);
+  border-bottom: 1px solid var(--warning-text);
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
-  color: var(--warning-fg, #92400e);
+  color: var(--warning-text);
 
   i { margin-right: var(--space-1); }
 }
@@ -727,7 +769,7 @@ h1 {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--warning-border, #fbbf24);
+  border-bottom: 1px solid var(--warning-text);
   font-size: var(--text-sm);
 
   &:last-child { border-bottom: none; }
@@ -747,9 +789,9 @@ h1 {
 
 .skipped-reason {
   font-size: var(--text-xs);
-  color: var(--warning-fg, #92400e);
-  background: var(--warning-muted, #fef3c7);
-  border: 1px solid var(--warning-border, #fbbf24);
+  color: var(--warning-text);
+  background: var(--warning-subtle);
+  border: 1px solid var(--warning-text);
   border-radius: var(--radius-sm);
   padding: 2px var(--space-2);
   white-space: nowrap;
