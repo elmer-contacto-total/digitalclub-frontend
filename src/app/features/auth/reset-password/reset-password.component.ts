@@ -27,6 +27,7 @@ export class ResetPasswordComponent implements OnInit {
   showConfirmPassword = signal(false);
   resetToken = signal<string | null>(null);
   tokenValid = signal(true);
+  resetSuccess = signal(false);
 
   readonly minPasswordLength = 6;
 
@@ -87,8 +88,12 @@ export class ResetPasswordComponent implements OnInit {
     ).subscribe({
       next: () => {
         this.isLoading.set(false);
+        this.resetSuccess.set(true);
         this.toastService.success('Contraseña cambiada exitosamente');
-        this.router.navigate(['/auth/login']);
+        // Intentar cerrar la pestaña para que el usuario vuelva a la app de escritorio.
+        // El navegador puede bloquear el cierre automático (pestañas abiertas desde un
+        // enlace de correo), por eso también mostramos un botón de respaldo.
+        this.attemptCloseTab();
       },
       error: (err) => {
         this.isLoading.set(false);
@@ -114,6 +119,29 @@ export class ResetPasswordComponent implements OnInit {
         }
       }
     });
+  }
+
+  /**
+   * Cierra la pestaña del navegador automáticamente tras un breve instante,
+   * de modo que el usuario vuelva a la aplicación de escritorio.
+   */
+  private attemptCloseTab(): void {
+    setTimeout(() => this.closeTab(), 1200);
+  }
+
+  /**
+   * Intenta cerrar la pestaña actual. Algunos navegadores solo permiten cerrar
+   * ventanas abiertas por script; el truco window.open('','_self') ayuda en varios
+   * casos, y si falla el usuario verá el mensaje para cerrarla manualmente.
+   */
+  closeTab(): void {
+    try {
+      window.close();
+      window.open('', '_self');
+      window.close();
+    } catch {
+      // El navegador bloqueó el cierre programático: se mantiene el mensaje de éxito.
+    }
   }
 
   get passwordControl() {
