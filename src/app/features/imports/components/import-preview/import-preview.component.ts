@@ -199,7 +199,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                 [currentPage]="currentPage()"
                 [totalItems]="totalElements()"
                 [pageSize]="pageSize()"
-                [pageSizeOptions]="[25, 50, 100]"
+                [pageSizeOptions]="[10, 25, 50, 100]"
                 (pageChange)="onPageChange($event)"
                 (pageSizeChange)="onPageSizeChange($event)"
               />
@@ -668,7 +668,7 @@ export class ImportPreviewComponent implements OnInit, OnDestroy {
 
   // Pagination
   currentPage = signal(1);
-  pageSize = signal(50);
+  pageSize = signal(10);
   totalElements = signal(0);
   totalPages = signal(0);
 

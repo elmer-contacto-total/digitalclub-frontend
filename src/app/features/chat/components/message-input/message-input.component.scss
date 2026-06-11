@@ -21,10 +21,10 @@
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   margin-bottom: var(--space-2);
-  background: var(--warning-bg, #fff8e1);
-  border: 1px solid var(--warning-border, #ffe082);
+  background: var(--warning-subtle);
+  border: 1px solid var(--warning-text);
   border-radius: var(--radius-md);
-  color: var(--warning-text, #7c5e00);
+  color: var(--warning-text);
   font-size: var(--text-xs);
 
   i {
