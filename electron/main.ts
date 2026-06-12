@@ -1660,6 +1660,45 @@ function hideWhatsAppView(): void {
   mainWindow.webContents.send('whatsapp-visibility-changed', { visible: false });
 }
 
+/**
+ * Destruye por completo la BrowserView de WhatsApp (no solo la oculta).
+ *
+ * CRÍTICO: `removeBrowserView` SOLO desadjunta la vista del window — NO destruye su
+ * `webContents`. Si únicamente hacemos `removeBrowserView` + `whatsappView = null`,
+ * la página de WhatsApp Web sigue VIVA en segundo plano (proceso de render activo)
+ * reteniendo la caché de la partición `persist:whatsapp`. Cuando luego se recrea la
+ * vista (p.ej. al re-impersonar a un asesor), la nueva BrowserView no puede abrir esa
+ * caché ("Unable to move the cache: Acceso denegado") y WhatsApp Web nunca inicializa
+ * el QR → se queda cargando para siempre.
+ *
+ * Destruir el webContents libera el proceso de render y el handle de la caché, de modo
+ * que la siguiente creación pueda usar `persist:whatsapp` sin conflicto.
+ */
+function destroyWhatsAppView(): void {
+  if (!whatsappView) return;
+
+  try {
+    if (mainWindow && mainWindow.getBrowserViews().includes(whatsappView)) {
+      mainWindow.removeBrowserView(whatsappView);
+    }
+    const wc = whatsappView.webContents as any;
+    if (wc && (typeof wc.isDestroyed !== 'function' || !wc.isDestroyed())) {
+      // destroy() = teardown inmediato (libera caché/proceso). close() como respaldo.
+      if (typeof wc.destroy === 'function') {
+        wc.destroy();
+      } else if (typeof wc.close === 'function') {
+        wc.close();
+      }
+    }
+  } catch (e) {
+    console.error('[MWS] Error destruyendo WhatsApp view:', e);
+  }
+
+  whatsappView = null;
+  whatsappVisible = false;
+  whatsappInitialized = false;
+}
+
 // Actualización inmediata (para resize de ventana)
 function updateWhatsAppViewBounds(): void {
   if (!mainWindow || !whatsappView || !whatsappVisible) return;
@@ -3242,13 +3281,10 @@ function setupIPC(): void {
       await defaultSession.clearCache();
       console.log('[MWS] Sesión principal limpiada');
 
-      // 4. Destruir WhatsApp view si existe
-      if (whatsappView && mainWindow) {
+      // 4. Destruir WhatsApp view si existe (destruye el webContents, no solo lo desadjunta)
+      if (whatsappView) {
         logWaDiag('destroy via full-reset IPC');
-        mainWindow.removeBrowserView(whatsappView);
-        whatsappView = null;
-        whatsappVisible = false;
-        whatsappInitialized = false;
+        destroyWhatsAppView();
       }
 
       // 5. Recargar la aplicación
@@ -3277,13 +3313,11 @@ function setupIPC(): void {
 
       if (whatsappView) {
         logWaDiag('destroy via whatsapp:reset-session IPC (fin de impersonación/logout)');
-        if (mainWindow && mainWindow.getBrowserViews().includes(whatsappView)) {
-          mainWindow.removeBrowserView(whatsappView);
-        }
-        whatsappView = null;
       }
-      whatsappVisible = false;
-      whatsappInitialized = false;
+      // Destruye el webContents (libera el handle de caché de persist:whatsapp) ANTES
+      // de limpiar la sesión; si no, la caché queda tomada por la vista vieja y la
+      // próxima creación (re-impersonar) se queda con el QR cargando.
+      destroyWhatsAppView();
 
       const whatsappSession = session.fromPartition('persist:whatsapp');
       await whatsappSession.clearStorageData();
