@@ -3009,8 +3009,9 @@ function setupIPC(): void {
           // Método 1: execCommand (más compatible)
           document.execCommand('insertText', false, text);
 
-          // Disparar eventos para que WhatsApp detecte el cambio
-          input.dispatchEvent(new InputEvent('input', { bubbles: true, data: text }));
+          // Disparar evento input para que WhatsApp active su botón de enviar
+          // (sin 'data' para no volver a insertar el texto de execCommand)
+          input.dispatchEvent(new InputEvent('input', { bubbles: true }));
 
           return { success: true };
         })()
