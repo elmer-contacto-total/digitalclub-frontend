@@ -1,6 +1,4 @@
-import { BrowserWindow, shell, app } from 'electron';
-import * as https from 'https';
-import * as http from 'http';
+import { BrowserWindow, shell, app, net } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
@@ -56,7 +54,12 @@ export async function checkForUpdates(
   console.log('[MWS Update] Checking for updates:', url);
 
   try {
-    const response = await fetch(url, {
+    // IMPORTANTE: usar net.fetch (stack de red de Chromium), NO el fetch de Node.
+    // net.fetch respeta el proxy del sistema (WPAD/PAC que impone Active Directory)
+    // y el almacén de certificados de Windows (raíz corporativa de inspección TLS).
+    // El fetch de Node ignora ambos y falla en silencio en laptops de dominio: por
+    // eso a esos usuarios nunca les saltaba la modal de actualización.
+    const response = await net.fetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -166,73 +169,97 @@ export async function downloadAndInstallUpdate(
 }
 
 /**
- * Download a file with progress tracking.
- * Follows redirects (important for S3 presigned URLs).
+ * Download a file with progress tracking, usando el módulo net de Electron.
+ *
+ * net.request enruta por el stack de Chromium igual que net.fetch: respeta el
+ * proxy corporativo (WPAD/PAC de Active Directory) y el almacén de certificados
+ * de Windows. Sigue redirects automáticamente (redirect: 'follow'), necesario
+ * para las presigned URLs de S3.
  */
 function downloadFile(
   url: string,
   destPath: string,
-  onProgress: (percent: number) => void,
-  redirectCount = 0
+  onProgress: (percent: number) => void
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (redirectCount > 5) {
-      reject(new Error('Too many redirects'));
-      return;
-    }
+    const request = net.request({ url, method: 'GET', redirect: 'follow' });
 
-    const protocol = url.startsWith('https') ? https : http;
+    let settled = false;
+    let watchdog: NodeJS.Timeout | null = null;
 
-    const request = protocol.get(url, (response) => {
-      // Handle redirects
-      if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-        console.log('[MWS Update] Following redirect to:', response.headers.location);
-        downloadFile(response.headers.location, destPath, onProgress, redirectCount + 1)
-          .then(resolve)
-          .catch(reject);
+    const cleanupWatchdog = () => {
+      if (watchdog) {
+        clearTimeout(watchdog);
+        watchdog = null;
+      }
+    };
+
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanupWatchdog();
+      try { request.abort(); } catch { /* noop */ }
+      fs.unlink(destPath, () => {});
+      reject(err);
+    };
+
+    // Watchdog de inactividad: aborta si no llegan datos por 60s.
+    const armWatchdog = () => {
+      cleanupWatchdog();
+      watchdog = setTimeout(() => fail(new Error('Download timeout')), 60000);
+    };
+
+    request.on('response', (response) => {
+      const status = response.statusCode || 0;
+      if (status !== 200) {
+        fail(new Error(`HTTP ${status}`));
         return;
       }
 
-      if (response.statusCode !== 200) {
-        reject(new Error(`HTTP ${response.statusCode}`));
-        return;
-      }
-
-      const totalSize = parseInt(response.headers['content-length'] || '0', 10);
+      // En Electron los headers pueden venir como string[] — normalizar.
+      const clHeader = response.headers['content-length'];
+      const clRaw = Array.isArray(clHeader) ? clHeader[0] : clHeader;
+      const totalSize = parseInt((clRaw as string) || '0', 10);
       let downloadedSize = 0;
 
       const fileStream = fs.createWriteStream(destPath);
+      fileStream.on('error', (err) => fail(err));
+
+      // pause/resume para backpressure (cast: no siempre están en los tipos de Electron 28).
+      const pausable = response as unknown as { pause?: () => void; resume?: () => void };
+
+      armWatchdog();
 
       response.on('data', (chunk: Buffer) => {
+        armWatchdog();
         downloadedSize += chunk.length;
+
+        const ok = fileStream.write(chunk);
+        if (!ok && pausable.pause && pausable.resume) {
+          pausable.pause();
+          fileStream.once('drain', () => pausable.resume!());
+        }
+
         if (totalSize > 0) {
-          const percent = Math.round((downloadedSize / totalSize) * 100);
-          onProgress(percent);
+          onProgress(Math.round((downloadedSize / totalSize) * 100));
         }
       });
 
-      response.pipe(fileStream);
-
-      fileStream.on('finish', () => {
-        fileStream.close();
-        resolve();
+      response.on('end', () => {
+        if (settled) return;
+        cleanupWatchdog();
+        fileStream.end(() => {
+          settled = true;
+          resolve();
+        });
       });
 
-      fileStream.on('error', (err) => {
-        fs.unlink(destPath, () => {});
-        reject(err);
-      });
+      response.on('error', (err: Error) => fail(err));
     });
 
-    request.on('error', (err) => {
-      fs.unlink(destPath, () => {});
-      reject(err);
-    });
+    request.on('error', (err) => fail(err));
 
-    request.setTimeout(60000, () => {
-      request.destroy();
-      reject(new Error('Download timeout'));
-    });
+    request.end();
   });
 }
 
