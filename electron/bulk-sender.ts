@@ -1374,8 +1374,15 @@ export class BulkSender {
     await this.cdpType(intlPhone);
     await this.sleep(2000);
 
-    // 3. ¿Hay algún resultado seleccionable? WhatsApp muestra el número como
-    //    contacto nuevo cuando existe, y un aviso cuando no está en WhatsApp.
+    // 3. Localizar el resultado que corresponde a ESTE número.
+    //
+    // No alcanza con "hay alguna celda": el panel recién abierto ya lista
+    // todos los contactos (se midieron 70 en producción), así que un
+    // querySelector suelto daría positivo siempre y el ArrowDown+Enter
+    // siguiente abriría un chat cualquiera — mandándole la campaña a la
+    // persona equivocada. Se exige que alguna celda contenga los últimos 8
+    // dígitos del número buscado.
+    const suffix = intlPhone.slice(-8);
     const outcome = await this.waitForCondition(`
       (function() {
         var body = (document.body && document.body.innerText) || '';
@@ -1385,9 +1392,14 @@ export class BulkSender {
             body.indexOf('is not on WhatsApp') !== -1) {
           return 'not_registered';
         }
-        var cell = document.querySelector('[data-testid="cell-frame-container"]') ||
-                   document.querySelector('#pane-side [role="listitem"]');
-        return cell ? 'has_result' : null;
+        var cells = document.querySelectorAll('[data-testid="cell-frame-container"]');
+        if (!cells.length) return null;
+        var suffix = ${JSON.stringify(suffix)};
+        for (var i = 0; i < cells.length; i++) {
+          var digits = (cells[i].textContent || '').replace(/[^0-9]/g, '');
+          if (digits.indexOf(suffix) !== -1) return 'match:' + i;
+        }
+        return null;
       })()
     `, NEW_CHAT_TIMEOUT_MS, 400);
 
@@ -1400,19 +1412,35 @@ export class BulkSender {
       };
     }
 
-    if (outcome !== 'has_result') {
+    if (typeof outcome !== 'string' || !outcome.startsWith('match:')) {
       await this.cdpKey('Escape', 'Escape', 27);
       return {
         success: false,
-        error: `"Nuevo chat" no devolvió resultados para ${phone}`,
+        error: `"Nuevo chat" no encontró a ${phone}`,
         errorType: 'not_found'
       };
     }
 
-    // 4. Abrir el primer resultado y esperar el cuadro de texto.
-    await this.cdpKey('ArrowDown', 'ArrowDown', 40);
-    await this.sleep(200);
-    await this.cdpKey('Enter', 'Enter', 13);
+    // 4. Abrir ESA celda por índice, no la primera de la lista.
+    const index = Number(outcome.slice('match:'.length));
+    const clicked = await this.whatsappView.webContents.executeJavaScript(`
+      (function() {
+        var cells = document.querySelectorAll('[data-testid="cell-frame-container"]');
+        var el = cells[${index}];
+        if (!el) return false;
+        el.click();
+        return true;
+      })()
+    `, true);
+
+    if (!clicked) {
+      await this.cdpKey('Escape', 'Escape', 27);
+      return {
+        success: false,
+        error: `El resultado de ${phone} desapareció antes de poder abrirlo`,
+        errorType: 'not_found'
+      };
+    }
 
     const composeReady = await this.waitForCondition(`
       (function() {
