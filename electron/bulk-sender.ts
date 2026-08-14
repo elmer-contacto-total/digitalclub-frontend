@@ -44,16 +44,6 @@ export type OverlayUpdateCallback = (data: {
 type NavResult = { success: boolean; error?: string; errorType?: 'not_registered' | 'not_found' | 'timeout' | 'selector' | 'unknown' };
 
 /**
- * Código de país que se antepone cuando el número del CSV viene en formato
- * local. Las tramas de cartera traen el celular peruano de 9 dígitos
- * (ej. 906261039) y el buscador de "Nuevo chat" necesita el número completo.
- */
-const DEFAULT_COUNTRY_CODE = '51';
-
-/** Largo de un celular local sin código de país (Perú). */
-const LOCAL_PHONE_LENGTH = 9;
-
-/**
  * Margen para que abra el panel "Nuevo chat" y devuelva resultados.
  * Es dentro de la SPA, así que no necesita tanto como una recarga.
  */
@@ -1292,17 +1282,6 @@ export class BulkSender {
   }
 
   /**
-   * Normaliza a formato internacional para "Nuevo chat", que necesita
-   * código de país. Las tramas de cartera traen el celular local de 9 dígitos,
-   * así que se antepone el código por defecto sólo cuando falta.
-   */
-  private toInternationalPhone(phone: string): string {
-    const digits = (phone || '').replace(/\D/g, '');
-    if (digits.length > LOCAL_PHONE_LENGTH) return digits; // ya trae código de país
-    return DEFAULT_COUNTRY_CODE + digits;
-  }
-
-  /**
    * Fallback cuando el buscador de la lista de chats no encuentra el número.
    *
    * Ese buscador sólo alcanza conversaciones existentes y contactos agendados
@@ -1322,7 +1301,7 @@ export class BulkSender {
       return { success: false, error: 'Vista de WhatsApp no disponible', errorType: 'unknown' };
     }
 
-    const intlPhone = this.toInternationalPhone(phone);
+    const localDigits = (phone || '').replace(/\D/g, '');
 
     // 1. Abrir el panel "Nuevo chat".
     const opened = await this.whatsappView.webContents.executeJavaScript(`
@@ -1370,8 +1349,14 @@ export class BulkSender {
       };
     }
 
+    // Se escribe el número tal como viene (solo dígitos), sin anteponer código
+    // de país. Validado contra el WhatsApp de producción: tecleando 999975353
+    // el panel agrega en primera posición la fila "+51 999 975 353" — WhatsApp
+    // deduce el país de la propia cuenta. Los CSV de cartera vienen en los dos
+    // formatos y ambos funcionan; el match posterior es por los últimos 8
+    // dígitos, que son los mismos con o sin prefijo.
     await this.cdpClear();
-    await this.cdpType(intlPhone);
+    await this.cdpType(localDigits);
     await this.sleep(2000);
 
     // 3. Localizar el resultado que corresponde a ESTE número.
@@ -1382,7 +1367,7 @@ export class BulkSender {
     // siguiente abriría un chat cualquiera — mandándole la campaña a la
     // persona equivocada. Se exige que alguna celda contenga los últimos 8
     // dígitos del número buscado.
-    const suffix = intlPhone.slice(-8);
+    const suffix = localDigits.slice(-8);
     const outcome = await this.waitForCondition(`
       (function() {
         var body = (document.body && document.body.innerText) || '';
@@ -1461,7 +1446,7 @@ export class BulkSender {
       };
     }
 
-    console.log(`[BulkSender] Chat de ${intlPhone} abierto vía "Nuevo chat"`);
+    console.log(`[BulkSender] Chat de ${localDigits} abierto vía "Nuevo chat"`);
     return { success: true };
   }
 
