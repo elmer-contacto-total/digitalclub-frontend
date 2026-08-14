@@ -46,7 +46,7 @@ type NavResult = { success: boolean; error?: string; errorType?: 'not_registered
 /**
  * Código de país que se antepone cuando el número del CSV viene en formato
  * local. Las tramas de cartera traen el celular peruano de 9 dígitos
- * (ej. 906261039) y el deep-link de WhatsApp SIEMPRE exige código de país.
+ * (ej. 906261039) y el buscador de "Nuevo chat" necesita el número completo.
  */
 const DEFAULT_COUNTRY_CODE = '51';
 
@@ -54,10 +54,10 @@ const DEFAULT_COUNTRY_CODE = '51';
 const LOCAL_PHONE_LENGTH = 9;
 
 /**
- * Margen para que WhatsApp Web recargue y abra el chat por deep-link.
- * Es bastante más lento que el buscador porque reinicia la app web.
+ * Margen para que abra el panel "Nuevo chat" y devuelva resultados.
+ * Es dentro de la SPA, así que no necesita tanto como una recarga.
  */
-const DEEP_LINK_TIMEOUT_MS = 25000;
+const NEW_CHAT_TIMEOUT_MS = 8000;
 
 /**
  * Margen para que aparezca el cuadro de texto tras abrir un chat.
@@ -815,7 +815,10 @@ export class BulkSender {
           sentCount: this.sentCount,
           failedCount: this.failedCount,
           totalRecipients: this.totalRecipients,
-          currentPhone: this.currentPhone,
+          // null y no this.currentPhone: durante la espera no se está enviando
+          // a nadie. Mostrar el número anterior hacía parecer que ese envío
+          // seguía en curso cuando ya estaba terminado.
+          currentPhone: null,
           nextMessageInSeconds: Math.ceil(remainingMs / 1000)
         });
       }
@@ -1194,9 +1197,9 @@ export class BulkSender {
       if (searchCheck.status === 'no_results') {
         // El buscador de WhatsApp solo ve chats existentes y contactos agendados,
         // así que con cartera nueva SIEMPRE cae acá. Antes de descartar el
-        // número, intentar por deep-link, que abre cualquier número con WhatsApp.
-        console.log(`[BulkSender] Buscador sin resultados para ${phone} — probando deep-link`);
-        return await this.navigateViaDeepLink(phone);
+        // número, intentar por el panel "Nuevo chat", que sí resuelve números sueltos.
+        console.log(`[BulkSender] Buscador sin resultados para ${phone} — probando "Nuevo chat"`);
+        return await this.navigateViaNewChat(phone);
       }
 
       if (searchCheck.count > 15) {
@@ -1254,11 +1257,14 @@ export class BulkSender {
         // reportaba como "Contacto no registrado en WhatsApp", que es falso y
         // además hace que el destinatario se saltee sin reintento.
         //
-        // Este camino es justamente el que el buscador "gana" cuando el chat
-        // ya existe, así que el fallback de no_results no lo cubre: hay que
-        // reintentar por deep-link también acá.
-        console.warn(`[BulkSender] Cuadro de texto no apareció para ${phone} — probando deep-link`);
-        return await this.navigateViaDeepLink(phone);
+        // No se reintenta por "Nuevo chat": si el chat ya existe (que es el
+        // caso cuando el buscador gana este camino), ese panel devuelve lo
+        // mismo. Se reporta el timeout tal cual y el loop sigue.
+        return {
+          success: false,
+          error: `El chat de ${phone} no terminó de abrir (${Math.round(COMPOSE_BOX_TIMEOUT_MS / 1000)}s)`,
+          errorType: 'timeout'
+        };
       }
 
       // Verify header contains phone suffix (soft check — warning only)
@@ -1286,7 +1292,7 @@ export class BulkSender {
   }
 
   /**
-   * Normaliza a formato internacional para el deep-link, que SIEMPRE exige
+   * Normaliza a formato internacional para "Nuevo chat", que necesita
    * código de país. Las tramas de cartera traen el celular local de 9 dígitos,
    * así que se antepone el código por defecto sólo cuando falta.
    */
@@ -1297,73 +1303,137 @@ export class BulkSender {
   }
 
   /**
-   * Fallback cuando el buscador no encuentra el número.
+   * Fallback cuando el buscador de la lista de chats no encuentra el número.
    *
-   * El buscador de la lista de chats sólo alcanza conversaciones existentes y
-   * contactos agendados en el teléfono vinculado. El deep-link ("click to chat")
-   * abre cualquier número que tenga WhatsApp, esté agendado o no — que es el
-   * caso normal en una campaña sobre cartera nueva.
+   * Ese buscador sólo alcanza conversaciones existentes y contactos agendados
+   * en el teléfono vinculado, así que en una campaña sobre cartera nueva falla
+   * siempre. El panel "Nuevo chat" tiene su propio buscador, que sí resuelve
+   * números sueltos.
    *
-   * Es más lento que el buscador porque recarga WhatsApp Web, por eso sólo se
-   * usa después de que el buscador ya falló.
+   * IMPORTANTE: todo ocurre dentro de la SPA, sin navegar el frame principal.
+   * La versión anterior de este fallback usaba el deep-link
+   * (web.whatsapp.com/send?phone=...) y en producción las 2 veces que corrió
+   * terminó con WhatsApp cerrando la sesión ~1 minuto después, obligando a
+   * re-escanear el QR. Perder la sesión es mucho peor que saltear un número:
+   * no volver a introducir una navegación de nivel superior acá.
    */
-  private async navigateViaDeepLink(phone: string): Promise<NavResult> {
+  private async navigateViaNewChat(phone: string): Promise<NavResult> {
     if (!this.whatsappView) {
       return { success: false, error: 'Vista de WhatsApp no disponible', errorType: 'unknown' };
     }
 
     const intlPhone = this.toInternationalPhone(phone);
 
-    try {
-      await this.whatsappView.webContents.loadURL(
-        `https://web.whatsapp.com/send?phone=${intlPhone}`
-      );
-    } catch (err: any) {
+    // 1. Abrir el panel "Nuevo chat".
+    const opened = await this.whatsappView.webContents.executeJavaScript(`
+      (function() {
+        var btn = document.querySelector('[data-testid="chat"]') ||
+                  document.querySelector('[data-icon="new-chat-outline"]') ||
+                  document.querySelector('[data-icon="chat"]') ||
+                  document.querySelector('[aria-label="Nuevo chat"]') ||
+                  document.querySelector('[aria-label="New chat"]') ||
+                  document.querySelector('[title="Nuevo chat"]');
+        if (!btn) return false;
+        (btn.closest('button') || btn).click();
+        return true;
+      })()
+    `, true);
+
+    if (!opened) {
       return {
         success: false,
-        error: `No se pudo abrir el chat de ${phone}: ${err?.message || err}`,
+        error: `No se encontró el botón "Nuevo chat" para ${phone}`,
+        errorType: 'selector'
+      };
+    }
+
+    // 2. Esperar el buscador del panel y escribir el número.
+    const typed = await this.waitForCondition(`
+      (function() {
+        var input = document.querySelector('[data-testid="chat-list-search"]') ||
+                    document.querySelector('[data-testid="search-input"]') ||
+                    document.querySelector('input[data-tab="3"]') ||
+                    document.querySelector('div[contenteditable="true"][data-tab="3"]');
+        if (!input) return null;
+        input.focus();
+        input.click();
+        return true;
+      })()
+    `, NEW_CHAT_TIMEOUT_MS, 300);
+
+    if (!typed) {
+      await this.cdpKey('Escape', 'Escape', 27);
+      return {
+        success: false,
+        error: `El panel "Nuevo chat" no abrió para ${phone}`,
         errorType: 'timeout'
       };
     }
 
-    // Tras la recarga esperamos uno de dos desenlaces: el cuadro de texto listo
-    // (chat abierto) o el aviso de WhatsApp de que el número no es válido.
+    await this.cdpClear();
+    await this.cdpType(intlPhone);
+    await this.sleep(2000);
+
+    // 3. ¿Hay algún resultado seleccionable? WhatsApp muestra el número como
+    //    contacto nuevo cuando existe, y un aviso cuando no está en WhatsApp.
     const outcome = await this.waitForCondition(`
       (function() {
         var body = (document.body && document.body.innerText) || '';
-        if (body.indexOf('no es válido') !== -1 ||
-            body.indexOf('inválido') !== -1 ||
-            body.indexOf('is not valid') !== -1 ||
-            body.indexOf('phone number shared via url is invalid') !== -1) {
-          return 'invalid';
+        if (body.indexOf('no está en WhatsApp') !== -1 ||
+            body.indexOf('no figura en WhatsApp') !== -1 ||
+            body.indexOf("isn't on WhatsApp") !== -1 ||
+            body.indexOf('is not on WhatsApp') !== -1) {
+          return 'not_registered';
         }
-        var box = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
-                  document.querySelector('footer div[contenteditable="true"]') ||
-                  document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
-                  document.querySelector('#main div[contenteditable="true"]');
-        return box ? 'ready' : null;
+        var cell = document.querySelector('[data-testid="cell-frame-container"]') ||
+                   document.querySelector('#pane-side [role="listitem"]');
+        return cell ? 'has_result' : null;
       })()
-    `, DEEP_LINK_TIMEOUT_MS, 500);
+    `, NEW_CHAT_TIMEOUT_MS, 400);
 
-    if (outcome === 'invalid') {
-      console.log(`[BulkSender] ${intlPhone} no tiene WhatsApp (deep-link)`);
+    if (outcome === 'not_registered') {
+      await this.cdpKey('Escape', 'Escape', 27);
       return {
         success: false,
-        error: `El número ${phone} no tiene WhatsApp`,
+        error: `El número ${phone} no está en WhatsApp`,
         errorType: 'not_registered'
       };
     }
 
-    if (outcome !== 'ready') {
-      console.warn(`[BulkSender] Deep-link no abrió el chat de ${intlPhone} a tiempo`);
+    if (outcome !== 'has_result') {
+      await this.cdpKey('Escape', 'Escape', 27);
       return {
         success: false,
-        error: `WhatsApp no abrió el chat de ${phone} (tardó más de ${Math.round(DEEP_LINK_TIMEOUT_MS / 1000)}s)`,
+        error: `"Nuevo chat" no devolvió resultados para ${phone}`,
+        errorType: 'not_found'
+      };
+    }
+
+    // 4. Abrir el primer resultado y esperar el cuadro de texto.
+    await this.cdpKey('ArrowDown', 'ArrowDown', 40);
+    await this.sleep(200);
+    await this.cdpKey('Enter', 'Enter', 13);
+
+    const composeReady = await this.waitForCondition(`
+      (function() {
+        var box = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                  document.querySelector('footer div[contenteditable="true"]') ||
+                  document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
+                  document.querySelector('#main div[contenteditable="true"]');
+        return box ? true : null;
+      })()
+    `, COMPOSE_BOX_TIMEOUT_MS, 300);
+
+    if (!composeReady) {
+      await this.cdpKey('Escape', 'Escape', 27);
+      return {
+        success: false,
+        error: `El chat de ${phone} no terminó de abrir desde "Nuevo chat"`,
         errorType: 'timeout'
       };
     }
 
-    console.log(`[BulkSender] Chat de ${intlPhone} abierto por deep-link`);
+    console.log(`[BulkSender] Chat de ${intlPhone} abierto vía "Nuevo chat"`);
     return { success: true };
   }
 

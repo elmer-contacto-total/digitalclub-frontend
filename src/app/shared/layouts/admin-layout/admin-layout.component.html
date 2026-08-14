@@ -46,7 +46,9 @@
         @if (bulkSendState().state === 'running') {
           <div class="bulk-send-icon"><i class="ph ph-paper-plane-tilt"></i></div>
           <h3>Envío masivo en curso</h3>
-          <p class="bulk-send-phone">{{ bulkSendState().currentPhone || 'Preparando...' }}</p>
+          <p class="bulk-send-phone">
+            {{ bulkSendState().currentPhone || (bulkSendState().nextMessageInSeconds ? 'En espera' : 'Preparando...') }}
+          </p>
           @if (bulkSendState().nextMessageInSeconds; as espera) {
             <p class="bulk-send-wait">
               <i class="ph ph-clock"></i>
@@ -76,7 +78,9 @@
         <p class="bulk-send-count">
           {{ bulkSendState().sentCount }} / {{ bulkSendState().totalRecipients }} enviados
           @if (bulkSendState().failedCount > 0) {
-            <span class="bulk-send-failed">({{ bulkSendState().failedCount }} no enviados)</span>
+            <span class="bulk-send-failed">
+              ({{ bulkSendState().failedCount }} no {{ bulkSendState().failedCount === 1 ? 'enviado' : 'enviados' }})
+            </span>
           }
         </p>
         @if (bulkSendState().state === 'running') {
