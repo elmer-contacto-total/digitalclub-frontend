@@ -953,359 +953,32 @@ export class BulkSender {
     }
   }
 
-  private async navigateToChat(phone: string): Promise<{ success: boolean; error?: string; errorType?: 'not_registered' | 'not_found' | 'timeout' | 'selector' | 'unknown' }> {
+  /**
+   * Abre el chat del destinatario.
+   *
+   * Se resuelve EXCLUSIVAMENTE por el panel "Nuevo chat", que busca por número
+   * y contacto. Antes se usaba el buscador de la lista de chats, y eso podía
+   * mandarle la campaña a la persona equivocada: ese buscador matchea también
+   * el TEXTO DENTRO de las conversaciones, así que un número mencionado en el
+   * chat de otra persona hacía que se abriera ese chat. Y verifyCurrentChat no
+   * lo detectaba, porque con un contacto guardado el encabezado muestra el
+   * nombre sin dígitos y la verificación lo daba por bueno.
+   *
+   * Preferimos no enviar antes que enviarle a quien no corresponde: si "Nuevo
+   * chat" no resuelve el número, el destinatario se reporta y se saltea.
+   */
+  private async navigateToChat(phone: string): Promise<NavResult> {
     if (!this.whatsappView) {
       return { success: false, error: 'Vista de WhatsApp no disponible', errorType: 'unknown' };
     }
 
-    // Normalize phone: strip +, -, (, ), spaces
-    const normalizedPhone = phone.replace(/[+\-() \s]/g, '');
-    // Last 8 digits for matching (handles country code variations)
-    const phoneSuffix = normalizedPhone.slice(-8);
-
-    // --- PHASE 0: "Nuevo chat" primero ---
-    //
-    // El buscador de la lista de chats matchea también el TEXTO DENTRO de las
-    // conversaciones. Si alguien alguna vez escribió este número en su chat
-    // con otra persona, esa conversación aparece entre los resultados y el
-    // Enter siguiente la abriría: la campaña de cobranza le llegaría a quien
-    // no corresponde. Y verifyCurrentChat no lo detecta, porque cuando el chat
-    // equivocado es de un contacto guardado el encabezado muestra el nombre
-    // sin dígitos y la verificación lo da por bueno.
-    //
-    // El panel "Nuevo chat" resuelve por número y contacto, nunca por
-    // contenido de mensajes, así que es el camino correcto. Abrir un contacto
-    // desde ahí no duplica nada: si ya existe la conversación, la abre.
-    const viaNewChat = await this.navigateViaNewChat(phone);
-    if (viaNewChat.success) return viaNewChat;
-    if (viaNewChat.errorType === 'not_registered') return viaNewChat;
-
-    console.warn(
-      `[BulkSender] "Nuevo chat" no resolvió ${phone} (${viaNewChat.error}) — probando el buscador de chats`
-    );
-
-    try {
-      // --- PHASE 1: Reset to main screen ---
-      const resetOk = await this.resetToMainScreen();
-      if (!resetOk) {
-        console.warn('[BulkSender] resetToMainScreen failed, continuing anyway...');
-      }
-
-      // --- PHASE 2A: Focus the search input via JS ---
-      // DOM nuevo de WA (mayo 2026): el buscador es <input data-tab="3"> visible siempre,
-      // no requiere click previo para abrirlo. Fallback al div contenteditable del DOM viejo.
-      const searchFocus = await this.whatsappView.webContents.executeJavaScript(`
-        (async function() {
-          try {
-            // 1. Intentar el input nativo nuevo
-            var input = document.querySelector('input[data-tab="3"]');
-            if (!input) {
-              // Fallback DOM viejo: requiere abrir el buscador con click
-              var searchBox = document.querySelector('[data-testid="chat-list-search"]') ||
-                              document.querySelector('[data-icon="search"]')?.closest('button') ||
-                              document.querySelector('#side [contenteditable="true"]');
-              if (searchBox) {
-                searchBox.click();
-                await new Promise(function(r) { setTimeout(r, 400); });
-              }
-              input = document.querySelector('input[data-tab="3"]') ||
-                      document.querySelector('[data-testid="chat-list-search-input"]') ||
-                      document.querySelector('#side div[contenteditable="true"]') ||
-                      document.querySelector('[data-testid="search-input"]');
-            }
-            if (!input) return { success: false, error: 'Campo de búsqueda no encontrado' };
-
-            input.focus();
-            input.click();
-
-            var focusInfo = document.activeElement ?
-              (document.activeElement.tagName + ' editable=' + document.activeElement.getAttribute('contenteditable') + ' testid=' + document.activeElement.getAttribute('data-testid') + ' tab=' + document.activeElement.getAttribute('data-tab')) : 'null';
-            return { success: true, focusInfo: focusInfo };
-          } catch(e) {
-            return { success: false, error: e.message || 'search_focus_error' };
-          }
-        })()
-      `, true);
-
-      if (!searchFocus.success) {
-        return { success: false, error: searchFocus.error, errorType: 'selector' };
-      }
-
-      console.log(`[BulkSender] Search focused: ${searchFocus.focusInfo}`);
-
-      // --- PHASE 2B: Type phone via CDP (focus-independent) ---
-      await this.sleep(100);
-
-      // Clear any existing text in the search input
-      await this.cdpClear();
-
-      // Type phone number character by character via CDP
-      await this.cdpType(normalizedPhone);
-
-      // Wait for WhatsApp to process the search query
-      await this.sleep(500);
-
-      // Verify text was typed
-      const verifyResult = await this.whatsappView.webContents.executeJavaScript(`
-        (function() {
-          var input = document.querySelector('input[data-tab="3"]') ||
-                      document.querySelector('[data-testid="chat-list-search-input"]') ||
-                      document.querySelector('#side div[contenteditable="true"]');
-          var content = '';
-          if (input) {
-            // input nativo: leer .value; contenteditable: leer .textContent
-            content = input.tagName === 'INPUT' ? (input.value || '').trim() : (input.textContent || '').trim();
-          }
-          return { content: content };
-        })()
-      `, true);
-
-      if (verifyResult.content.length > 0) {
-        console.log(`[BulkSender] Typed ${normalizedPhone} via keyboard (verified: ${verifyResult.content})`);
-      } else {
-        console.warn(`[BulkSender] Keyboard typing may have failed — search input content: "${verifyResult.content}"`);
-      }
-
-      // --- PHASE 4: Check search results (with retry if not filtered) ---
-      let searchCheck: any = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        // Wait for WhatsApp to process search query
-        await this.sleep(2000);
-
-        searchCheck = await this.whatsappView.webContents.executeJavaScript(`
-          (function() {
-            var noResults = document.querySelector('[data-testid="search-no-results-title"]');
-            if (noResults) return { status: 'no_results' };
-
-            var searchPanel = document.querySelector('#pane-side') || document.querySelector('#side');
-            if (searchPanel) {
-              var panelText = searchPanel.innerText || '';
-              if (panelText.indexOf('No se encontraron') !== -1 ||
-                  panelText.indexOf('No results found') !== -1 ||
-                  panelText.indexOf('No contacts found') !== -1 ||
-                  panelText.indexOf('No se encontró') !== -1) {
-                return { status: 'no_results' };
-              }
-            }
-
-            // Contar SOLO cell-frame-container: en DOM mayo 2026 cada chat
-            // tiene además [role="listitem"] y [role="row"] como etiquetas
-            // separadas, y los dedupe por elemento NO funciona (son nodos
-            // distintos: la celda y el wrapper-row). Sumar los 3 selectores
-            // inflaba el conteo por encima del threshold y rompía el filter
-            // aunque el filter sí hubiera ocurrido (caso Samuel: 7 cells →
-            // sumaban 21+ con listitem/row/tabs y el código abortaba).
-            // Si testid cambiara en el futuro, los demás caminos del flujo
-            // (no_results, navegación) ya cubren los fallos.
-            var cells = document.querySelectorAll('[data-testid="cell-frame-container"]');
-            var count = cells.length;
-            // Fallback: si por algún motivo cell-frame-container no aparece
-            // (testid cambió), caer a [role="listitem"] que también marca
-            // chats individuales.
-            if (count === 0) {
-              count = document.querySelectorAll('#pane-side [role="listitem"]').length;
-            }
-            return { status: 'has_results', count: count };
-          })()
-        `, true);
-
-        if (searchCheck.status === 'no_results') break;
-        if (searchCheck.count <= 15) break; // Filtered OK
-
-        // Diagnóstico: volcar estado real del DOM cuando el filter falla.
-        // Útil para saber si el typing llegó al input, si hay pestañas
-        // (Chats/Contactos), y si el target aparece entre los resultados.
-        try {
-          const diag = await this.whatsappView.webContents.executeJavaScript(`
-            (function() {
-              var input = document.querySelector('input[data-tab="3"]') ||
-                          document.querySelector('[data-testid="chat-list-search-input"]') ||
-                          document.querySelector('#side div[contenteditable="true"]');
-              var inputContent = input ? (input.tagName === 'INPUT' ? (input.value || '') : (input.textContent || '')).trim() : '';
-              var ae = document.activeElement;
-              var cells = Array.prototype.slice.call(
-                document.querySelectorAll('[data-testid="cell-frame-container"]')
-              );
-              var firstResults = cells.slice(0, 5).map(function(el) {
-                var titleEl = el.querySelector('[data-testid="cell-frame-title"]') || el.querySelector('span[title]');
-                return {
-                  title: titleEl ? ((titleEl.textContent || titleEl.getAttribute('title') || '')).substring(0, 60) : null,
-                  excerpt: (el.textContent || '').substring(0, 80)
-                };
-              });
-              var phoneSuffix = ${JSON.stringify(normalizedPhone.slice(-7))};
-              var matchByPhone = cells.filter(function(el) {
-                return (el.textContent || '').indexOf(phoneSuffix) > -1;
-              }).length;
-              var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'))
-                .map(function(t) { return t.textContent && t.textContent.trim(); })
-                .filter(Boolean);
-              var activeTab = document.querySelector('[role="tab"][aria-selected="true"]');
-              return {
-                attempt: ${attempt},
-                inputContent: inputContent,
-                expected: ${JSON.stringify(normalizedPhone)},
-                contentMatches: inputContent === ${JSON.stringify(normalizedPhone)},
-                activeElementTag: ae ? ae.tagName : null,
-                activeElementTestid: ae ? ae.getAttribute('data-testid') : null,
-                activeElementTab: ae ? ae.getAttribute('data-tab') : null,
-                cellCount: cells.length,
-                firstResults: firstResults,
-                tabs: tabs,
-                activeTab: activeTab ? activeTab.textContent.trim() : null,
-                matchByPhoneSuffix: matchByPhone
-              };
-            })()
-          `, true);
-          console.log('[BulkSender] Diag filter fail:', JSON.stringify(diag));
-          // Reenviar al renderer Angular (DevTools de la ventana principal con
-          // F12 / Ctrl+Shift+I). El log del main process no se ve sin esto.
-          this.sendDiagToRenderer(diag);
-        } catch (diagErr) {
-          console.warn('[BulkSender] Diag filter fail: error capturando estado:', diagErr);
-        }
-
-        // Too many results — search didn't filter. Retry: clear, escape, re-enter search
-        if (attempt < 2) {
-          console.warn(`[BulkSender] Búsqueda no filtró (${searchCheck.count} items), reintentando (${attempt + 1}/2)...`);
-          await this.cdpClear();
-          await this.sleep(300);
-          // Press Escape to exit search mode (CDP — focus-independent)
-          await this.cdpKey('Escape', 'Escape', 27);
-          await this.sleep(500);
-          // Re-focus input directamente (el input nativo nuevo no necesita re-click previo)
-          await this.whatsappView.webContents.executeJavaScript(`
-            (function() {
-              var input = document.querySelector('input[data-tab="3"]') ||
-                          document.querySelector('[data-testid="chat-list-search-input"]') ||
-                          document.querySelector('#side div[contenteditable="true"]');
-              if (!input) {
-                // DOM viejo: abrir el buscador con click
-                var searchBox = document.querySelector('[data-testid="chat-list-search"]') ||
-                                document.querySelector('[data-icon="search"]')?.closest('button');
-                if (searchBox) searchBox.click();
-              }
-            })()
-          `, true);
-          await this.sleep(500);
-          // Re-focus input and re-type
-          await this.whatsappView.webContents.executeJavaScript(`
-            (function() {
-              var input = document.querySelector('input[data-tab="3"]') ||
-                          document.querySelector('[data-testid="chat-list-search-input"]') ||
-                          document.querySelector('#side div[contenteditable="true"]');
-              if (input) { input.focus(); input.click(); }
-            })()
-          `, true);
-          await this.sleep(200);
-          await this.cdpClear();
-          await this.sleep(200);
-          await this.cdpType(normalizedPhone);
-        }
-      }
-
-      // Final check after retries
-      if (searchCheck.status === 'no_results') {
-        // El buscador de WhatsApp solo ve chats existentes y contactos agendados,
-        // así que con cartera nueva SIEMPRE cae acá. Antes de descartar el
-        // número, intentar por el panel "Nuevo chat", que sí resuelve números sueltos.
-        // "Nuevo chat" ya se intentó antes que esto (PHASE 0), así que acá no
-        // queda nada más por probar.
-        console.log(`[BulkSender] Ni "Nuevo chat" ni el buscador encontraron ${phone}`);
-        return {
-          success: false,
-          error: `No se encontró el chat de ${phone}`,
-          errorType: 'not_found'
-        };
-      }
-
-      if (searchCheck.count > 15) {
-        console.warn(`[BulkSender] Búsqueda no filtró tras 3 intentos (${searchCheck.count} resultados) para ${normalizedPhone}`);
-        return { success: false, error: `Búsqueda no filtró tras 3 intentos (${searchCheck.count} resultados)`, errorType: 'timeout' };
-      }
-
-      console.log(`[BulkSender] Search filtered to ${searchCheck.count} items, selecting via keyboard`);
-
-      // Select first result via ArrowDown, then open via Enter (CDP — focus-independent)
-      await this.cdpKey('ArrowDown', 'ArrowDown', 40);
-      await this.sleep(200);
-      await this.cdpKey('Enter', 'Enter', 13);
-
-      // --- PHASE 5: Verify the correct chat loaded ---
-      // Wait for compose box to appear (try multiple selectors for different WhatsApp versions)
-      const composeReady = await this.waitForCondition(`
-        (function() {
-          var box = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
-                    document.querySelector('footer div[contenteditable="true"]') ||
-                    document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
-                    document.querySelector('#main div[contenteditable="true"][data-tab]') ||
-                    document.querySelector('#main div[contenteditable="true"]');
-          return box ? true : null;
-        })()
-      `, COMPOSE_BOX_TIMEOUT_MS, 300);
-
-      if (!composeReady) {
-        // Diagnostic: log what's in #main to debug selector issues
-        try {
-          const diag = await this.whatsappView.webContents.executeJavaScript(`
-            (function() {
-              var main = document.querySelector('div#main');
-              if (!main) return { hasMain: false };
-              var editables = main.querySelectorAll('[contenteditable="true"]');
-              var info = [];
-              for (var i = 0; i < editables.length; i++) {
-                var el = editables[i];
-                info.push({
-                  tag: el.tagName,
-                  testid: el.getAttribute('data-testid'),
-                  role: el.getAttribute('role'),
-                  tab: el.getAttribute('data-tab'),
-                  parent: el.parentElement ? el.parentElement.tagName : null
-                });
-              }
-              return { hasMain: true, editables: info };
-            })()
-          `, true);
-          console.warn('[BulkSender] Compose box not found. Diagnostic:', JSON.stringify(diag));
-        } catch { /* ignore */ }
-
-        // Que no aparezca el cuadro de texto NO prueba que el contacto no
-        // tenga WhatsApp — solo que este chat no terminó de abrir. Antes se
-        // reportaba como "Contacto no registrado en WhatsApp", que es falso y
-        // además hace que el destinatario se saltee sin reintento.
-        //
-        // No se reintenta por "Nuevo chat": si el chat ya existe (que es el
-        // caso cuando el buscador gana este camino), ese panel devuelve lo
-        // mismo. Se reporta el timeout tal cual y el loop sigue.
-        return {
-          success: false,
-          error: `El chat de ${phone} no terminó de abrir (${Math.round(COMPOSE_BOX_TIMEOUT_MS / 1000)}s)`,
-          errorType: 'timeout'
-        };
-      }
-
-      // Verify header contains phone suffix (soft check — warning only)
-      const headerCheck = await this.whatsappView.webContents.executeJavaScript(`
-        (function() {
-          // DOM nuevo: data-testid="conversation-info-header-chat-title"
-          var titleEl = document.querySelector('[data-testid="conversation-info-header-chat-title"]');
-          if (titleEl) return (titleEl.textContent || '').trim() || 'no_header';
-          // Fallback DOM viejo
-          var header = document.querySelector('#main header span[title]') ||
-                       document.querySelector('#main header span[dir="auto"]');
-          if (!header) return 'no_header';
-          return header.getAttribute('title') || header.textContent || '';
-        })()
-      `, true);
-
-      if (headerCheck !== 'no_header' && !String(headerCheck).includes(phoneSuffix)) {
-        console.warn(`[BulkSender] Header "${headerCheck}" does not match phone suffix "${phoneSuffix}" — proceeding (WhatsApp may show generic text)`);
-      }
-
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Error de ejecución', errorType: 'unknown' };
+    // Cerrar paneles/chats abiertos antes de abrir "Nuevo chat".
+    const resetOk = await this.resetToMainScreen();
+    if (!resetOk) {
+      console.warn('[BulkSender] resetToMainScreen falló, continuando igual...');
     }
+
+    return await this.navigateViaNewChat(phone);
   }
 
   /**
@@ -1425,6 +1098,29 @@ export class BulkSender {
     }
 
     if (typeof outcome !== 'string' || !outcome.startsWith('match:')) {
+      // Sin fallback debajo, un fallo acá es el final del camino para este
+      // destinatario. Volcar el estado real del panel para poder ajustar los
+      // selectores sin tener que reproducirlo a mano.
+      try {
+        const diag = await this.whatsappView.webContents.executeJavaScript(`
+          (function() {
+            var input = document.querySelector('input[data-tab="3"]');
+            var cells = Array.prototype.slice.call(
+              document.querySelectorAll('[data-testid="cell-frame-container"]'));
+            return {
+              buscado: ${JSON.stringify(localDigits)},
+              enInput: input ? (input.value || '') : null,
+              celdas: cells.length,
+              primeras: cells.slice(0, 5).map(function(el) {
+                return (el.textContent || '').substring(0, 70);
+              })
+            };
+          })()
+        `, true);
+        console.warn('[BulkSender] "Nuevo chat" sin match. Estado:', JSON.stringify(diag));
+        this.sendDiagToRenderer({ origen: 'navigateViaNewChat', ...diag });
+      } catch { /* ignore */ }
+
       await this.cdpKey('Escape', 'Escape', 27);
       return {
         success: false,
