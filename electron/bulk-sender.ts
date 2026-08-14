@@ -963,6 +963,27 @@ export class BulkSender {
     // Last 8 digits for matching (handles country code variations)
     const phoneSuffix = normalizedPhone.slice(-8);
 
+    // --- PHASE 0: "Nuevo chat" primero ---
+    //
+    // El buscador de la lista de chats matchea también el TEXTO DENTRO de las
+    // conversaciones. Si alguien alguna vez escribió este número en su chat
+    // con otra persona, esa conversación aparece entre los resultados y el
+    // Enter siguiente la abriría: la campaña de cobranza le llegaría a quien
+    // no corresponde. Y verifyCurrentChat no lo detecta, porque cuando el chat
+    // equivocado es de un contacto guardado el encabezado muestra el nombre
+    // sin dígitos y la verificación lo da por bueno.
+    //
+    // El panel "Nuevo chat" resuelve por número y contacto, nunca por
+    // contenido de mensajes, así que es el camino correcto. Abrir un contacto
+    // desde ahí no duplica nada: si ya existe la conversación, la abre.
+    const viaNewChat = await this.navigateViaNewChat(phone);
+    if (viaNewChat.success) return viaNewChat;
+    if (viaNewChat.errorType === 'not_registered') return viaNewChat;
+
+    console.warn(
+      `[BulkSender] "Nuevo chat" no resolvió ${phone} (${viaNewChat.error}) — probando el buscador de chats`
+    );
+
     try {
       // --- PHASE 1: Reset to main screen ---
       const resetOk = await this.resetToMainScreen();
@@ -1188,8 +1209,14 @@ export class BulkSender {
         // El buscador de WhatsApp solo ve chats existentes y contactos agendados,
         // así que con cartera nueva SIEMPRE cae acá. Antes de descartar el
         // número, intentar por el panel "Nuevo chat", que sí resuelve números sueltos.
-        console.log(`[BulkSender] Buscador sin resultados para ${phone} — probando "Nuevo chat"`);
-        return await this.navigateViaNewChat(phone);
+        // "Nuevo chat" ya se intentó antes que esto (PHASE 0), así que acá no
+        // queda nada más por probar.
+        console.log(`[BulkSender] Ni "Nuevo chat" ni el buscador encontraron ${phone}`);
+        return {
+          success: false,
+          error: `No se encontró el chat de ${phone}`,
+          errorType: 'not_found'
+        };
       }
 
       if (searchCheck.count > 15) {
