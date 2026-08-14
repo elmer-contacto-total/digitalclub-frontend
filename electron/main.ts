@@ -3170,6 +3170,36 @@ function setupIPC(): void {
     }
   });
 
+  /**
+   * ¿La sesión de WhatsApp está lista para enviar?
+   *
+   * El envío masivo se auto-pausa en el primer chequeo si la BrowserView no
+   * existe o WhatsApp Web todavía no pintó la lista de chats. Antes esto se
+   * "resolvía" esperando 500 ms a ciegas antes de arrancar, lo que dejaba el
+   * envío pausado en 0/0 sin explicación. Ahora la UI puede esperar de verdad.
+   */
+  ipcMain.handle('whatsapp:session-ready', async () => {
+    if (!whatsappView || !whatsappView.webContents) {
+      return { ready: false, reason: 'WhatsApp no está abierto' };
+    }
+    try {
+      const state = await whatsappView.webContents.executeJavaScript(`
+        (function() {
+          var qr = document.querySelector('[data-testid="qrcode"]') ||
+                   document.querySelector('canvas[aria-label]');
+          if (qr) return 'qr';
+          return document.querySelector('#pane-side') ? 'ready' : 'loading';
+        })()
+      `, true);
+
+      if (state === 'ready') return { ready: true, reason: null };
+      if (state === 'qr') return { ready: false, reason: 'WhatsApp pide escanear el código QR' };
+      return { ready: false, reason: 'WhatsApp todavía está cargando' };
+    } catch {
+      return { ready: false, reason: 'No se pudo consultar el estado de WhatsApp' };
+    }
+  });
+
   // Start bulk send
   ipcMain.handle('bulk-send:start', async (_, bulkSendId: number, authToken: string) => {
     try {
@@ -3191,7 +3221,8 @@ function setupIPC(): void {
         const status = bulkSender.getStatus();
         mainWindow.webContents.send('bulk-send-state-changed', {
           state: status.state, sentCount: status.sentCount,
-          failedCount: status.failedCount, totalRecipients: status.totalRecipients, currentPhone: null
+          failedCount: status.failedCount, totalRecipients: status.totalRecipients, currentPhone: null,
+          lastError: status.lastError
         });
       }
     }
@@ -3204,7 +3235,8 @@ function setupIPC(): void {
       const s = bulkSender.getStatus();
       mainWindow.webContents.send('bulk-send-state-changed', {
         state: s.state, sentCount: s.sentCount, failedCount: s.failedCount,
-        totalRecipients: s.totalRecipients, currentPhone: s.currentPhone
+        totalRecipients: s.totalRecipients, currentPhone: s.currentPhone,
+        lastError: s.lastError
       });
     }
     return { success: true };
@@ -3219,7 +3251,8 @@ function setupIPC(): void {
       const s = bulkSender.getStatus();
       mainWindow.webContents.send('bulk-send-state-changed', {
         state: s.state, sentCount: s.sentCount, failedCount: s.failedCount,
-        totalRecipients: s.totalRecipients, currentPhone: s.currentPhone
+        totalRecipients: s.totalRecipients, currentPhone: s.currentPhone,
+        lastError: s.lastError
       });
     }
     return result;
@@ -3232,7 +3265,8 @@ function setupIPC(): void {
       const s = bulkSender.getStatus();
       mainWindow.webContents.send('bulk-send-state-changed', {
         state: s.state, sentCount: s.sentCount, failedCount: s.failedCount,
-        totalRecipients: s.totalRecipients, currentPhone: s.currentPhone
+        totalRecipients: s.totalRecipients, currentPhone: s.currentPhone,
+        lastError: s.lastError
       });
     }
     return { success: true };

@@ -47,6 +47,12 @@
           <div class="bulk-send-icon"><i class="ph ph-paper-plane-tilt"></i></div>
           <h3>Envío masivo en curso</h3>
           <p class="bulk-send-phone">{{ bulkSendState().currentPhone || 'Preparando...' }}</p>
+          @if (bulkSendState().nextMessageInSeconds; as espera) {
+            <p class="bulk-send-wait">
+              <i class="ph ph-clock"></i>
+              Siguiente mensaje en {{ espera }}s (pausa anti-ban)
+            </p>
+          }
         } @else if (bulkSendState().state === 'completed') {
           <div class="bulk-send-icon bulk-send-icon-success"><i class="ph ph-check-circle"></i></div>
           <h3>Envío completado</h3>
@@ -62,7 +68,7 @@
         } @else {
           <div class="bulk-send-icon"><i class="ph ph-paper-plane-tilt"></i></div>
           <h3>Envío masivo pausado</h3>
-          <p class="bulk-send-phone">En espera</p>
+          <p class="bulk-send-phone">{{ bulkSendState().lastError || 'En espera' }}</p>
         }
         <div class="bulk-send-progress-bar">
           <div class="bulk-send-progress-fill" [style.width.%]="bulkSendProgress"></div>

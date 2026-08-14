@@ -13,6 +13,10 @@ export interface BulkSendState {
   totalRecipients: number;
   currentPhone: string | null;
   periodicPauseRemaining?: number;
+  /** Motivo del último fallo/pausa. Se muestra al agente en el overlay. */
+  lastError?: string | null;
+  /** Segundos restantes de la espera anti-ban entre mensajes. */
+  nextMessageInSeconds?: number;
 }
 
 /**
@@ -65,7 +69,8 @@ interface ElectronAPI {
   crmClientReady?(): void;
 
   // Bulk send state changes
-  onBulkSendStateChanged?(callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number }) => void): void;
+  isWhatsAppSessionReady?(): Promise<{ ready: boolean; reason: string | null }>;
+  onBulkSendStateChanged?(callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number; lastError?: string | null; nextMessageInSeconds?: number }) => void): void;
 
   // Angular bounds
   getAngularBounds?(): Promise<{ angularWidth: number; whatsappVisible: boolean } | null>;
@@ -566,6 +571,36 @@ export class ElectronService {
   }
 
   // === Bulk Send ===
+
+  /**
+   * Espera a que WhatsApp Web esté cargado y con sesión iniciada.
+   *
+   * Arrancar el envío antes de esto hace que el motor se auto-pause en su
+   * primer chequeo, dejando el overlay trabado en "pausado 0/0" sin explicar
+   * por qué. Devuelve el motivo cuando no llegó a estar listo, para poder
+   * mostrárselo al agente.
+   */
+  async waitForWhatsAppReady(timeoutMs = 30000): Promise<{ ready: boolean; reason: string | null }> {
+    const api = (window as any).electronAPI;
+    if (!api?.isWhatsAppSessionReady) {
+      // Build antiguo del Electron sin el IPC: no bloquear al agente.
+      return { ready: true, reason: null };
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    let last: { ready: boolean; reason: string | null } = { ready: false, reason: 'WhatsApp no está abierto' };
+
+    while (Date.now() < deadline) {
+      try {
+        last = await api.isWhatsAppSessionReady();
+        if (last.ready) return last;
+      } catch {
+        last = { ready: false, reason: 'No se pudo consultar el estado de WhatsApp' };
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    return last;
+  }
 
   /**
    * Start bulk send campaign via Electron
