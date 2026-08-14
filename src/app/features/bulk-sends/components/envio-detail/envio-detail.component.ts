@@ -455,7 +455,14 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
       // que cdpType y dispatchKeyEvent funcionen. Si arrancamos desde el
       // detalle sin redirigir, los envíos fallan.
       await this.router.navigate(['/app/electron_clients']);
-      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Esperar sesión de WhatsApp lista: si arrancamos antes, el motor se
+      // auto-pausa en su primer chequeo y el envío queda trabado en 0/0.
+      const wa = await this.electronService.waitForWhatsAppReady();
+      if (!wa.ready) {
+        this.toast.error(`No se puede iniciar el envío: ${wa.reason}`);
+        return;
+      }
 
       const ok = await this.electronService.startBulkSend(this.bulkSendId, token);
       if (ok) {

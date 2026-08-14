@@ -404,7 +404,11 @@ export class EnvioListComponent implements OnInit, OnDestroy {
   async resume(bs: BulkSend): Promise<void> {
     if (this.electronService.isElectron) {
       await this.router.navigate(['/app/electron_clients']);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const wa = await this.electronService.waitForWhatsAppReady();
+      if (!wa.ready) {
+        this.toast.error(`No se puede reanudar: ${wa.reason}`);
+        return;
+      }
       this.electronService.resumeBulkSend();
       this.toast.success('Envío reanudado');
     } else {
@@ -424,7 +428,16 @@ export class EnvioListComponent implements OnInit, OnDestroy {
     const token = this.authService.getToken();
     if (!token) return;
     await this.router.navigate(['/app/electron_clients']);
-    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Esperar a que WhatsApp esté realmente listo. Arrancar antes deja el
+    // envío pausado en 0/0 sin explicación (el motor se auto-pausa en su
+    // primer chequeo de sesión).
+    const wa = await this.electronService.waitForWhatsAppReady();
+    if (!wa.ready) {
+      this.toast.error(`No se puede iniciar el envío: ${wa.reason}`);
+      return;
+    }
+
     const started = await this.electronService.startBulkSend(bs.id, token);
     if (started) {
       this.toast.success('Envío masivo completado');

@@ -277,8 +277,14 @@ const electronAPI = {
     }
   },
 
+  // ¿WhatsApp está cargado y con sesión iniciada? Se consulta antes de arrancar
+  // un envío masivo: sin sesión el motor se auto-pausa en el primer chequeo.
+  isWhatsAppSessionReady: (): Promise<{ ready: boolean; reason: string | null }> => {
+    return ipcRenderer.invoke('whatsapp:session-ready');
+  },
+
   // Bulk send state changes (from main process)
-  onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number }) => void) => {
+  onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number; lastError?: string | null; nextMessageInSeconds?: number }) => void) => {
     ipcRenderer.on('bulk-send-state-changed', (_, data) => callback(data));
   },
 
@@ -396,7 +402,8 @@ declare global {
         checkPending: () => Promise<any>;
         dismissOverlay: () => Promise<{ success: boolean }>;
       };
-      onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number }) => void) => void;
+      isWhatsAppSessionReady: () => Promise<{ ready: boolean; reason: string | null }>;
+      onBulkSendStateChanged: (callback: (data: { state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; periodicPauseRemaining?: number; lastError?: string | null; nextMessageInSeconds?: number }) => void) => void;
       setWhatsAppOverlayMode: (overlayOpen: boolean) => Promise<boolean>;
       resetWhatsAppSession: () => Promise<boolean>;
       setImpersonation: (active: boolean) => void;

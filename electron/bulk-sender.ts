@@ -36,10 +36,28 @@ export type OverlayUpdateCallback = (data: {
   totalRecipients: number;
   currentPhone: string | null;
   periodicPauseRemaining?: number;
+  lastError?: string | null;
+  nextMessageInSeconds?: number;
 }) => void;
 
 /** Resultado de navigateToChat / prefetchNext */
 type NavResult = { success: boolean; error?: string; errorType?: 'not_registered' | 'not_found' | 'timeout' | 'selector' | 'unknown' };
+
+/**
+ * Código de país que se antepone cuando el número del CSV viene en formato
+ * local. Las tramas de cartera traen el celular peruano de 9 dígitos
+ * (ej. 906261039) y el deep-link de WhatsApp SIEMPRE exige código de país.
+ */
+const DEFAULT_COUNTRY_CODE = '51';
+
+/** Largo de un celular local sin código de país (Perú). */
+const LOCAL_PHONE_LENGTH = 9;
+
+/**
+ * Margen para que WhatsApp Web recargue y abra el chat por deep-link.
+ * Es bastante más lento que el buscador porque reinicia la app web.
+ */
+const DEEP_LINK_TIMEOUT_MS = 25000;
 
 const DEFAULT_RULES: BulkSendRules = {
   min_delay_seconds: 30,
@@ -159,7 +177,8 @@ export class BulkSender {
         sentCount: this.sentCount,
         failedCount: this.failedCount,
         totalRecipients: this.totalRecipients,
-        currentPhone: this.currentPhone
+        currentPhone: this.currentPhone,
+        lastError: this.lastError
       });
     }
     this.persistState();
@@ -760,8 +779,38 @@ export class BulkSender {
       const delay = this.getRandomDelay();
       console.log(`[BulkSender] Waiting ${Math.round(delay / 1000)}s before next...`);
       const prefetchPromise = this.prefetchNext();
-      await this.sleep(delay);
+      await this.sleepWithCountdown(delay);
       this.prefetched = await prefetchPromise;
+    }
+  }
+
+  /**
+   * Espera entre mensajes emitiendo la cuenta regresiva al overlay.
+   *
+   * La duración total es EXACTAMENTE la misma que un sleep(totalMs) — el fin se
+   * calcula una sola vez y se duerme a tramos hasta llegar a él, así que no hay
+   * deriva ni se acorta la espera. Sólo se agrega el aviso visual: sin él, los
+   * 30-90s entre mensajes se ven idénticos a la app colgada.
+   *
+   * NO toca el anti-ban.
+   */
+  private async sleepWithCountdown(totalMs: number): Promise<void> {
+    const end = Date.now() + totalMs;
+    let remainingMs = totalMs;
+
+    while (remainingMs > 0) {
+      if (this.onOverlayUpdate && !this.isPaused && !this.isCancelled) {
+        this.onOverlayUpdate({
+          state: this._state,
+          sentCount: this.sentCount,
+          failedCount: this.failedCount,
+          totalRecipients: this.totalRecipients,
+          currentPhone: this.currentPhone,
+          nextMessageInSeconds: Math.ceil(remainingMs / 1000)
+        });
+      }
+      await this.sleep(Math.min(1000, remainingMs));
+      remainingMs = end - Date.now();
     }
   }
 
@@ -1133,8 +1182,11 @@ export class BulkSender {
 
       // Final check after retries
       if (searchCheck.status === 'no_results') {
-        console.log(`[BulkSender] Phone ${phone} not registered in WhatsApp`);
-        return { success: false, error: `No se encontraron resultados para ${phone}`, errorType: 'not_registered' };
+        // El buscador de WhatsApp solo ve chats existentes y contactos agendados,
+        // así que con cartera nueva SIEMPRE cae acá. Antes de descartar el
+        // número, intentar por deep-link, que abre cualquier número con WhatsApp.
+        console.log(`[BulkSender] Buscador sin resultados para ${phone} — probando deep-link`);
+        return await this.navigateViaDeepLink(phone);
       }
 
       if (searchCheck.count > 15) {
@@ -1211,6 +1263,88 @@ export class BulkSender {
     } catch (err: any) {
       return { success: false, error: err.message || 'Error de ejecución', errorType: 'unknown' };
     }
+  }
+
+  /**
+   * Normaliza a formato internacional para el deep-link, que SIEMPRE exige
+   * código de país. Las tramas de cartera traen el celular local de 9 dígitos,
+   * así que se antepone el código por defecto sólo cuando falta.
+   */
+  private toInternationalPhone(phone: string): string {
+    const digits = (phone || '').replace(/\D/g, '');
+    if (digits.length > LOCAL_PHONE_LENGTH) return digits; // ya trae código de país
+    return DEFAULT_COUNTRY_CODE + digits;
+  }
+
+  /**
+   * Fallback cuando el buscador no encuentra el número.
+   *
+   * El buscador de la lista de chats sólo alcanza conversaciones existentes y
+   * contactos agendados en el teléfono vinculado. El deep-link ("click to chat")
+   * abre cualquier número que tenga WhatsApp, esté agendado o no — que es el
+   * caso normal en una campaña sobre cartera nueva.
+   *
+   * Es más lento que el buscador porque recarga WhatsApp Web, por eso sólo se
+   * usa después de que el buscador ya falló.
+   */
+  private async navigateViaDeepLink(phone: string): Promise<NavResult> {
+    if (!this.whatsappView) {
+      return { success: false, error: 'Vista de WhatsApp no disponible', errorType: 'unknown' };
+    }
+
+    const intlPhone = this.toInternationalPhone(phone);
+
+    try {
+      await this.whatsappView.webContents.loadURL(
+        `https://web.whatsapp.com/send?phone=${intlPhone}`
+      );
+    } catch (err: any) {
+      return {
+        success: false,
+        error: `No se pudo abrir el chat de ${phone}: ${err?.message || err}`,
+        errorType: 'timeout'
+      };
+    }
+
+    // Tras la recarga esperamos uno de dos desenlaces: el cuadro de texto listo
+    // (chat abierto) o el aviso de WhatsApp de que el número no es válido.
+    const outcome = await this.waitForCondition(`
+      (function() {
+        var body = (document.body && document.body.innerText) || '';
+        if (body.indexOf('no es válido') !== -1 ||
+            body.indexOf('inválido') !== -1 ||
+            body.indexOf('is not valid') !== -1 ||
+            body.indexOf('phone number shared via url is invalid') !== -1) {
+          return 'invalid';
+        }
+        var box = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+                  document.querySelector('footer div[contenteditable="true"]') ||
+                  document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
+                  document.querySelector('#main div[contenteditable="true"]');
+        return box ? 'ready' : null;
+      })()
+    `, DEEP_LINK_TIMEOUT_MS, 500);
+
+    if (outcome === 'invalid') {
+      console.log(`[BulkSender] ${intlPhone} no tiene WhatsApp (deep-link)`);
+      return {
+        success: false,
+        error: `El número ${phone} no tiene WhatsApp`,
+        errorType: 'not_registered'
+      };
+    }
+
+    if (outcome !== 'ready') {
+      console.warn(`[BulkSender] Deep-link no abrió el chat de ${intlPhone} a tiempo`);
+      return {
+        success: false,
+        error: `WhatsApp no abrió el chat de ${phone} (tardó más de ${Math.round(DEEP_LINK_TIMEOUT_MS / 1000)}s)`,
+        errorType: 'timeout'
+      };
+    }
+
+    console.log(`[BulkSender] Chat de ${intlPhone} abierto por deep-link`);
+    return { success: true };
   }
 
   private async sendAndSubmit(text: string, expectedPhone?: string): Promise<{ success: boolean; error?: string }> {
