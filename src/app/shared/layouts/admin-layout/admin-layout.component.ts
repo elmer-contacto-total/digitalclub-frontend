@@ -93,7 +93,10 @@ export class AdminLayoutComponent implements OnInit, OnDestroy {
 
             // Show toast
             const msg = state.state === 'completed'
-              ? `Envío completado: ${state.sentCount} enviados` + (state.failedCount > 0 ? `, ${state.failedCount} fallidos` : '')
+              // "no enviados" y no "fallidos": el contador suma los saltados
+              // (SKIPPED) junto con los fallos reales (FAILED). El detalle del
+              // envío distingue uno de otro por destinatario.
+              ? `Envío completado: ${state.sentCount} enviados` + (state.failedCount > 0 ? `, ${state.failedCount} no enviados` : '')
               : 'Envío masivo cancelado';
             this.toastService[state.state === 'completed' ? 'success' : 'warning'](msg);
 

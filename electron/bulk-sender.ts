@@ -59,6 +59,16 @@ const LOCAL_PHONE_LENGTH = 9;
  */
 const DEEP_LINK_TIMEOUT_MS = 25000;
 
+/**
+ * Margen para que aparezca el cuadro de texto tras abrir un chat.
+ *
+ * Estaba en 5s y se agotaba con WhatsApp lento o la máquina cargada, y el
+ * codigo lo reportaba como "Contacto no registrado en WhatsApp" — conclusion
+ * falsa: en el envio 21 de produccion un numero se envio bien y despues fallo
+ * por aca. Solo se paga cuando algo va mal, asi que conviene holgado.
+ */
+const COMPOSE_BOX_TIMEOUT_MS = 12000;
+
 const DEFAULT_RULES: BulkSendRules = {
   min_delay_seconds: 30,
   max_delay_seconds: 90,
@@ -1212,7 +1222,7 @@ export class BulkSender {
                     document.querySelector('#main div[contenteditable="true"]');
           return box ? true : null;
         })()
-      `, 5000, 300);
+      `, COMPOSE_BOX_TIMEOUT_MS, 300);
 
       if (!composeReady) {
         // Diagnostic: log what's in #main to debug selector issues
@@ -1238,7 +1248,17 @@ export class BulkSender {
           `, true);
           console.warn('[BulkSender] Compose box not found. Diagnostic:', JSON.stringify(diag));
         } catch { /* ignore */ }
-        return { success: false, error: 'Contacto no registrado en WhatsApp', errorType: 'not_registered' };
+
+        // Que no aparezca el cuadro de texto NO prueba que el contacto no
+        // tenga WhatsApp — solo que este chat no terminó de abrir. Antes se
+        // reportaba como "Contacto no registrado en WhatsApp", que es falso y
+        // además hace que el destinatario se saltee sin reintento.
+        //
+        // Este camino es justamente el que el buscador "gana" cuando el chat
+        // ya existe, así que el fallback de no_results no lo cubre: hay que
+        // reintentar por deep-link también acá.
+        console.warn(`[BulkSender] Cuadro de texto no apareció para ${phone} — probando deep-link`);
+        return await this.navigateViaDeepLink(phone);
       }
 
       // Verify header contains phone suffix (soft check — warning only)

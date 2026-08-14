@@ -76,7 +76,7 @@
         <p class="bulk-send-count">
           {{ bulkSendState().sentCount }} / {{ bulkSendState().totalRecipients }} enviados
           @if (bulkSendState().failedCount > 0) {
-            <span class="bulk-send-failed">({{ bulkSendState().failedCount }} fallidos)</span>
+            <span class="bulk-send-failed">({{ bulkSendState().failedCount }} no enviados)</span>
           }
         </p>
         @if (bulkSendState().state === 'running') {
