@@ -772,6 +772,25 @@ export class BulkSender {
         continue; // Skip inter-message delay after periodic pause
       }
 
+      // ¿Queda alguien más a quien enviarle?
+      //
+      // La espera anti-ban separa un mensaje del SIGUIENTE. Si ya no hay
+      // siguiente, esperar no protege de nada: solo deja la interfaz
+      // bloqueada 30-90s con el envío ya terminado. Es el mismo criterio que
+      // usa la pausa periódica más arriba.
+      //
+      // Si totalRecipients todavía no se conoce (0 — la primera respuesta del
+      // backend aún no llegó), se espera igual. Ante la duda, el lado seguro
+      // es respetar el anti-ban, nunca saltearlo.
+      const quedanDestinatarios =
+        this.totalRecipients <= 0 ||
+        (this.sentCount + this.failedCount) < this.totalRecipients;
+
+      if (!quedanDestinatarios) {
+        console.log('[BulkSender] Último destinatario procesado — sin espera final');
+        continue;
+      }
+
       // Random delay between messages. Durante esta espera pre-cargamos y
       // pre-navegamos al siguiente destinatario: solapa ~5s de trabajo con
       // los ~30-90s de espera. Navegar/buscar chats NO dispara baneo; el
