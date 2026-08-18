@@ -299,7 +299,53 @@ export class BulkSender {
     this.emitOverlayUpdate();
   }
 
-  async resume(): Promise<{ success: boolean; error?: string }> {
+  /**
+   * Verifica contra el backend que un envio siga siendo reanudable.
+   * El estado persistido en disco es solo una PISTA: si el envio ya se
+   * completo, se cancelo o fue borrado, retomarlo deja la app anclada a un
+   * envio muerto y los envios nuevos nunca se reclaman (sintoma: "0 de 0").
+   */
+  private async isResumable(bulkSendId: number): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`${this.apiBaseUrl}/app/bulk_sends/${bulkSendId}`, {
+        headers: this.getHeaders(),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) {
+        console.warn(`[BulkSender] Envio ${bulkSendId} no disponible (HTTP ${res.status})`);
+        return false;
+      }
+      const data: any = await res.json();
+      const status = String(data?.bulk_send?.status ?? data?.status ?? '').toUpperCase();
+      if (status === 'COMPLETED' || status === 'CANCELLED') {
+        console.warn(`[BulkSender] Envio ${bulkSendId} ya esta ${status}`);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      // Ante un fallo de red NO retomamos: preferimos no secuestrar el flujo.
+      console.error(`[BulkSender] No se pudo validar el envio ${bulkSendId}:`, err);
+      return false;
+    }
+  }
+
+  /**
+   * @param requestedBulkSendId  Envio elegido explicitamente por el usuario.
+   *        Si viene, MANDA sobre el estado persistido en disco.
+   */
+  async resume(requestedBulkSendId?: number): Promise<{ success: boolean; error?: string }> {
+    // Case 0: El usuario pidio un envio concreto distinto al que hay en memoria.
+    // Su eleccion gana: arrancamos ese y descartamos cualquier ancla vieja.
+    if (requestedBulkSendId && requestedBulkSendId !== this.bulkSendId) {
+      console.log(`[BulkSender] Resume explicito del envio ${requestedBulkSendId} (en memoria habia ${this.bulkSendId ?? 'ninguno'})`);
+      this.clearPersistedState();
+      this._state = 'idle';
+      return this.start(requestedBulkSendId);
+    }
+
     // Case 1: Normal resume (same session, paused state in memory)
     if (this._state === 'paused') {
       console.log(`[BulkSender] Resuming bulk send ${this.bulkSendId} (same session)`);
@@ -323,6 +369,14 @@ export class BulkSender {
     if (this._state === 'idle') {
       const persisted = this.getPersistedState();
       if (persisted && (persisted.state === 'paused' || persisted.state === 'running') && persisted.bulkSendId) {
+        // No retomar a ciegas: confirmar contra el backend que sigue vigente.
+        if (!(await this.isResumable(persisted.bulkSendId))) {
+          console.warn(`[BulkSender] Estado persistido obsoleto (envio ${persisted.bulkSendId}) — descartando`);
+          this.clearPersistedState();
+          this.bulkSendId = null;
+          this._state = 'idle';
+          return { success: false, error: 'El envio anterior ya no esta disponible. Selecciona un envio e inicia de nuevo.' };
+        }
         console.log(`[BulkSender] Resuming bulk send ${persisted.bulkSendId} (after app restart)`);
         this.bulkSendId = persisted.bulkSendId;
         this.sentCount = persisted.sentCount || 0;

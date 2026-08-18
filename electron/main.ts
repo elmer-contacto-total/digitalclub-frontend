@@ -3243,10 +3243,11 @@ function setupIPC(): void {
   });
 
   // Resume bulk send
-  ipcMain.handle('bulk-send:resume', async () => {
+  ipcMain.handle('bulk-send:resume', async (_evt, bulkSendId?: number, authToken?: string) => {
     bulkSender.setWhatsAppView(whatsappView);
     bulkSender.setMainWindow(mainWindow);
-    const result = await bulkSender.resume();
+    if (authToken) bulkSender.setAuthToken(authToken);
+    const result = await bulkSender.resume(bulkSendId);
     if (mainWindow) {
       const s = bulkSender.getStatus();
       mainWindow.webContents.send('bulk-send-state-changed', {

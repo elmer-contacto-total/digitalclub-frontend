@@ -631,12 +631,11 @@ export class ElectronService {
   /**
    * Resume bulk send campaign
    */
-  async resumeBulkSend(): Promise<boolean> {
+  async resumeBulkSend(bulkSendId?: number, authToken?: string): Promise<{ success: boolean; error?: string }> {
     if ((window as any).electronAPI?.bulkSend?.resume) {
-      const result = await (window as any).electronAPI.bulkSend.resume();
-      return result.success;
+      return await (window as any).electronAPI.bulkSend.resume(bulkSendId, authToken);
     }
-    return false;
+    return { success: false, error: 'Electron no disponible' };
   }
 
   /**

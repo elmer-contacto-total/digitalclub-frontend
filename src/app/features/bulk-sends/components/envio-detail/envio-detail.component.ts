@@ -413,7 +413,12 @@ export class EnvioDetailComponent implements OnInit, OnDestroy {
       // visible cuando el bulk reanude. Si no, las operaciones CDP fallan.
       await this.router.navigate(['/app/electron_clients']);
       await new Promise(resolve => setTimeout(resolve, 500));
-      this.electronService.resumeBulkSend();
+      const res = await this.electronService.resumeBulkSend(this.bulkSendId, this.authService.getToken() ?? undefined);
+      if (!res.success) {
+        this.toast.error(res.error || 'No se pudo reanudar el envío');
+        this.loadDetail();
+        return;
+      }
       this.toast.success('Envío reanudado');
       this.loadDetail();
     } else {

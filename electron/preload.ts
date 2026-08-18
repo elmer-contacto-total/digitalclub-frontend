@@ -260,8 +260,8 @@ const electronAPI = {
     pause: (): Promise<{ success: boolean }> => {
       return ipcRenderer.invoke('bulk-send:pause');
     },
-    resume: (): Promise<{ success: boolean; error?: string }> => {
-      return ipcRenderer.invoke('bulk-send:resume');
+    resume: (bulkSendId?: number, authToken?: string): Promise<{ success: boolean; error?: string }> => {
+      return ipcRenderer.invoke('bulk-send:resume', bulkSendId, authToken);
     },
     cancel: (): Promise<{ success: boolean }> => {
       return ipcRenderer.invoke('bulk-send:cancel');
@@ -396,7 +396,7 @@ declare global {
       bulkSend: {
         start: (bulkSendId: number, authToken: string) => Promise<{ success: boolean; error?: string }>;
         pause: () => Promise<{ success: boolean }>;
-        resume: () => Promise<{ success: boolean; error?: string }>;
+        resume: (bulkSendId?: number, authToken?: string) => Promise<{ success: boolean; error?: string }>;
         cancel: () => Promise<{ success: boolean }>;
         getStatus: () => Promise<{ bulkSendId: number | null; state: string; sentCount: number; failedCount: number; totalRecipients: number; currentPhone: string | null; lastError: string | null }>;
         checkPending: () => Promise<any>;

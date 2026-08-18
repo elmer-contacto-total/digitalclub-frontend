@@ -409,7 +409,12 @@ export class EnvioListComponent implements OnInit, OnDestroy {
         this.toast.error(`No se puede reanudar: ${wa.reason}`);
         return;
       }
-      this.electronService.resumeBulkSend();
+      const res = await this.electronService.resumeBulkSend(bs.id, this.authService.getToken() ?? undefined);
+      if (!res.success) {
+        this.toast.error(res.error || 'No se pudo reanudar el envío');
+        this.loadBulkSends();
+        return;
+      }
       this.toast.success('Envío reanudado');
     } else {
       this.bulkSendService.resumeBulkSend(bs.id).pipe(takeUntil(this.destroy$)).subscribe({
