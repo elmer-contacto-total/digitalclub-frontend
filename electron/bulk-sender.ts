@@ -929,38 +929,14 @@ export class BulkSender {
     if (!this.whatsappView) return { match: false, actual: 'no_view' };
     const phoneSuffix = expectedPhone.replace(/\D/g, '').slice(-8);
 
-    // Verificación fuerte: el JID del chat abierto lleva el número real
-    // (ej. "false_51913254120@c.us"), lo muestre o no el encabezado. Es la
-    // única forma de descartar que se haya abierto el chat de otra persona
-    // cuando el contacto está agendado y arriba solo se ve el nombre.
+    // NOTA: no se puede verificar por JID. Se midió contra el DOM de producción
+    // (2026-08-14) y NINGÚN elemento de la página expone el JID: se recorrieron
+    // todos los [data-id] y ninguno contenía "@". El data-id de #main es el id
+    // del mensaje ("3EB0654057F367D0260F4C"), sin teléfono.
     //
-    // Si el DOM no lo expone se cae al chequeo por encabezado de abajo, que es
-    // el comportamiento histórico — nunca es más permisivo que antes.
-    const jidDigits = await this.whatsappView.webContents.executeJavaScript(`
-      (function() {
-        var fuentes = [
-          document.querySelector('#main [data-id]'),
-          document.querySelector('#main'),
-          document.querySelector('[data-testid="conversation-panel-wrapper"] [data-id]')
-        ];
-        for (var i = 0; i < fuentes.length; i++) {
-          var el = fuentes[i];
-          if (!el) continue;
-          var id = el.getAttribute('data-id') || '';
-          var m = id.match(/(\\d{8,})@/);
-          if (m) return m[1];
-        }
-        return '';
-      })()
-    `, true).catch(() => '');
-
-    if (jidDigits) {
-      const ok = String(jidDigits).includes(phoneSuffix);
-      if (!ok) {
-        console.warn(`[BulkSender] JID del chat abierto (${jidDigits}) no coincide con ${expectedPhone}`);
-      }
-      return { match: ok, actual: `jid:${jidDigits}` };
-    }
+    // Consecuencia: con un contacto AGENDADO el encabezado muestra solo el
+    // nombre y esta función no puede confirmar nada — devuelve match=true por
+    // defecto. Es una verificación parcial, no una garantía.
 
     const headerInfo = await this.whatsappView.webContents.executeJavaScript(`
       (function() {

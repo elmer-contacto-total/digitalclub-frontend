@@ -9,6 +9,19 @@
     <router-outlet />
   </main>
 
+  <!-- Toasts (mismo markup que admin-layout) -->
+  <div class="toast-container">
+    @for (toast of toasts(); track toast.id) {
+      <div class="toast toast-{{ toast.type }}" (click)="dismissToast(toast.id)">
+        <i class="ph {{ getToastIcon(toast.type) }}"></i>
+        <span>{{ toast.message }}</span>
+        <button type="button" class="toast-close" aria-label="Cerrar">
+          <i class="ph ph-x"></i>
+        </button>
+      </div>
+    }
+  </div>
+
   <!-- Footer -->
   <footer class="auth-footer">
     <p>&copy; {{ currentYear }} Monitor Whatsapp Service. Todos los derechos reservados.</p>
