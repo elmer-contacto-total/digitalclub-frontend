@@ -23,7 +23,9 @@ export class ForgotPasswordComponent {
 
   forgotForm: FormGroup;
   isLoading = signal(false);
-  emailSent = signal(false);
+  // Marca que la solicitud se envio, NO que el correo exista: el backend ya no
+  // lo revela (V04, enumeracion de usuarios).
+  requestSent = signal(false);
   // Mensaje de error inline: los toasts no se renderizan en las páginas de auth
   // (el contenedor de toasts vive solo en el admin-layout), así que aquí mostramos
   // el feedback dentro del propio componente.
@@ -48,14 +50,9 @@ export class ForgotPasswordComponent {
     this.authService.forgotPassword(email).subscribe({
       next: (res) => {
         this.isLoading.set(false);
-        if (res?.emailSent) {
-          // El correo existe y se envió: mostrar pantalla "Correo Enviado"
-          this.emailSent.set(true);
-          this.toastService.success('Se han enviado las instrucciones a su correo');
-        } else {
-          // Correo no registrado: NO mostrar "Correo Enviado", avisar inline
-          this.errorMessage.set('El correo no está registrado');
-        }
+        // Misma pantalla siempre. Distinguir el caso "no registrado" es
+        // justamente lo que permitia enumerar cuentas validas.
+        this.requestSent.set(true);
       },
       error: () => {
         this.isLoading.set(false);

@@ -202,8 +202,9 @@ export class AuthService {
   /**
    * Request password reset email
    */
-  forgotPassword(email: string): Observable<{ success: boolean; emailSent: boolean; message?: string }> {
-    return this.api.post<{ success: boolean; emailSent: boolean; message?: string }>('/api/v1/password/forgot', { email });
+  forgotPassword(email: string): Observable<{ success: boolean; message?: string }> {
+    // V04: el backend responde igual exista o no el correo — no hay emailSent.
+    return this.api.post<{ success: boolean; message?: string }>('/api/v1/password/forgot', { email });
   }
 
   /**
