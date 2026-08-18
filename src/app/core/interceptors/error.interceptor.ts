@@ -22,8 +22,23 @@ function sanitizeErrorMessage(raw: string): string {
  * NOTE: 401 errors are handled by auth.interceptor.ts with automatic token refresh.
  * This interceptor handles all other error codes.
  */
+/**
+ * Endpoints cuyo error ya lo comunica el propio componente, con mensaje inline
+ * y toast complementarios. Si el interceptor tambien emitiera el suyo, el
+ * usuario veria dos notificaciones diciendo casi lo mismo.
+ *
+ * Antes esto no se notaba porque /auth no montaba el contenedor de toasts y
+ * los del interceptor eran invisibles ahi. Al montarlo quedaron a la vista.
+ */
+const HANDLED_BY_COMPONENT = [
+  '/api/v1/web/verify_otp',
+  '/api/v1/web/resend_otp',
+  '/api/v1/password/forgot'
+];
+
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const toastService = inject(ToastService);
+  const handledByComponent = HANDLED_BY_COMPONENT.some(u => req.url.includes(u));
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -81,7 +96,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const safeMessage = sanitizeErrorMessage(errorMessage);
 
       // Show toast notification (except for 401 which is handled by auth interceptor)
-      if (showToast) {
+      if (showToast && !handledByComponent) {
         toastService.error(safeMessage);
       }
 
