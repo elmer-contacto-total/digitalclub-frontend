@@ -174,6 +174,16 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
         this.isLoading.set(false);
         const { code, message } = parseApiError(err);
 
+        // V03: demasiados intentos fallidos -> mensaje claro y volver al login.
+        // El backend invalida la sesion OTP al superar el umbral (HTTP 429).
+        if (err?.status === 429) {
+          this.hasError.set(true);
+          this.otpDigits.forEach(d => d.set(''));
+          this.toastService.error(message || 'Demasiados intentos fallidos. Solicite un nuevo código.');
+          setTimeout(() => this.goBack(), 2500);
+          return;
+        }
+
         // Handle specific error cases
         switch (code) {
           case AuthErrorCode.INVALID_OTP:

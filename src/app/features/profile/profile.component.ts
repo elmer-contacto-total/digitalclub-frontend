@@ -151,8 +151,12 @@ const TIME_ZONES = [
                       [(ngModel)]="form.firstName"
                       name="firstName"
                       placeholder="Ingresa tu nombre"
+                      maxlength="60"
                       required
                     />
+                    @if (form.firstName && !isNameValid(form.firstName)) {
+                      <span class="field-error">Solo se permiten letras, espacios, guiones y apóstrofes.</span>
+                    }
                   </div>
 
                   <div class="form-group">
@@ -163,8 +167,12 @@ const TIME_ZONES = [
                       [(ngModel)]="form.lastName"
                       name="lastName"
                       placeholder="Ingresa tu apellido"
+                      maxlength="60"
                       required
                     />
+                    @if (form.lastName && !isNameValid(form.lastName)) {
+                      <span class="field-error">Solo se permiten letras, espacios, guiones y apóstrofes.</span>
+                    }
                   </div>
 
                   <div class="form-group">
@@ -542,7 +550,13 @@ const TIME_ZONES = [
         font-weight: 500;
         color: var(--fg-default);
 
-        .required { color: var(--error-default); }
+.required { color: var(--error-default); }
+        .field-error {
+          display: block;
+          margin-top: 4px;
+          font-size: 0.78rem;
+          color: var(--error-default);
+        }
       }
 
       input, select {
@@ -797,8 +811,15 @@ export class ProfileComponent implements OnInit {
     });
   }
 
+  // V05: lista blanca — letras (con tildes/ñ), espacios, guiones, apostrofes y puntos.
+  isNameValid(value: string): boolean {
+    if (!value) return false;
+    return /^[\p{L}\p{M}][\p{L}\p{M} .'\-]*$/u.test(value.trim());
+  }
+
   isFormValid(): boolean {
-    return !!(this.form.firstName?.trim() && this.form.lastName?.trim());
+    return !!(this.form.firstName?.trim() && this.form.lastName?.trim()
+      && this.isNameValid(this.form.firstName) && this.isNameValid(this.form.lastName));
   }
 
   getInitials(): string {
