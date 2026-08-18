@@ -27,6 +27,10 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
   isResending = signal(false);
   resendCooldown = signal(0);
   hasError = signal(false);
+  // Texto del error inline. Los toasts NO se renderizan en /auth (el contenedor
+  // vive solo en admin-layout), asi que el mensaje debe ir en pantalla o el
+  // usuario no se entera de nada. Mismo criterio que forgot-password.
+  errorMessage = signal<string | null>(null);
   private cooldownInterval?: ReturnType<typeof setInterval>;
 
   // Individual digit signals
@@ -95,6 +99,7 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
 
     this.otpDigits[index].set(value);
     this.hasError.set(false);
+    this.errorMessage.set(null);
 
     // Move to next input if value entered
     if (value && index < 5) {
@@ -184,9 +189,15 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
           || /demasiados|muchos intentos|too many/i.test(message || '');
         if (tooManyAttempts) {
           this.hasError.set(true);
+          this.errorMessage.set(
+            'Demasiados intentos fallidos. Vuelva a iniciar sesión para recibir un código nuevo.'
+          );
           this.otpDigits.forEach(d => d.set(''));
+          // Sin devolver el foco, el cursor queda en el último dígito y la
+          // pantalla parece colgada mientras corre el temporizador.
+          this.digitInputs.toArray()[0]?.nativeElement.focus();
           this.toastService.error('Demasiados intentos fallidos. Solicite un nuevo código.');
-          setTimeout(() => this.goBack(), 2800);
+          setTimeout(() => this.goBack(), 4000);
           return;
         }
 
@@ -194,6 +205,7 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
         switch (code) {
           case AuthErrorCode.INVALID_OTP:
             this.hasError.set(true);
+            this.errorMessage.set(message);
             this.toastService.error(message);
             // Clear all digits and refocus
             this.otpDigits.forEach(d => d.set(''));
@@ -201,15 +213,20 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
             inputs[0]?.nativeElement.focus();
             break;
           case AuthErrorCode.SESSION_EXPIRED:
+            this.hasError.set(true);
+            this.errorMessage.set(message);
             this.toastService.error(message);
             // Redirect back to login on session expiry
             setTimeout(() => this.goBack(), 1500);
             break;
           case AuthErrorCode.NETWORK_ERROR:
+            this.hasError.set(true);
+            this.errorMessage.set('Error de conexión. Verifique su internet.');
             this.toastService.error('Error de conexión. Verifique su internet.');
             break;
           default:
             this.hasError.set(true);
+            this.errorMessage.set(message);
             this.toastService.error(message);
             this.otpDigits.forEach(d => d.set(''));
             const inputsDefault = this.digitInputs.toArray();

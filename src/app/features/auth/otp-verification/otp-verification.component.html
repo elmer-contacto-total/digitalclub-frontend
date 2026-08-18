@@ -38,7 +38,9 @@
           }
         </div>
         @if (hasError()) {
-          <span class="form-error text-center">El código ingresado es incorrecto</span>
+          <span class="form-error text-center">
+            {{ errorMessage() || 'El código ingresado es incorrecto' }}
+          </span>
         }
       </div>
 
