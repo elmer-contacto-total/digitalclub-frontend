@@ -16,6 +16,8 @@ import { environment } from '../../../../../environments/environment';
 import { splitPhone, joinPhone, DEFAULT_COUNTRY_CODE } from '../../../../core/utils/phone.util';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
+// V05: lista blanca de nombres — letras (con tildes/ñ), espacios, guiones, apostrofes, puntos.
+const NAME_REGEX = /^[\p{L}\p{M}][\p{L}\p{M} .'\-]*$/u;
 
 @Component({
   selector: 'app-user-form',
@@ -90,7 +92,13 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
                   [class.invalid]="isFieldInvalid('firstName')"
                 />
                 @if (isFieldInvalid('firstName')) {
-                  <span class="error-message">El nombre es requerido</span>
+                  <span class="error-message">
+                    @if (form.get('firstName')?.errors?.['pattern']) {
+                      Solo se permiten letras, espacios, guiones y apóstrofes.
+                    } @else {
+                      El nombre es requerido
+                    }
+                  </span>
                 }
               </div>
 
@@ -103,7 +111,13 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
                   [class.invalid]="isFieldInvalid('lastName')"
                 />
                 @if (isFieldInvalid('lastName')) {
-                  <span class="error-message">El apellido es requerido</span>
+                  <span class="error-message">
+                    @if (form.get('lastName')?.errors?.['pattern']) {
+                      Solo se permiten letras, espacios, guiones y apóstrofes.
+                    } @else {
+                      El apellido es requerido
+                    }
+                  </span>
                 }
               </div>
             </div>
@@ -717,8 +731,8 @@ export class UserFormComponent implements OnInit {
     const passwordValidators = this.isEditMode() ? [] : [Validators.required, Validators.minLength(8)];
 
     this.form = this.fb.group({
-      firstName: ['', Validators.required],
-      lastName: ['', Validators.required],
+      firstName: ['', [Validators.required, Validators.pattern(NAME_REGEX), Validators.maxLength(60)]],
+      lastName: ['', [Validators.required, Validators.pattern(NAME_REGEX), Validators.maxLength(60)]],
       email: ['', [Validators.required, Validators.pattern(EMAIL_REGEX)]],
       phoneCountryCode: ['51'],
       phone: [''],

@@ -22,6 +22,8 @@ import { SortHeaderDirective } from '../../../../shared/directives/sort-header.d
 import { SortState, toggleSort, sortRows } from '../../../../core/utils/table-sort';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
+// V05: lista blanca de nombres.
+const NAME_REGEX = /^[\p{L}\p{M}][\p{L}\p{M} .'\-]*$/u;
 
 @Component({
   selector: 'app-user-list',
@@ -300,7 +302,11 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
                         type="text"
                         [(ngModel)]="editForm.firstName"
                         placeholder="Nombre"
+                        maxlength="60"
                       />
+                      @if (editForm.firstName && !isNameValid(editForm.firstName)) {
+                        <span class="field-error">Solo se permiten letras, espacios, guiones y apóstrofes.</span>
+                      }
                     </div>
                     <div class="form-group">
                       <label>Apellido <span class="required">*</span></label>
@@ -308,7 +314,11 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
                         type="text"
                         [(ngModel)]="editForm.lastName"
                         placeholder="Apellido"
+                        maxlength="60"
                       />
+                      @if (editForm.lastName && !isNameValid(editForm.lastName)) {
+                        <span class="field-error">Solo se permiten letras, espacios, guiones y apóstrofes.</span>
+                      }
                     </div>
                   </div>
                   <div class="form-row">
@@ -910,6 +920,12 @@ const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$/;
         .required {
           color: var(--error-default);
         }
+        .field-error {
+          display: block;
+          margin-top: 4px;
+          font-size: 0.78rem;
+          color: var(--error-default);
+        }
       }
 
       input, select {
@@ -1473,8 +1489,16 @@ export class UserListComponent implements OnInit, OnDestroy {
     return !!(
       this.editForm.firstName?.trim() &&
       this.editForm.lastName?.trim() &&
+      this.isNameValid(this.editForm.firstName) &&
+      this.isNameValid(this.editForm.lastName) &&
       EMAIL_REGEX.test(email)
     );
+  }
+
+  // V05: letras (con tildes/ñ), espacios, guiones, apostrofes y puntos.
+  isNameValid(value: string | null | undefined): boolean {
+    if (!value) return false;
+    return NAME_REGEX.test(value.trim());
   }
 
   saveUser(): void {
