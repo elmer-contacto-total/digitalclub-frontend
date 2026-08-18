@@ -152,7 +152,10 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
   }
 
   onSubmit(): void {
-    if (!this.isComplete()) {
+    // Guard contra doble envio / verify fantasma: si ya hay una peticion en curso
+    // o el codigo no esta completo, no reenviar (evita el "codigo invalido" espurio
+    // tras un auto-submit repetido o una redireccion en curso).
+    if (!this.isComplete() || this.isLoading()) {
       return;
     }
 

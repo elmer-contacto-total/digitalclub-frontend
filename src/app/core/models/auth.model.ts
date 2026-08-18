@@ -199,7 +199,19 @@ export function parseApiError(error: any): { code: AuthErrorCode; message: strin
   if (error?.error?.token_invalid || errorMessage.includes('Token') || errorMessage.includes('token')) {
     return { code: AuthErrorCode.TOKEN_INVALID, message: 'Enlace inválido o expirado' };
   }
-  if (error?.status === 0 || error?.name === 'HttpErrorResponse' && !error?.ok) {
+  // 429: rate-limit / cooldown / demasiados intentos -> mostrar el mensaje real
+  // del backend, NO "Error de conexion". Antes caia en NETWORK_ERROR y confundia.
+  if (error?.status === 429) {
+    return {
+      code: AuthErrorCode.UNKNOWN,
+      message: errorMessage || 'Demasiadas solicitudes. Espere un momento e intente de nuevo.'
+    };
+  }
+
+  // Error de red REAL: solo cuando no hubo respuesta del servidor (status 0).
+  // (Antes tambien entraba cualquier HttpErrorResponse !ok, marcando 4xx/5xx
+  //  como "Error de conexion" aunque si hubiera respuesta del servidor.)
+  if (error?.status === 0) {
     return { code: AuthErrorCode.NETWORK_ERROR, message: 'Error de conexión' };
   }
 
