@@ -189,9 +189,10 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
           || /demasiados|muchos intentos|too many/i.test(message || '');
         if (tooManyAttempts) {
           this.hasError.set(true);
-          this.errorMessage.set(
-            'Demasiados intentos fallidos. Vuelva a iniciar sesión para recibir un código nuevo.'
-          );
+          // Inline = QUÉ pasó. Toast = QUÉ hacer. Nunca el mismo texto: dos
+          // avisos que dicen lo mismo se leen como un error duplicado.
+          this.errorMessage.set('Demasiados intentos fallidos');
+          this.toastService.error('Vuelva a iniciar sesión para recibir un código nuevo');
           this.otpDigits.forEach(d => d.set(''));
           // Sin devolver el foco, el cursor queda en el último dígito y la
           // pantalla parece colgada mientras corre el temporizador.
@@ -204,7 +205,8 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
         switch (code) {
           case AuthErrorCode.INVALID_OTP:
             this.hasError.set(true);
-            this.errorMessage.set(message);
+            this.errorMessage.set('Código incorrecto');
+            this.toastService.error('Revise el código de 6 dígitos enviado a su correo');
             // Clear all digits and refocus
             this.otpDigits.forEach(d => d.set(''));
             const inputs = this.digitInputs.toArray();
@@ -212,15 +214,19 @@ export class OtpVerificationComponent implements OnInit, OnDestroy, AfterViewIni
             break;
           case AuthErrorCode.SESSION_EXPIRED:
             this.hasError.set(true);
-            this.errorMessage.set(message);
+            this.errorMessage.set('La sesión expiró');
+            this.toastService.error('Vuelva a iniciar sesión para recibir un código nuevo');
             // Redirect back to login on session expiry
             setTimeout(() => this.goBack(), 1500);
             break;
           case AuthErrorCode.NETWORK_ERROR:
             this.hasError.set(true);
-            this.errorMessage.set('Error de conexión. Verifique su internet.');
+            this.errorMessage.set('Sin conexión');
+            this.toastService.error('Verifique su internet e intente de nuevo');
             break;
           default:
+            // Caso no previsto: no hay dos textos que ofrecer, así que va solo
+            // el inline con lo que informó el backend.
             this.hasError.set(true);
             this.errorMessage.set(message);
             this.otpDigits.forEach(d => d.set(''));
