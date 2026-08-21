@@ -9,7 +9,7 @@ import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
 import { Message } from '../models/message.model';
-import { Subject, Observable } from 'rxjs';
+import { Subject, Observable, firstValueFrom } from 'rxjs';
 
 // ===== TYPES =====
 
@@ -175,6 +175,27 @@ export class WebSocketService implements OnDestroy {
           Authorization: `Bearer ${token}`
         },
 
+        // Refresca el token ANTES de cada (re)conexion. Sin esto, la libreria STOMP
+        // reconecta cada 5s reusando el token "horneado" en el objeto Client: al
+        // expirar el access token, cada reconexion manda un token vencido y el
+        // servidor responde "Expired JWT" en un loop infinito que nunca se cura.
+        // Aqui, si el token esta vencido o por vencer, se refresca y se aplica el
+        // nuevo a brokerURL y connectHeaders. Si no se puede refrescar, el loop se
+        // corta en onWebSocketClose (fuerza login limpio).
+        beforeConnect: async () => {
+          let current = this.authService.getToken();
+          if (this.isJwtExpired(current)) {
+            const refreshed = await firstValueFrom(this.authService.refreshToken())
+              .catch(() => false);
+            if (refreshed) {
+              current = this.authService.getToken();
+            }
+          }
+          if (current) {
+            this.applyToken(current);
+          }
+        },
+
         // Debug logging (disable in production)
         debug: (str) => {
           if (!environment.production) {
@@ -219,6 +240,35 @@ export class WebSocketService implements OnDestroy {
     }
 
     this._status.set('disconnected');
+  }
+
+  /**
+   * Aplica un token fresco a la conexion STOMP (URL de broker + header STOMP).
+   * Se invoca en cada (re)conexion desde beforeConnect para no reusar un token
+   * vencido pegado en el objeto Client.
+   */
+  private applyToken(token: string): void {
+    if (!this.stompClient) return;
+    this.stompClient.brokerURL = `${environment.wsUrl}?token=${token}`;
+    this.stompClient.connectHeaders = { Authorization: `Bearer ${token}` };
+  }
+
+  /**
+   * Indica si el JWT esta vencido o por vencer (con un margen de holgura).
+   * Decodifica el claim exp; ante cualquier error de parseo lo trata como vencido.
+   */
+  private isJwtExpired(token: string | null, skewSeconds = 30): boolean {
+    if (!token) return true;
+    try {
+      const parts = token.split('.');
+      if (parts.length < 2) return true;
+      const payload = JSON.parse(atob(parts[1]));
+      if (!payload || typeof payload.exp !== 'number') return false;
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      return payload.exp <= nowSeconds + skewSeconds;
+    } catch {
+      return true;
+    }
   }
 
   /**
@@ -475,11 +525,24 @@ export class WebSocketService implements OnDestroy {
    * Handle WebSocket close
    */
   private onWebSocketClose(event: CloseEvent): void {
-    if (!event.wasClean && this.reconnectAttempts < this.maxReconnectAttempts) {
-      this._status.set('reconnecting');
-      this.reconnectAttempts++;
-      console.log(`[WebSocket] Reconnecting... attempt ${this.reconnectAttempts}`);
+    if (event.wasClean) {
+      return;
     }
+    this.reconnectAttempts++;
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      // Se agotaron los reintentos: la sesion no se pudo refrescar (refresh token
+      // tambien vencido o revocado). Cortamos el loop de reconexion y mandamos al
+      // login limpio, en vez de martillar "Expired JWT" indefinidamente.
+      console.warn('[WebSocket] Reconexiones agotadas; cerrando sesion');
+      const client = this.stompClient;
+      this.stompClient = null;
+      client?.deactivate();
+      this._status.set('disconnected');
+      this.authService.forceLogout(true);
+      return;
+    }
+    this._status.set('reconnecting');
+    console.log(`[WebSocket] Reconnecting... attempt ${this.reconnectAttempts}`);
   }
 
   /**
