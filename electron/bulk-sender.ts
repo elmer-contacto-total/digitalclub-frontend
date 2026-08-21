@@ -85,6 +85,8 @@ export class BulkSender {
   private consecutiveFailures = 0;
   private currentPhone: string | null = null;
   private lastError: string | null = null;
+  /** Motivo del ultimo fallo de next-recipient, para el mensaje de pausa. */
+  private lastHttpFailure: string | null = null;
   private isPaused = false;
   private isCancelled = false;
   private dailySentCount = 0;
@@ -495,7 +497,9 @@ export class BulkSender {
           if (this.consecutiveFailures >= 5) {
             this.isPaused = true;
             this._state = 'paused';
-            this.lastError = 'Error de conexión con el servidor. Verifique su red y reanude.';
+            this.lastError = this.lastHttpFailure
+              ? `El servidor rechazó la solicitud (${this.lastHttpFailure}). Reanude o vuelva a iniciar sesión.`
+              : 'Error de conexión con el servidor. Verifique su red y reanude.';
             await this.notifyBackend('pause');
             this.emitOverlayUpdate();
             return;
@@ -2282,9 +2286,32 @@ export class BulkSender {
         }
         return data;
       }
+
+      // Cualquier status != 2xx terminaba aca en silencio y el motor lo
+      // reportaba como "error de red", indistinguible de un 401 por token
+      // vencido o un 500 del backend. Ademas esta llamada la hace el proceso
+      // principal, asi que NO aparece en la pestania Network del renderer:
+      // sin este volcado el fallo es invisible.
+      let cuerpo = '';
+      try { cuerpo = (await response.text()).slice(0, 200); } catch { /* ignore */ }
+      this.lastHttpFailure = `HTTP ${response.status}`;
+      console.error(`[BulkSender] next-recipient HTTP ${response.status} ${response.statusText} :: ${cuerpo}`);
+      this.sendDiagToRenderer({
+        origen: 'fetchNextRecipient',
+        bulkSendId: this.bulkSendId,
+        status: response.status,
+        statusText: response.statusText,
+        cuerpo
+      });
       return null;
-    } catch (err) {
-      console.error('[BulkSender] Failed to fetch next recipient:', err);
+    } catch (err: any) {
+      this.lastHttpFailure = `red: ${err?.message || err}`;
+      console.error('[BulkSender] next-recipient fallo de red:', err);
+      this.sendDiagToRenderer({
+        origen: 'fetchNextRecipient',
+        bulkSendId: this.bulkSendId,
+        error: String(err?.message || err)
+      });
       return null;
     }
   }
