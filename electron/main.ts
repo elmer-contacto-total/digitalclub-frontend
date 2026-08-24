@@ -6,7 +6,8 @@ import {
   globalShortcut,
   clipboard,
   ipcMain,
-  session
+  session,
+  net
 } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -322,7 +323,7 @@ async function sendHealthReport(report: any): Promise<void> {
     return;
   }
   try {
-    const res = await fetch(`${BACKEND_BASE_URL}/app/wa_health_report`, {
+    const res = await net.fetch(`${BACKEND_BASE_URL}/app/wa_health_report`, {
       method: 'POST',
       headers: getMediaApiHeaders(),
       body: JSON.stringify(report)
@@ -358,7 +359,7 @@ function flushPendingHealthReport(): void {
  */
 async function notifyIncomingMessage(senderPhone: string, messageContent?: string): Promise<void> {
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/app/messages/activate_incoming_ticket`, {
+    const response = await net.fetch(`${BACKEND_BASE_URL}/app/messages/activate_incoming_ticket`, {
       method: 'POST',
       headers: getMediaApiHeaders(),
       body: JSON.stringify({
@@ -401,7 +402,7 @@ async function notifyIncomingMessage(senderPhone: string, messageContent?: strin
  */
 async function notifyOutgoingMessage(clientPhone: string): Promise<void> {
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/app/messages/mark_agent_responded`, {
+    const response = await net.fetch(`${BACKEND_BASE_URL}/app/messages/mark_agent_responded`, {
       method: 'POST',
       headers: getMediaApiHeaders(),
       body: JSON.stringify({
@@ -441,7 +442,7 @@ async function notifyOutgoingMessage(clientPhone: string): Promise<void> {
  */
 async function sendAuditLog(payload: AuditLogPayload): Promise<void> {
   try {
-    const response = await fetch(`${MEDIA_API_URL}/audit`, {
+    const response = await net.fetch(`${MEDIA_API_URL}/audit`, {
       method: 'POST',
       headers: getMediaApiHeaders(),
       body: JSON.stringify(payload)
@@ -477,7 +478,7 @@ async function fetchKnownMediaIds(phone: string): Promise<Array<{ whatsappMessag
 
   try {
     const url = `${MEDIA_API_URL}/chat/${encodeURIComponent(phone)}/known-ids?limit=500`;
-    const response = await fetch(url, {
+    const response = await net.fetch(url, {
       method: 'GET',
       headers: getMediaApiHeaders(),
       signal: AbortSignal.timeout(5000)
@@ -533,7 +534,7 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
   // si los 3 intentos fallan, se loguea warning y se descarta.
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const response = await fetch(`${MEDIA_API_URL}`, {
+      const response = await net.fetch(`${MEDIA_API_URL}`, {
         method: 'POST',
         headers: getMediaApiHeaders(),
         body: JSON.stringify(payload)
@@ -596,7 +597,7 @@ async function sendMediaToServer(payload: MediaCapturePayload): Promise<void> {
 async function sendMediaDeletionToServer(whatsappMessageId: string, isDisappearing: boolean = false): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const response = await fetch(`${MEDIA_API_URL}/mark-deleted`, {
+      const response = await net.fetch(`${MEDIA_API_URL}/mark-deleted`, {
         method: 'POST',
         headers: getMediaApiHeaders(),
         body: JSON.stringify({ whatsappMessageId, isDisappearing })
@@ -642,7 +643,7 @@ async function retryPendingDeletions(): Promise<void> {
     const toRetry = pendingDeletions.splice(0, pendingDeletions.length);
     for (const entry of toRetry) {
       try {
-        const response = await fetch(`${MEDIA_API_URL}/mark-deleted`, {
+        const response = await net.fetch(`${MEDIA_API_URL}/mark-deleted`, {
           method: 'POST',
           headers: getMediaApiHeaders(),
           body: JSON.stringify({ whatsappMessageId: entry.id })

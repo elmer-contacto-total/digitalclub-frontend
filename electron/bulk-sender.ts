@@ -311,7 +311,7 @@ export class BulkSender {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(`${this.apiBaseUrl}/app/bulk_sends/${bulkSendId}`, {
+      const res = await net.fetch(`${this.apiBaseUrl}/app/bulk_sends/${bulkSendId}`, {
         headers: this.getHeaders(),
         signal: controller.signal
       });
@@ -677,7 +677,7 @@ export class BulkSender {
             this.lastError = 'WhatsApp ha limitado el envío. Se reanudará automáticamente en ~15 minutos.';
             // Notify backend so other Electron instances also stop
             try {
-              await fetch(`${this.apiBaseUrl}/app/bulk_sends/report-rate-limit?cooldownMinutes=15`, {
+              await net.fetch(`${this.apiBaseUrl}/app/bulk_sends/report-rate-limit?cooldownMinutes=15`, {
                 method: 'POST',
                 headers: this.getHeaders()
               });
@@ -721,7 +721,7 @@ export class BulkSender {
           this.lastError = 'WhatsApp ha limitado el envío. Se reanudará automáticamente en ~15 minutos.';
           // Notify backend so other Electron instances also stop
           try {
-            await fetch(`${this.apiBaseUrl}/app/bulk_sends/report-rate-limit?cooldownMinutes=15`, {
+            await net.fetch(`${this.apiBaseUrl}/app/bulk_sends/report-rate-limit?cooldownMinutes=15`, {
               method: 'POST',
               headers: this.getHeaders()
             });
@@ -2229,7 +2229,7 @@ export class BulkSender {
 
   private async fetchRules(): Promise<void> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/rules`, {
+      const response = await net.fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/rules`, {
         headers: this.getHeaders()
       });
       if (response.ok) {
@@ -2276,7 +2276,7 @@ export class BulkSender {
       return null;
     }
     try {
-      const response = await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/next-recipient`, {
+      const response = await net.fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/next-recipient`, {
         headers: this.getHeaders()
       });
       if (response.ok) {
@@ -2322,7 +2322,7 @@ export class BulkSender {
       return;
     }
     try {
-      await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/recipient-result`, {
+      await net.fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/recipient-result`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({ recipientId, success, errorMessage: errorMessage || null, action: action || null })
@@ -2340,7 +2340,7 @@ export class BulkSender {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-      await fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/${action}`, {
+      await net.fetch(`${this.apiBaseUrl}/app/bulk_sends/${this.bulkSendId}/${action}`, {
         method: 'POST',
         headers: this.getHeaders(),
         signal: controller.signal
