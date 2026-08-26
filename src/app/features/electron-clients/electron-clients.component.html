@@ -30,8 +30,13 @@
             <div class="empty-icon">
               <i class="ph ph-chats-circle"></i>
             </div>
-            <h3>Sin contacto seleccionado</h3>
-            <p>Selecciona un chat en WhatsApp para ver la informacion del contacto</p>
+            @if (currentPhone()) {
+              <h3>Sin datos de este contacto</h3>
+              <p>Este numero no corresponde a un cliente asignado a ti.</p>
+            } @else {
+              <h3>Sin contacto seleccionado</h3>
+              <p>Selecciona un chat en WhatsApp para ver la informacion del contacto</p>
+            }
             <div class="empty-tip">
               <i class="ph ph-lightbulb"></i>
               <span>El numero se detecta automaticamente del chat de WhatsApp</span>
