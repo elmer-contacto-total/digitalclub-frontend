@@ -2563,6 +2563,17 @@ const MEDIA_CAPTURE_SCRIPT = `
     if (img.classList.contains('hablape-protected-image')) return;
     if (img.__hablapeProtected) return;
 
+    // La imagen tiene que ser un adjunto de la conversacion abierta. El selector
+    // de stickers --favoritos, recientes-- tambien dibuja imagenes, y se estaban
+    // capturando como si fueran del chat: quedaban filas con identificador
+    // "sticker-item", sin fecha ni remitente, duplicando el adjunto de verdad.
+    var burbuja = img.closest && img.closest('[data-id], [data-testid^="conv-msg-"]');
+    var panelChat = document.querySelector('div#main') ||
+                    document.querySelector('[data-testid="conversation-panel-messages"]');
+    if (!burbuja || !panelChat || !panelChat.contains(burbuja)) {
+      return;
+    }
+
     // Si la imagen ya fue revelada previamente (persiste entre navegaciones de chat)
     const messageId = messageEl?.getAttribute?.('data-id');
     if (messageId && processedMessageIds.has(messageId)) return;
