@@ -1815,6 +1815,10 @@ let lastDetectedName = '';
 // el número cuando WhatsApp lo muestra y, si lo oculta, el identificador que
 // pone en su lugar. Es lo que se usa para registrar la conversación.
 let lastPanelIdentifier = '';
+
+// Si la conversación abierta es un grupo. Los grupos quedan fuera del alcance:
+// no se registra nada de ellos.
+let conversacionEsGrupal = false;
 let chatScannerInterval: NodeJS.Timeout | null = null;
 let chatScannerRunning = false;
 
@@ -1828,10 +1832,17 @@ let sessionCheckInterval: NodeJS.Timeout | null = null;
  */
 async function updateChatPhoneInWhatsApp(phone: string, name: string): Promise<void> {
   if (!whatsappView) return;
-  // Escapar para evitar inyección JS: phone es solo dígitos, name puede tener
-  // emojis/comillas/apóstrofes/backslashes/saltos de línea. JSON.stringify
-  // produce un literal válido y seguro.
-  const phoneLit = JSON.stringify((phone || '').replace(/\D/g, ''));
+  // Escapar para evitar inyección JS: name puede tener emojis, comillas,
+  // apóstrofes, backslashes o saltos de línea. JSON.stringify produce un literal
+  // válido y seguro.
+  //
+  // El identificador puede ser un número o, cuando WhatsApp lo oculta, el
+  // identificador con arroba que muestra la ficha de contacto. Se admite ese
+  // segundo caso sin quitarle nada, con un formato acotado; cualquier otra cosa
+  // se reduce a dígitos como antes.
+  const crudo = (phone || '').trim();
+  const esIdentificador = /^@[A-Za-z0-9._-]{2,40}$/.test(crudo);
+  const phoneLit = JSON.stringify(esIdentificador ? crudo : crudo.replace(/\D/g, ''));
   const nameLit = JSON.stringify(name || '');
   try {
     await whatsappView.webContents.executeJavaScript(`
@@ -2098,9 +2109,33 @@ async function checkForExtractedPhone(): Promise<void> {
 async function leerIdentificadorDelPanel(): Promise<void> {
   if (!whatsappView) return;
   try {
-    const id = await whatsappView.webContents.executeJavaScript(
-      'window.__hablapePanelIdentifier || null', true);
-    if (id && typeof id === 'string') lastPanelIdentifier = id;
+    const lectura = await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        // WhatsApp marca los mensajes de grupo con "@g.us" en su identificador.
+        var grupo = !!document.querySelector('#main [data-id*="@g.us"]');
+        return { id: window.__hablapePanelIdentifier || null, esGrupo: grupo };
+      })()
+    `, true);
+
+    conversacionEsGrupal = !!(lectura && lectura.esGrupo);
+
+    const id = lectura ? lectura.id : null;
+    if (!id || typeof id !== 'string' || id === lastPanelIdentifier) return;
+
+    lastPanelIdentifier = id;
+
+    // En un grupo, la ficha lista participantes y alguno puede tener nombre de
+    // usuario: ese identificador no representa la conversación y no se propaga.
+    if (conversacionEsGrupal) return;
+
+    // Los archivos adjuntos se identifican con el mismo criterio que los
+    // mensajes. Cuando la ficha no muestra número, el identificador que WhatsApp
+    // pone en su lugar es lo que va a la captura de adjuntos, para que unos y
+    // otros queden bajo la misma conversación en lugar de dispersarse.
+    if (!lastDetectedPhone) {
+      await updateChatPhoneInWhatsApp(id, lastDetectedName || '');
+      console.log('[Captura] identificador de la ficha aplicado a los adjuntos:', id);
+    }
   } catch (err) {
     // La vista puede estar recargando; se reintenta en la siguiente pasada.
   }
@@ -2255,6 +2290,7 @@ async function scanChat(): Promise<void> {
           lastPanelIdentifier = '';
           clearScannedMessages();
           vigilante.olvidarTodo();
+          conversacionEsGrupal = false;
           // Limpiar número extraído del panel anterior
           await clearExtractedPhoneInWhatsApp();
         }
@@ -2284,6 +2320,7 @@ async function scanChat(): Promise<void> {
             lastPanelIdentifier = '';
             clearScannedMessages();
             vigilante.olvidarTodo();
+            conversacionEsGrupal = false;
 
             // Limpiar número extraído del panel anterior y establecer nombre actual
             await clearExtractedPhoneInWhatsApp();
@@ -2321,6 +2358,7 @@ async function scanChat(): Promise<void> {
         lastPanelIdentifier = '';
         clearScannedMessages();
         vigilante.olvidarTodo();
+        conversacionEsGrupal = false;
 
         // BLOQUEAR el chat - pasamos el teléfono esperado para verificación posterior
         blockWhatsAppChat(phone);
@@ -2459,6 +2497,9 @@ async function capturarConversacionVisible(): Promise<void> {
 
   await leerIdentificadorDelPanel();
 
+  // Los grupos quedan fuera del alcance: no se registra nada de ellos.
+  if (conversacionEsGrupal) return;
+
   const identificador = lastDetectedPhone || lastPanelIdentifier;
   if (!identificador) return;
 
@@ -2505,6 +2546,7 @@ async function capturarConversacionVisible(): Promise<void> {
  */
 async function vigilarEliminaciones(): Promise<void> {
   if (!colaCaptura || !whatsappVisible) return;
+  if (conversacionEsGrupal) return;
 
   const estado = await leerEstadoDelChat();
   if (!estado) return;
@@ -2606,6 +2648,7 @@ async function checkWhatsAppSessionState(): Promise<void> {
         lastPanelIdentifier = '';
         clearScannedMessages();
         vigilante.olvidarTodo();
+        conversacionEsGrupal = false;
         // Notificar que no hay chat seleccionado
         mainWindow.webContents.send('chat-selected', {
           phone: null,
@@ -2975,6 +3018,7 @@ function setupIPC(): void {
     lastPanelIdentifier = '';
     clearScannedMessages();
     vigilante.olvidarTodo();
+    conversacionEsGrupal = false;
     activeClientUserId = null;
     activeClientPhone = null;
     activeClientName = null;
@@ -3165,6 +3209,7 @@ function setupIPC(): void {
   ipcMain.handle('scan-messages', async (_, telefono: string) => {
     clearScannedMessages(); // Limpiar cache al escanear nuevo chat
     vigilante.olvidarTodo();
+    conversacionEsGrupal = false;
     const messages = await scanChatMessages(telefono);
     return messages;
   });
