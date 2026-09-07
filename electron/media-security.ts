@@ -2763,6 +2763,23 @@ const MEDIA_CAPTURE_SCRIPT = `
           node.querySelector?.('[data-testid^="conv-msg-"]')
         ) : null;
 
+        // Imagen que aparece DENTRO de un mensaje que ya estaba en pantalla.
+        // Es el caso del historico: al pulsar "Presionar para ver", WhatsApp
+        // inserta la imagen en un mensaje existente, asi que el nodo agregado no
+        // es un mensaje y antes se ignoraba. Sin esto los adjuntos antiguos se
+        // descargaban sin candado y sin capturarse.
+        if (!nodeIsMessage && !innerMessageEl) {
+          var esImagen = node.tagName === 'IMG' && (node.getAttribute('src') || '').startsWith('blob:');
+          var traeImagen = !esImagen && node.querySelector && node.querySelector('img[src^="blob:"]');
+          if (esImagen || traeImagen) {
+            var contenedor = node.closest && (node.closest('[data-id*="@"]') ||
+                                              node.closest('[data-testid^="conv-msg-"]'));
+            if (contenedor) {
+              setTimeout(function () { processMessageForImages(contenedor); }, 1000);
+            }
+          }
+        }
+
         if (nodeIsMessage || innerMessageEl) {
           const messageEl = nodeIsMessage ? node : innerMessageEl;
 
