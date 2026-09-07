@@ -1,6 +1,7 @@
 /**
  * Captured Media Item Component
- * Displays a captured media (image/audio) as an incoming message bubble
+ * Displays a captured media (image/audio) as a message bubble, del lado que
+ * corresponda segun quien lo envio.
  * Integrates seamlessly with the chat timeline
  */
 import { Component, input, signal } from '@angular/core';
@@ -14,11 +15,15 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
   imports: [CommonModule, ImagePreviewComponent],
   styleUrl: './captured-media-item.component.scss',
   template: `
-    <div class="message-item incoming captured-media">
-      <!-- Avatar (primero para alineación izquierda) -->
-      <div class="avatar incoming-avatar">
-        <i class="ph-fill ph-user"></i>
-      </div>
+    <div class="message-item captured-media"
+         [class.incoming]="!esSaliente()"
+         [class.outgoing]="esSaliente()">
+      <!-- Avatar: solo en los del cliente, como en los mensajes de texto -->
+      @if (!esSaliente()) {
+        <div class="avatar incoming-avatar">
+          <i class="ph-fill ph-user"></i>
+        </div>
+      }
 
       <!-- Message Bubble -->
       <div class="message-bubble" [class.deleted-bubble]="media().deleted">
@@ -35,8 +40,10 @@ import { ImagePreviewComponent } from '../../../../shared/components/image-previ
           </div>
         }
 
-        <!-- Sender name -->
-        @if (media().chatName) {
+        <!-- Quien lo envio -->
+        @if (esSaliente()) {
+          <strong class="sender-name">Tú:</strong>
+        } @else if (media().chatName) {
           <strong class="sender-name">{{ media().chatName }}:</strong>
         }
 
@@ -135,6 +142,14 @@ export class CapturedMediaItemComponent {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Si lo envió el asesor. Cuando no hay dato --adjuntos anteriores a que se
+   * registrara-- se conserva el comportamiento de siempre: del lado del cliente.
+   */
+  esSaliente(): boolean {
+    return this.media().direction === 'OUTGOING';
   }
 
   openMediaPreview(): void {

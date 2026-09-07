@@ -14,11 +14,24 @@
   max-width: 75%;
   margin-bottom: var(--space-1);
 
-  // Captured media siempre a la IZQUIERDA (como mensajes entrantes)
+  // Del lado que corresponda, igual que los mensajes de texto.
   &.incoming {
     flex-direction: row;
     margin-right: auto;
     margin-left: 0;
+  }
+
+  &.outgoing {
+    flex-direction: row-reverse;
+    margin-left: auto;
+    margin-right: 0;
+
+    .message-bubble {
+      background: var(--message-outgoing-bg);
+      color: var(--message-outgoing-text);
+      border-bottom-left-radius: var(--radius-lg);
+      border-bottom-right-radius: var(--radius-sm);
+    }
   }
 }
 

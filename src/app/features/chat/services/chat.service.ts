@@ -415,6 +415,7 @@ export class ChatService {
       durationSeconds: media.durationSeconds || media.duration_seconds || null,
       capturedAt: media.capturedAt || media.captured_at || '',
       messageSentAt: media.messageSentAt || media.message_sent_at || null,
+      direction: media.direction || null,
       chatPhone: media.chatPhone || media.chat_phone || null,
       chatName: media.chatName || media.chat_name || null,
       deleted: media.deleted || false,

@@ -228,6 +228,9 @@ export interface CapturedMedia {
   messageSentAt: string | null;
   chatPhone: string | null;
   chatName: string | null;
+  /** INCOMING lo envió el cliente, OUTGOING el asesor. Nulo en los adjuntos
+   *  capturados antes de que se registrara este dato. */
+  direction?: 'INCOMING' | 'OUTGOING' | null;
   deleted?: boolean;
   deletedAt?: string | null;
 }
