@@ -2958,7 +2958,11 @@ const MEDIA_CAPTURE_SCRIPT = `
             if (capturedChat && currentChat && capturedChat !== currentChat) return;
 
             const msgEl = document.querySelector('[data-id="' + dataId + '"]');
-            if (msgEl && (isMessageDeletedByMarker(msgEl) || !hasMediaElements(msgEl))) {
+            // Solo el aviso que WhatsApp pone en el propio mensaje. Antes bastaba
+            // con no verle contenido en ese instante, y al rehacerse la lista
+            // --por ejemplo cuando borran un mensaje vecino-- los adjuntos de
+            // alrededor quedaban marcados sin que nadie los hubiera borrado.
+            if (msgEl && isMessageDeletedByMarker(msgEl)) {
               detectedDeletions.add(dataId);
               window.__hablapeDeletedQueue.push({
                 whatsappMessageId: dataId,
