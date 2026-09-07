@@ -2515,12 +2515,26 @@ async function leerEstadoDelChat(): Promise<EstadoDelChat | null> {
                     (b.getAttribute('data-testid') || '').replace(/^conv-msg-/, '');
           if (!bid) continue;
 
+          // Misma cascada que el lector, sobre el DOM ya asentado.
+          var etiquetas = [];
+          var conAria = b.querySelectorAll('[aria-label]');
+          for (var a = 0; a < conAria.length; a++) {
+            var et = (conAria[a].getAttribute('aria-label') || '').trim();
+            if (et) etiquetas.push(et);
+          }
+
           var saliente = null;
-          if (b.querySelector('[class*="message-out"]')) saliente = true;
-          else if (b.querySelector('[class*="message-in"]')) saliente = false;
-          else if (b.querySelector('[data-testid="tail-out"]')) saliente = true;
-          else if (b.querySelector('[data-testid="tail-in"]')) saliente = false;
-          else if (b.closest('[class*="message-out"]')) saliente = true;
+          for (var e = 0; e < etiquetas.length && saliente === null; e++) {
+            if (/^(you|t[uu]|yo)\\s*:/i.test(etiquetas[e])) saliente = true;
+            else if (/^(delivered|read|sent|pending|entregado|le[ií]do|enviado|pendiente)$/i.test(etiquetas[e])) saliente = true;
+          }
+          if (saliente === null && b.querySelector('[data-testid="tail-out"], [data-icon="tail-out"]')) saliente = true;
+          if (saliente === null && b.querySelector('[data-testid="tail-in"], [data-icon="tail-in"]')) saliente = false;
+          if (saliente === null) {
+            for (var f = 0; f < etiquetas.length && saliente === null; f++) {
+              if (/^.{1,60}:$/.test(etiquetas[f])) saliente = false;
+            }
+          }
 
           // Solo se declara la direccion cuando hay senal. Sin ella no se
           // devuelve nada, para no pisar la lectura original con una suposicion.
@@ -2834,25 +2848,43 @@ async function scanChatMessages(telefono: string): Promise<ScannedMessage[]> {
               // Dirección: quién escribió el mensaje. Se prueban varias señales
               // porque WhatsApp ofusca las clases y ninguna sobrevive sola. Es la
               // misma cascada que usa la captura de adjuntos, de más fiable a menos.
-              const isOutgoing = (() => {
-                // 1. La clase message-out/message-in vive en un DIV HIJO del nodo
-                //    conv-msg-, no en un ancestro: closest() no la encuentra.
-                //    Está presente en TODOS los mensajes, a diferencia de las colas.
-                if (msg.querySelector('[class*="message-out"]')) return true;
-                if (msg.querySelector('[class*="message-in"]')) return false;
-                // 2. Colas: solo aparecen en el último mensaje de cada bloque.
-                if (msg.querySelector('[data-testid="tail-out"]')) return true;
-                if (msg.querySelector('[data-testid="tail-in"]')) return false;
-                // 3. Clase en un ancestro (DOM anterior).
-                if (msg.closest('[class*="message-out"]')) return true;
-                // 4. El aria-label empieza con "Tú"/"Yo"/"You" en los salientes.
-                //    Sobrevive aunque cambien las clases ofuscadas.
-                const ariaEl = msg.querySelector('[aria-label]');
-                if (ariaEl) {
-                  const aria = (ariaEl.getAttribute('aria-label') || '').trim();
-                  if (/^(t[úu]\\s|yo\\s|you\\s)/i.test(aria)) return true;
+              const isOutgoing = (function () {
+                // Direccion: quien escribio el mensaje.
+                //
+                // Verificado sobre el DOM del 7-sep-2026: las clases
+                // message-out/message-in ya no existen y las colas solo aparecen
+                // en el ultimo mensaje de cada bloque. Lo que si trae cada
+                // mensaje es su aria-label: "You:" en los propios, el nombre del
+                // contacto en los ajenos, y el estado de entrega --que solo
+                // tienen los propios-- como aria aparte.
+                var etiquetas = [];
+                var nodos = msg.querySelectorAll('[aria-label]');
+                for (var a = 0; a < nodos.length; a++) {
+                  var et = (nodos[a].getAttribute('aria-label') || '').trim();
+                  if (et) etiquetas.push(et);
                 }
-                // Sin señal concluyente: se asume entrante.
+
+                // 1. "You:" / "Tu:" / "Yo:" al principio. Es la senal directa.
+                for (var b = 0; b < etiquetas.length; b++) {
+                  if (/^(you|t[uu]|yo)\\s*:/i.test(etiquetas[b])) return true;
+                }
+
+                // 2. Estado de entrega: solo lo llevan los mensajes propios.
+                for (var c = 0; c < etiquetas.length; c++) {
+                  if (/^(delivered|read|sent|pending|entregado|le[ií]do|enviado|pendiente)$/i.test(etiquetas[c])) return true;
+                }
+
+                // 3. Colas, cuando las hay.
+                if (msg.querySelector('[data-testid="tail-out"], [data-icon="tail-out"]')) return true;
+                if (msg.querySelector('[data-testid="tail-in"], [data-icon="tail-in"]')) return false;
+
+                // 4. Un aria que es un nombre terminado en dos puntos y que no
+                //    es el propio: lo escribio el contacto.
+                for (var d = 0; d < etiquetas.length; d++) {
+                  if (/^.{1,60}:$/.test(etiquetas[d])) return false;
+                }
+
+                // Sin senal concluyente: se asume entrante.
                 return false;
               })();
 
