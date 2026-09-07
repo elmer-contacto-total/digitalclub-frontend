@@ -1237,6 +1237,7 @@ const MEDIA_CAPTURE_SCRIPT = `
     lastExtractedPhone = null;
     window.__hablapeExtractedPhone = null;
     window.__hablapePhoneExtractedAt = null;
+    window.__hablapePanelIdentifier = null;
     console.log('[MWS] 🧹 Número extraído limpiado');
   };
 
@@ -1499,6 +1500,36 @@ const MEDIA_CAPTURE_SCRIPT = `
     return null;
   }
 
+  /**
+   * Identificador de la conversación cuando la ficha no muestra número.
+   *
+   * Desde que WhatsApp permite nombres de usuario, un contacto puede mantener
+   * su número oculto: la ficha muestra en su lugar un identificador con
+   * arroba. Se conserva tal cual, para que la conversación quede registrada
+   * igual aunque después no pueda cruzarse contra la cartera.
+   */
+  function extractAliasFromContactPanel() {
+    const ALIAS_RE = /^@[A-Za-z0-9._-]{2,40}$/;
+
+    const panel = document.querySelector('[data-testid="chat-info-drawer"]') ||
+                  document.querySelector('[data-testid="conversation-info-drawer"]') ||
+                  document.querySelector('[data-testid="contact-info-drawer"]') ||
+                  document.querySelector('[data-testid="profile-drawer"]') ||
+                  document.querySelector('[data-testid="info-drawer"]') ||
+                  document.querySelector('div[role="complementary"]') ||
+                  document.querySelector('div[role="dialog"]');
+
+    if (!panel) return null;
+
+    const candidatos = panel.querySelectorAll('span, h2');
+    for (const el of candidatos) {
+      const text = (el.textContent || '').trim();
+      if (ALIAS_RE.test(text)) return text;
+    }
+
+    return null;
+  }
+
   // Helper de debug para diagnosticar el DOM del drawer en runtime.
   // Uso: abrir un chat, hacer click en el nombre del contacto, abrir DevTools
   // de la BrowserView (Ctrl+Shift+W) y ejecutar __hablapeDebugContactPanel().
@@ -1657,6 +1688,7 @@ const MEDIA_CAPTURE_SCRIPT = `
 
   // Función helper para emitir teléfono extraído
   function emitExtractedPhone(phone) {
+    if (phone) window.__hablapePanelIdentifier = phone;
     if (phone && (phone !== lastExtractedPhone || !window.__hablapeExtractedPhone)) {
       lastExtractedPhone = phone;
       window.__hablapeExtractedPhone = phone;
@@ -1692,7 +1724,17 @@ const MEDIA_CAPTURE_SCRIPT = `
       // Función helper para intentar extracción
       const tryExtract = () => {
         const phone = extractPhoneFromContactPanel();
-        return emitExtractedPhone(phone);
+        if (phone) return emitExtractedPhone(phone);
+
+        // La ficha no muestra número: es el caso del contacto con nombre de
+        // usuario. Se guarda el identificador que WhatsApp puso en su lugar
+        // para que la conversación no se quede sin con qué registrarse.
+        const alias = extractAliasFromContactPanel();
+        if (alias && alias !== window.__hablapePanelIdentifier) {
+          window.__hablapePanelIdentifier = alias;
+          console.log('[MWS] Ficha sin número, identificador:', alias);
+        }
+        return false;
       };
 
       // Intentar extracción con reintentos (500ms, 1000ms, 1500ms, 2000ms, 3000ms)

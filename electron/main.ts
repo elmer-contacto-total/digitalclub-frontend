@@ -24,6 +24,7 @@ import { checkForUpdates, notifyUpdateAvailable, openDownloadUrl, downloadAndIns
 import { BulkSender } from './bulk-sender';
 import { DEFAULT_BACKEND_URL, DEFAULT_ANGULAR_URL, PRODUCT_NAME } from './app-config';
 import { getHealthProbeScript } from './wa-health-probe';
+import { ColaDeCaptura, EstadoDelChat, MensajeCapturado, VigilanteDeEliminados } from './message-capture';
 
 // App version - read from package.json via Electron's app.getVersion()
 // When building with electron-builder, this reflects the version in package.json
@@ -1809,6 +1810,11 @@ function animateWhatsAppViewBounds(): void {
 
 let lastDetectedPhone = '';
 let lastDetectedName = '';
+
+// Identificador que la ficha de contacto dejó a la vista para el chat abierto:
+// el número cuando WhatsApp lo muestra y, si lo oculta, el identificador que
+// pone en su lugar. Es lo que se usa para registrar la conversación.
+let lastPanelIdentifier = '';
 let chatScannerInterval: NodeJS.Timeout | null = null;
 let chatScannerRunning = false;
 
@@ -2083,6 +2089,24 @@ async function checkForExtractedPhone(): Promise<void> {
 }
 
 /**
+ * Trae el identificador que quedó a la vista en la ficha de contacto.
+ *
+ * Corre en cada pasada del escáner porque la ficha puede abrirse en cualquier
+ * momento y no siempre termina en un número: cuando el contacto tiene nombre de
+ * usuario, WhatsApp muestra ese identificador en lugar del teléfono.
+ */
+async function leerIdentificadorDelPanel(): Promise<void> {
+  if (!whatsappView) return;
+  try {
+    const id = await whatsappView.webContents.executeJavaScript(
+      'window.__hablapePanelIdentifier || null', true);
+    if (id && typeof id === 'string') lastPanelIdentifier = id;
+  } catch (err) {
+    // La vista puede estar recargando; se reintenta en la siguiente pasada.
+  }
+}
+
+/**
  * Maneja cuando se extrae un número del panel de contacto en WhatsApp
  */
 function handlePhoneExtracted(phone: string): void {
@@ -2228,6 +2252,9 @@ async function scanChat(): Promise<void> {
         if (lastDetectedPhone || lastDetectedName) {
           lastDetectedPhone = '';
           lastDetectedName = '';
+          lastPanelIdentifier = '';
+          clearScannedMessages();
+          vigilante.olvidarTodo();
           // Limpiar número extraído del panel anterior
           await clearExtractedPhoneInWhatsApp();
         }
@@ -2254,6 +2281,9 @@ async function scanChat(): Promise<void> {
             console.log('[MWS] Chat sin número detectado:', result.chatName);
             lastDetectedName = result.chatName;
             lastDetectedPhone = ''; // Limpiar teléfono anterior
+            lastPanelIdentifier = '';
+            clearScannedMessages();
+            vigilante.olvidarTodo();
 
             // Limpiar número extraído del panel anterior y establecer nombre actual
             await clearExtractedPhoneInWhatsApp();
@@ -2288,6 +2318,9 @@ async function scanChat(): Promise<void> {
 
         lastDetectedPhone = phone;
         lastDetectedName = name || '';
+        lastPanelIdentifier = '';
+        clearScannedMessages();
+        vigilante.olvidarTodo();
 
         // BLOQUEAR el chat - pasamos el teléfono esperado para verificación posterior
         blockWhatsAppChat(phone);
@@ -2309,10 +2342,178 @@ async function scanChat(): Promise<void> {
   // Verificar si el usuario extrajo un número del panel de contacto
   await checkForExtractedPhone();
 
+  // Registrar lo que haya en pantalla. Al colgarse del mismo ciclo del escáner
+  // se cubren los tres momentos de una sola vez: la lectura completa al abrir la
+  // conversación, los mensajes que entran con ella abierta, y los anteriores que
+  // se hacen visibles cuando el asesor se desplaza. Es el mismo enfoque del
+  // aplicativo móvil, que relee lo visible y descarta lo ya enviado.
+  await capturarConversacionVisible();
+
+  // Y comprobar que lo ya registrado siga a la vista. Va después de la captura
+  // para que un mensaje recién leído entre a la vigilancia con su posición ya
+  // conocida y no se lo confunda con uno que desapareció.
+  await vigilarEliminaciones();
+
   // SIEMPRE programar siguiente escaneo (movido fuera del try-catch)
   if (chatScannerRunning && whatsappVisible) {
     chatScannerInterval = setTimeout(scanChat, getRandomScanInterval());
   }
+}
+
+// ============================================================================
+// CAPTURA DE CONVERSACIONES
+// Lee lo visible en el chat abierto y lo encola para el servidor.
+// ============================================================================
+
+/** Cola en disco. Se crea al arrancar, cuando ya existe la ruta de datos. */
+let colaCaptura: ColaDeCaptura | null = null;
+
+/** Vigila que lo ya registrado siga a la vista en la conversación abierta. */
+const vigilante = new VigilanteDeEliminados();
+
+function iniciarColaCaptura(): void {
+  if (colaCaptura) return;
+  colaCaptura = new ColaDeCaptura(
+    app.getPath('userData'),
+    BACKEND_BASE_URL,
+    async (url, cuerpo) => {
+      // net.fetch y no fetch de Node: usa la pila de Chromium, así respeta el
+      // proxy corporativo y el almacén de certificados de Windows. Con el fetch
+      // de Node los envíos se pierden en silencio en las redes de oficina.
+      const r = await net.fetch(url, { method: 'POST', headers: getMediaApiHeaders(), body: cuerpo });
+      return { ok: r.ok, status: r.status };
+    },
+  );
+  colaCaptura.iniciar();
+  console.log('[Captura] cola iniciada');
+}
+
+/**
+ * Lee qué mensajes están a la vista y cuáles muestran el aviso de eliminación.
+ *
+ * Es una lectura barata y deliberadamente distinta de la captura: aquí no
+ * interesa el contenido, solo qué sigue en pantalla, que es lo que permite
+ * distinguir una eliminación de un desplazamiento.
+ */
+async function leerEstadoDelChat(): Promise<EstadoDelChat | null> {
+  if (!whatsappView) return null;
+  try {
+    return await whatsappView.webContents.executeJavaScript(`
+      (function() {
+        var panel = document.querySelector('div#main');
+        if (!panel) return null;
+
+        // Frases con las que WhatsApp anuncia un mensaje eliminado. Se incluyen
+        // las del propio asesor: para la auditoría interesa igual.
+        var AVISOS = [
+          'Se eliminó este mensaje',
+          'Este mensaje fue eliminado',
+          'Eliminaste este mensaje',
+          'This message was deleted',
+          'You deleted this message',
+          'Esta mensagem foi apagada',
+          'Esta mensagem foi eliminada',
+          'Diese Nachricht wurde gelöscht',
+          'Questo messaggio è stato eliminato'
+        ];
+
+        var ids = [];
+        var conMarcador = [];
+        var nodos = panel.querySelectorAll('[data-id]');
+
+        for (var i = 0; i < nodos.length; i++) {
+          var el = nodos[i];
+          var id = el.getAttribute('data-id');
+          if (!id) continue;
+          ids.push(id);
+
+          if (el.querySelector('[data-testid="recalled"], [data-testid="msg-revoked"], [data-testid="msg-revoked-bubble"], [data-icon="recalled"], [data-icon="msg-revoked"]')) {
+            conMarcador.push(id);
+            continue;
+          }
+          var texto = el.textContent || '';
+          for (var j = 0; j < AVISOS.length; j++) {
+            if (texto.indexOf(AVISOS[j]) !== -1) { conMarcador.push(id); break; }
+          }
+        }
+
+        return { ids: ids, conMarcador: conMarcador };
+      })()
+    `, true);
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Registra los mensajes del chat abierto.
+ *
+ * El identificador de la conversación sale de la ficha de contacto: el número
+ * cuando WhatsApp lo expone y, si lo oculta, el identificador que muestre en su
+ * lugar. Sin ninguno de los dos no hay a quién asociar la conversación y no se
+ * encola nada.
+ */
+async function capturarConversacionVisible(): Promise<void> {
+  if (!colaCaptura || !whatsappVisible) return;
+  if (!loggedInUserId || !loggedInClientId) return;
+
+  await leerIdentificadorDelPanel();
+
+  const identificador = lastDetectedPhone || lastPanelIdentifier;
+  if (!identificador) return;
+
+  try {
+    const leidos = await scanChatMessages(identificador);
+    if (leidos.length === 0) return;
+
+    const mensajes: MensajeCapturado[] = leidos
+      // Un mensaje sin texto todavía se está dibujando: se deja para la
+      // siguiente pasada en lugar de registrarlo vacío.
+      .filter(m => m.content && m.content.trim().length > 0)
+      .map(m => ({
+        whatsappMessageId: m.whatsappId,
+        content: m.content,
+        direction: m.direction === 'OUTGOING' ? 'OUTGOING' : 'INCOMING',
+        sentAt: m.timestamp || null,
+      }));
+
+    if (mensajes.length === 0) return;
+
+    // Solo se vigila lo que efectivamente quedó registrado: de lo que nunca se
+    // envió no habría nada que marcar como eliminado.
+    vigilante.seguir(mensajes.map(m => m.whatsappMessageId));
+
+    colaCaptura.encolar({
+      conversationId: identificador,
+      conversationName: lastDetectedName || null,
+      clientUserId: activeClientUserId || null,
+      agentId: loggedInUserId,
+      clientId: loggedInClientId,
+      messages: mensajes,
+    });
+
+    console.log(`[Captura] ${mensajes.length} mensajes encolados de ${identificador}`);
+  } catch (err) {
+    console.error('[Captura] error leyendo la conversación:', err);
+  }
+}
+
+/**
+ * Deja constancia de los mensajes registrados que dejaron de estar en la
+ * conversación. El contenido ya guardado se conserva: lo único que viaja al
+ * servidor es el aviso de que desaparecieron.
+ */
+async function vigilarEliminaciones(): Promise<void> {
+  if (!colaCaptura || !whatsappVisible) return;
+
+  const estado = await leerEstadoDelChat();
+  if (!estado) return;
+
+  const eliminados = vigilante.revisar(estado);
+  if (eliminados.length === 0) return;
+
+  console.log(`[Captura] ${eliminados.length} mensajes eliminados detectados`);
+  colaCaptura.encolarEliminados(eliminados);
 }
 
 function startChatScanner(): void {
@@ -2402,6 +2603,9 @@ async function checkWhatsAppSessionState(): Promise<void> {
       if (!isNowLoggedIn) {
         lastDetectedPhone = '';
         lastDetectedName = '';
+        lastPanelIdentifier = '';
+        clearScannedMessages();
+        vigilante.olvidarTodo();
         // Notificar que no hay chat seleccionado
         mainWindow.webContents.send('chat-selected', {
           phone: null,
@@ -2491,17 +2695,41 @@ async function scanChatMessages(telefono: string): Promise<ScannedMessage[]> {
           const msgEls = panel.querySelectorAll('[data-testid^="conv-msg-"]');
           msgEls.forEach(msg => {
             try {
-              // ID único: el "data-id" sin prefijo, dentro del mensaje
-              const idEl = msg.querySelector('[data-id]');
-              const dataId = idEl ? (idEl.getAttribute('data-id') || '') : '';
+              // ID único del mensaje. En el DOM vigente (verificado sep-2026) el
+              // atributo vive en el PROPIO nodo conv-msg-, no en un descendiente:
+              //   <div data-id="3EB0A6D8F0560712C321AB" data-testid="conv-msg-3EB0...">
+              // Buscarlo solo con querySelector devolvía vacío y descartaba TODOS
+              // los mensajes. Se conserva el descendiente como respaldo por si WA
+              // vuelve a anidarlo, y el testid como última salida.
+              const dataId = msg.getAttribute('data-id') ||
+                             (msg.querySelector('[data-id]')?.getAttribute('data-id') || '') ||
+                             (msg.getAttribute('data-testid') || '').replace(/^conv-msg-/, '');
               if (!dataId) return;
 
-              // Dirección: tail-in = entrante, tail-out = saliente
-              const hasTailOut = !!msg.querySelector('[data-testid="tail-out"]');
-              const hasTailIn = !!msg.querySelector('[data-testid="tail-in"]');
-              // Si no hay tails (mensaje encadenado sin cola), heurística: buscar contenedor
-              // con clase _akbu/_akbv que WA usa para outgoing, sino default a INCOMING.
-              const isOutgoing = hasTailOut || (!hasTailIn && !!msg.closest('[class*="message-out"]'));
+              // Dirección: quién escribió el mensaje. Se prueban varias señales
+              // porque WhatsApp ofusca las clases y ninguna sobrevive sola. Es la
+              // misma cascada que usa la captura de adjuntos, de más fiable a menos.
+              const isOutgoing = (() => {
+                // 1. La clase message-out/message-in vive en un DIV HIJO del nodo
+                //    conv-msg-, no en un ancestro: closest() no la encuentra.
+                //    Está presente en TODOS los mensajes, a diferencia de las colas.
+                if (msg.querySelector('[class*="message-out"]')) return true;
+                if (msg.querySelector('[class*="message-in"]')) return false;
+                // 2. Colas: solo aparecen en el último mensaje de cada bloque.
+                if (msg.querySelector('[data-testid="tail-out"]')) return true;
+                if (msg.querySelector('[data-testid="tail-in"]')) return false;
+                // 3. Clase en un ancestro (DOM anterior).
+                if (msg.closest('[class*="message-out"]')) return true;
+                // 4. El aria-label empieza con "Tú"/"Yo"/"You" en los salientes.
+                //    Sobrevive aunque cambien las clases ofuscadas.
+                const ariaEl = msg.querySelector('[aria-label]');
+                if (ariaEl) {
+                  const aria = (ariaEl.getAttribute('aria-label') || '').trim();
+                  if (/^(t[úu]\\s|yo\\s|you\\s)/i.test(aria)) return true;
+                }
+                // Sin señal concluyente: se asume entrante.
+                return false;
+              })();
 
               // Texto: el span con data-testid="selectable-text" tiene el contenido
               const textEl = msg.querySelector('[data-testid="selectable-text"]') ||
@@ -2744,6 +2972,9 @@ function setupIPC(): void {
     // no asocie capturas o tickets al cliente que estaba activo antes.
     lastDetectedPhone = '';
     lastDetectedName = '';
+    lastPanelIdentifier = '';
+    clearScannedMessages();
+    vigilante.olvidarTodo();
     activeClientUserId = null;
     activeClientPhone = null;
     activeClientName = null;
@@ -2933,6 +3164,7 @@ function setupIPC(): void {
   // Escanear mensajes del chat actual
   ipcMain.handle('scan-messages', async (_, telefono: string) => {
     clearScannedMessages(); // Limpiar cache al escanear nuevo chat
+    vigilante.olvidarTodo();
     const messages = await scanChatMessages(telefono);
     return messages;
   });
@@ -3446,6 +3678,10 @@ app.whenReady().then(async () => {
 
   // Generar o cargar fingerprint único para esta instalación
   userFingerprint = getOrCreateFingerprint();
+
+  // La cola de captura se levanta antes que la ventana: si quedaron lotes sin
+  // entregar de la sesión anterior, se despachan apenas haya red.
+  iniciarColaCaptura();
 
   // NO limpiar localStorage al iniciar - contiene tokens de autenticación
   // Solo limpiar caché de recursos (no datos de usuario)
