@@ -2898,25 +2898,37 @@ async function scanChatMessages(telefono: string): Promise<ScannedMessage[]> {
               // quedarian fechados en el momento de la lectura y la conversacion
               // se veria desordenada.
               //
-              // WhatsApp lo expone como "[HH:mm, DD/MM/YYYY] Nombre: ". Se emite
-              // en ISO con la T que espera el servidor: con un espacio en medio
-              // el lote entero se rechazaria y se quedaria reintentando.
+              // Formato observado: "[12:06 PM, 9/7/2026] Rodrigo NAS: ", o sea
+              // hora de 12 con AM/PM y fecha en MES/DIA/ANO. Otros idiomas de
+              // WhatsApp usan 24 horas y DIA/MES, asi que el orden se deduce en
+              // vez de darlo por sentado.
               let timestamp = '';
               const timeEl = msg.querySelector('[data-pre-plain-text]');
               const prePlain = timeEl ? (timeEl.getAttribute('data-pre-plain-text') || '') : '';
-              const timeMatch = prePlain.match(/\\[(\\d{1,2}):(\\d{2}),\\s*(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\]/);
-              if (timeMatch) {
-                const hh = timeMatch[1], mm = timeMatch[2];
-                let d = parseInt(timeMatch[3], 10);
-                let mo = parseInt(timeMatch[4], 10);
-                // Si el mes sale mayor que 12 el formato venia como MM/DD:
-                // se intercambian antes de armar la fecha.
-                if (mo > 12 && d <= 12) { const t = d; d = mo; mo = t; }
-                if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
-                  const dd = ('0' + d).slice(-2);
-                  const MM = ('0' + mo).slice(-2);
-                  timestamp = timeMatch[5] + '-' + MM + '-' + dd + 'T' +
-                              ('0' + hh).slice(-2) + ':' + mm + ':00';
+              const t = prePlain.match(/\\[(\\d{1,2}):(\\d{2})(?::\\d{2})?\\s*(?:([ap])\\.?\\s?m\\.?)?\\s*,\\s*(\\d{1,2})\\/(\\d{1,2})\\/(\\d{2,4})\\]/i);
+              if (t) {
+                let hora = parseInt(t[1], 10);
+                const minuto = t[2];
+                const meridiano = (t[3] || '').toLowerCase();
+                if (meridiano === 'p' && hora < 12) hora += 12;
+                if (meridiano === 'a' && hora === 12) hora = 0;
+
+                const n1 = parseInt(t[4], 10);
+                const n2 = parseInt(t[5], 10);
+                let dia, mes;
+                if (n1 > 12) { dia = n1; mes = n2; }        // solo el dia pasa de 12
+                else if (n2 > 12) { mes = n1; dia = n2; }   // idem al reves
+                else if (meridiano) { mes = n1; dia = n2; } // AM/PM: formato mes/dia
+                else { dia = n1; mes = n2; }                // 24 horas: dia/mes
+
+                let anio = parseInt(t[6], 10);
+                if (anio < 100) anio += 2000;
+
+                if (mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31 && hora >= 0 && hora <= 23) {
+                  // ISO con la T que espera el servidor: con un espacio en medio
+                  // el lote entero se rechazaria y quedaria reintentando.
+                  timestamp = anio + '-' + ('0' + mes).slice(-2) + '-' + ('0' + dia).slice(-2) +
+                              'T' + ('0' + hora).slice(-2) + ':' + minuto + ':00';
                 }
               }
 
