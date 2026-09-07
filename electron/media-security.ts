@@ -2065,9 +2065,19 @@ const MEDIA_CAPTURE_SCRIPT = `
         }
       }
 
-      // Fallback: look for time in metadata spans
-      const timeSpans = messageEl.querySelectorAll('span[dir="auto"], span');
-      for (const span of timeSpans) {
+      // Respaldo: la hora que muestra el propio mensaje.
+      //
+      // Vive en la franja de metadatos [data-testid="msg-meta"], y en DIV, no en
+      // span: mirar solo spans no encontraba nada y el adjunto acababa fechado
+      // con la hora de otro mensaje. Se mira primero esa franja --que es del
+      // mensaje y de nadie mas-- y despues el resto por si cambia el markup.
+      var candidatos = [];
+      var meta = messageEl.querySelectorAll('[data-testid="msg-meta"] *');
+      for (var mi = 0; mi < meta.length; mi++) candidatos.push(meta[mi]);
+      var resto = messageEl.querySelectorAll('span, div');
+      for (var ri = 0; ri < resto.length; ri++) candidatos.push(resto[ri]);
+
+      for (const span of candidatos) {
         const text = span.textContent?.trim() || '';
         // Match time format like "10:30" or "10:30 a. m."
         const hourMatch = text.match(/^(\\d{1,2}):(\\d{2})(\\s*[ap]\\.?\\s*m\\.?)?$/i);
@@ -2096,7 +2106,7 @@ const MEDIA_CAPTURE_SCRIPT = `
           lastKnownMessageTimestamp = messageSentAt;
           lastKnownWhatsappMessageId = whatsappMessageId;
           lastContextCaptureTime = Date.now();
-          console.log('[MWS Debug] extractMessageTimestamp: encontrado via span (local):', messageSentAt, '(from:', text, ')');
+          console.log('[MWS Debug] extractMessageTimestamp: hora del propio mensaje:', messageSentAt, '(de:', text, ')');
 
           return { messageSentAt, whatsappMessageId };
         }
