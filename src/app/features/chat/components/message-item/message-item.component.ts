@@ -229,7 +229,9 @@ export class MessageItemComponent {
   }
 
   formatTime(): string {
-    let dateStr = this.message().createdAt;
+    // sent_at: la hora a la que se envio el mensaje. created_at es la hora a la
+    // que se inserto la fila, y al capturar historia todos comparten esa hora.
+    let dateStr = this.message().sentAt || this.message().createdAt;
     if (!dateStr) return '';
 
     // Backend ya envía hora Lima sin timezone - no manipular offset

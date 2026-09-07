@@ -222,7 +222,10 @@ export class MessageListComponent implements AfterViewInit {
 
     // Add messages to timeline
     messages.forEach(message => {
-      const timestamp = new Date(message.createdAt);
+      // Mismo criterio que los adjuntos de esta vista, que ya usan
+      // messageSentAt: el dia y el orden salen de cuando se envio el mensaje,
+      // no de cuando se inserto la fila.
+      const timestamp = new Date(message.sentAt || message.createdAt);
       const dateKey = timestamp.toDateString();
       const existing = groups.get(dateKey) || [];
       groups.set(dateKey, [...existing, {
