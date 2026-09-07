@@ -219,6 +219,12 @@ export interface EstadoDelChat {
   ids: string[];
   /** Los que muestran el aviso de mensaje eliminado. */
   conMarcador: string[];
+  /**
+   * Direccion de cada mensaje a la vista, segun el DOM ya asentado. Solo trae
+   * los que dan una senal clara: la ausencia significa "todavia no se sabe", no
+   * "es entrante".
+   */
+  direcciones: Record<string, 'INCOMING' | 'OUTGOING'>;
 }
 
 /** Pasadas sin ver un mensaje antes de sospechar de su desaparición. */

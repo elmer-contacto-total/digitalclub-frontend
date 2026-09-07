@@ -2290,6 +2290,7 @@ async function scanChat(): Promise<void> {
           lastPanelIdentifier = '';
           clearScannedMessages();
           vigilante.olvidarTodo();
+          enEspera.clear();
           conversacionEsGrupal = false;
           // Limpiar número extraído del panel anterior
           await clearExtractedPhoneInWhatsApp();
@@ -2320,6 +2321,7 @@ async function scanChat(): Promise<void> {
             lastPanelIdentifier = '';
             clearScannedMessages();
             vigilante.olvidarTodo();
+            enEspera.clear();
             conversacionEsGrupal = false;
 
             // Limpiar número extraído del panel anterior y establecer nombre actual
@@ -2358,6 +2360,7 @@ async function scanChat(): Promise<void> {
         lastPanelIdentifier = '';
         clearScannedMessages();
         vigilante.olvidarTodo();
+        enEspera.clear();
         conversacionEsGrupal = false;
 
         // BLOQUEAR el chat - pasamos el teléfono esperado para verificación posterior
@@ -2385,12 +2388,17 @@ async function scanChat(): Promise<void> {
   // conversación, los mensajes que entran con ella abierta, y los anteriores que
   // se hacen visibles cuando el asesor se desplaza. Es el mismo enfoque del
   // aplicativo móvil, que relee lo visible y descarta lo ya enviado.
-  await capturarConversacionVisible();
+  // Una sola lectura del DOM por pasada, que sirve a las dos: la captura la usa
+  // para confirmar la dirección de lo que retuvo, y la vigilancia para saber
+  // qué sigue a la vista.
+  const estadoDelChat = await leerEstadoDelChat();
+
+  await capturarConversacionVisible(estadoDelChat);
 
   // Y comprobar que lo ya registrado siga a la vista. Va después de la captura
   // para que un mensaje recién leído entre a la vigilancia con su posición ya
   // conocida y no se lo confunda con uno que desapareció.
-  await vigilarEliminaciones();
+  await vigilarEliminaciones(estadoDelChat);
 
   // SIEMPRE programar siguiente escaneo (movido fuera del try-catch)
   if (chatScannerRunning && whatsappVisible) {
@@ -2408,6 +2416,26 @@ let colaCaptura: ColaDeCaptura | null = null;
 
 /** Vigila que lo ya registrado siga a la vista en la conversación abierta. */
 const vigilante = new VigilanteDeEliminados();
+
+/**
+ * Mensajes leídos que todavía no se envían.
+ *
+ * Se retiene cada uno una pasada del escáner —unos dos segundos— antes de
+ * darlo por bueno. En ese lapso WhatsApp termina de dibujarlo y la dirección
+ * pasa a ser de fiar.
+ */
+interface MensajeEnEspera {
+  content: string;
+  direction: 'INCOMING' | 'OUTGOING';
+  sentAt: string | null;
+  desde: number;
+}
+const enEspera = new Map<string, MensajeEnEspera>();
+let pasadaActual = 0;
+
+/** Tope de espera: si el asesor se desplaza y el mensaje sale de la vista, se
+ *  envía con lo que se leyó en su momento antes que perderlo. */
+const PASADAS_MAXIMAS_EN_ESPERA = 3;
 
 function iniciarColaCaptura(): void {
   if (colaCaptura) return;
@@ -2475,7 +2503,31 @@ async function leerEstadoDelChat(): Promise<EstadoDelChat | null> {
           }
         }
 
-        return { ids: ids, conMarcador: conMarcador };
+        // Direccion de cada mensaje a la vista, leida del DOM ya asentado. Es la
+        // misma cascada del lector, pero aqui el mensaje lleva al menos una
+        // pasada dibujado, que es cuando las senales son de fiar.
+        var direcciones = {};
+        var burbujas = panel.querySelectorAll('[data-testid^="conv-msg-"]');
+        for (var k = 0; k < burbujas.length; k++) {
+          var b = burbujas[k];
+          var bid = b.getAttribute('data-id') ||
+                    (b.querySelector('[data-id]') ? b.querySelector('[data-id]').getAttribute('data-id') : '') ||
+                    (b.getAttribute('data-testid') || '').replace(/^conv-msg-/, '');
+          if (!bid) continue;
+
+          var saliente = null;
+          if (b.querySelector('[class*="message-out"]')) saliente = true;
+          else if (b.querySelector('[class*="message-in"]')) saliente = false;
+          else if (b.querySelector('[data-testid="tail-out"]')) saliente = true;
+          else if (b.querySelector('[data-testid="tail-in"]')) saliente = false;
+          else if (b.closest('[class*="message-out"]')) saliente = true;
+
+          // Solo se declara la direccion cuando hay senal. Sin ella no se
+          // devuelve nada, para no pisar la lectura original con una suposicion.
+          if (saliente !== null) direcciones[bid] = saliente ? 'OUTGOING' : 'INCOMING';
+        }
+
+        return { ids: ids, conMarcador: conMarcador, direcciones: direcciones };
       })()
     `, true);
   } catch (err) {
@@ -2491,7 +2543,7 @@ async function leerEstadoDelChat(): Promise<EstadoDelChat | null> {
  * lugar. Sin ninguno de los dos no hay a quién asociar la conversación y no se
  * encola nada.
  */
-async function capturarConversacionVisible(): Promise<void> {
+async function capturarConversacionVisible(estado: EstadoDelChat | null): Promise<void> {
   if (!colaCaptura || !whatsappVisible) return;
   if (!loggedInUserId || !loggedInClientId) return;
 
@@ -2503,20 +2555,51 @@ async function capturarConversacionVisible(): Promise<void> {
   const identificador = lastDetectedPhone || lastPanelIdentifier;
   if (!identificador) return;
 
-  try {
-    const leidos = await scanChatMessages(identificador);
-    if (leidos.length === 0) return;
+  pasadaActual++;
 
-    const mensajes: MensajeCapturado[] = leidos
-      // Un mensaje sin texto todavía se está dibujando: se deja para la
-      // siguiente pasada en lugar de registrarlo vacío.
-      .filter(m => m.content && m.content.trim().length > 0)
-      .map(m => ({
-        whatsappMessageId: m.whatsappId,
+  try {
+    // 1. Lo recién aparecido se aparta, no se envía todavía.
+    //
+    //    Un mensaje recién dibujado no dice de fiar quién lo escribió: WhatsApp
+    //    todavía no le puso las clases que lo distinguen, y a veces reaprovecha
+    //    el nodo del mensaje anterior. Leerlo en ese instante daba la dirección
+    //    al revés en los mensajes que el asesor acababa de enviar. Como cada
+    //    mensaje se lee una sola vez, esa lectura quedaba grabada.
+    const leidos = await scanChatMessages(identificador);
+    for (const m of leidos) {
+      if (!m.content || m.content.trim().length === 0) continue;
+      if (enEspera.has(m.whatsappId)) continue;
+      enEspera.set(m.whatsappId, {
         content: m.content,
         direction: m.direction === 'OUTGOING' ? 'OUTGOING' : 'INCOMING',
         sentAt: m.timestamp || null,
-      }));
+        desde: pasadaActual,
+      });
+    }
+
+    if (enEspera.size === 0) return;
+
+    // 2. Lo que ya lleva al menos una pasada apartado se envía, tomando la
+    //    dirección del DOM asentado cuando este la declara.
+    const mensajes: MensajeCapturado[] = [];
+    for (const [id, m] of enEspera) {
+      const esperoUnaPasada = pasadaActual > m.desde;
+      const seNosVaDeLaVista = pasadaActual - m.desde >= PASADAS_MAXIMAS_EN_ESPERA;
+      if (!esperoUnaPasada && !seNosVaDeLaVista) continue;
+
+      const asentada = estado ? estado.direcciones[id] : undefined;
+      if (asentada && asentada !== m.direction) {
+        console.log(`[Captura] dirección corregida en ${id.substring(0, 22)}: ${m.direction} -> ${asentada}`);
+      }
+
+      mensajes.push({
+        whatsappMessageId: id,
+        content: m.content,
+        direction: asentada || m.direction,
+        sentAt: m.sentAt,
+      });
+      enEspera.delete(id);
+    }
 
     if (mensajes.length === 0) return;
 
@@ -2544,11 +2627,9 @@ async function capturarConversacionVisible(): Promise<void> {
  * conversación. El contenido ya guardado se conserva: lo único que viaja al
  * servidor es el aviso de que desaparecieron.
  */
-async function vigilarEliminaciones(): Promise<void> {
+async function vigilarEliminaciones(estado: EstadoDelChat | null): Promise<void> {
   if (!colaCaptura || !whatsappVisible) return;
   if (conversacionEsGrupal) return;
-
-  const estado = await leerEstadoDelChat();
   if (!estado) return;
 
   const eliminados = vigilante.revisar(estado);
@@ -2648,6 +2729,7 @@ async function checkWhatsAppSessionState(): Promise<void> {
         lastPanelIdentifier = '';
         clearScannedMessages();
         vigilante.olvidarTodo();
+        enEspera.clear();
         conversacionEsGrupal = false;
         // Notificar que no hay chat seleccionado
         mainWindow.webContents.send('chat-selected', {
@@ -2779,6 +2861,33 @@ async function scanChatMessages(telefono: string): Promise<ScannedMessage[]> {
                              msg.querySelector('.selectable-text span, .copyable-text span, ._ao3e');
               const content = textEl ? (textEl.innerText || '').trim() : '';
 
+              // Fecha y hora que muestra WhatsApp, no la del reloj del equipo.
+              // Sin esto, los mensajes que se leen al desplazarse hacia atras
+              // quedarian fechados en el momento de la lectura y la conversacion
+              // se veria desordenada.
+              //
+              // WhatsApp lo expone como "[HH:mm, DD/MM/YYYY] Nombre: ". Se emite
+              // en ISO con la T que espera el servidor: con un espacio en medio
+              // el lote entero se rechazaria y se quedaria reintentando.
+              let timestamp = '';
+              const timeEl = msg.querySelector('[data-pre-plain-text]');
+              const prePlain = timeEl ? (timeEl.getAttribute('data-pre-plain-text') || '') : '';
+              const timeMatch = prePlain.match(/\\[(\\d{1,2}):(\\d{2}),\\s*(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\]/);
+              if (timeMatch) {
+                const hh = timeMatch[1], mm = timeMatch[2];
+                let d = parseInt(timeMatch[3], 10);
+                let mo = parseInt(timeMatch[4], 10);
+                // Si el mes sale mayor que 12 el formato venia como MM/DD:
+                // se intercambian antes de armar la fecha.
+                if (mo > 12 && d <= 12) { const t = d; d = mo; mo = t; }
+                if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+                  const dd = ('0' + d).slice(-2);
+                  const MM = ('0' + mo).slice(-2);
+                  timestamp = timeMatch[5] + '-' + MM + '-' + dd + 'T' +
+                              ('0' + hh).slice(-2) + ':' + mm + ':00';
+                }
+              }
+
               const media = detectMediaType(msg);
               const type = media ? media.type : 'TEXT';
               const hasMedia = !!media;
@@ -2790,7 +2899,7 @@ async function scanChatMessages(telefono: string): Promise<ScannedMessage[]> {
                   content: content,
                   type: type,
                   direction: isOutgoing ? 'OUTGOING' : 'INCOMING',
-                  timestamp: '',
+                  timestamp: timestamp,
                   senderName: undefined,
                   hasMedia: hasMedia,
                   mediaType: mediaType
@@ -3018,6 +3127,7 @@ function setupIPC(): void {
     lastPanelIdentifier = '';
     clearScannedMessages();
     vigilante.olvidarTodo();
+    enEspera.clear();
     conversacionEsGrupal = false;
     activeClientUserId = null;
     activeClientPhone = null;
@@ -3209,6 +3319,7 @@ function setupIPC(): void {
   ipcMain.handle('scan-messages', async (_, telefono: string) => {
     clearScannedMessages(); // Limpiar cache al escanear nuevo chat
     vigilante.olvidarTodo();
+    enEspera.clear();
     conversacionEsGrupal = false;
     const messages = await scanChatMessages(telefono);
     return messages;
