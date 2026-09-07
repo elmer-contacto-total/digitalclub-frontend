@@ -2557,19 +2557,38 @@ const MEDIA_CAPTURE_SCRIPT = `
     const messageId = messageEl?.getAttribute?.('data-id');
     if (messageId && processedMessageIds.has(messageId)) return;
 
-    img.__hablapeProtected = true;
+    // La imagen puede no estar lista todavia: al desplazarse entran al DOM antes
+    // de terminar de dibujarse. En ese estado no se las descarta --se reintenta--
+    // porque marcarlas aqui las dejaba sin candado para siempre.
+    var esBlob = !!(img.src && img.src.indexOf('blob:') === 0);
+    var rect = img.getBoundingClientRect();
+    var anchoReal = rect.width || img.naturalWidth || 0;
+    var altoReal = rect.height || img.naturalHeight || 0;
+    var sinMedidas = anchoReal === 0 || altoReal === 0;
 
-    // Verificar que la imagen tiene dimensiones válidas (no es thumbnail tiny)
-    const rect = img.getBoundingClientRect();
-    if (rect.width < 80 || rect.height < 80) {
-      console.log('[MWS Protect] Imagen muy pequeña, no proteger:', rect.width, 'x', rect.height);
+    if (!esBlob || sinMedidas) {
+      var intentos = (img.__hablapeIntentos || 0) + 1;
+      img.__hablapeIntentos = intentos;
+      if (intentos <= 10) {
+        setTimeout(function () { protectImage(img, messageEl); }, 700);
+      } else {
+        console.log('[MWS Protect] La imagen no llego a estar lista tras 10 intentos');
+      }
       return;
     }
 
-    // Solo proteger imágenes blob
-    if (!img.src?.startsWith('blob:')) return;
+    // Ya se le conocen las medidas: si es de verdad pequena --un emoji, una
+    // miniatura-- no se protege.
+    if (anchoReal < 80 || altoReal < 80) {
+      img.__hablapeProtected = true;
+      console.log('[MWS Protect] Imagen muy pequeña, no proteger:', anchoReal, 'x', altoReal);
+      return;
+    }
 
-    console.log('[MWS Protect] Protegiendo imagen:', rect.width, 'x', rect.height);
+    // Desde aqui si se protege: recien ahora se la da por atendida.
+    img.__hablapeProtected = true;
+
+    console.log('[MWS Protect] Protegiendo imagen:', anchoReal, 'x', altoReal);
 
     // Aplicar blur a la imagen
     img.classList.add('hablape-protected-image');
