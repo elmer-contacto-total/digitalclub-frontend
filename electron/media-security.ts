@@ -1943,6 +1943,62 @@ const MEDIA_CAPTURE_SCRIPT = `
     return y + '-' + mo + '-' + d + 'T' + h + ':' + mi + ':00';
   }
 
+  // Interpreta "[12:06 PM, 9/7/2026] Nombre: ". Devuelve {fecha, hora} en piezas,
+  // para poder usar solo una de las dos cuando el adjunto no trae la suya.
+  //
+  // El orden dia/mes NO se da por sentado: si alguno de los dos numeros pasa de
+  // 12 ese es el dia; si los dos caben como mes, se usa el reloj --con AM/PM es
+  // formato mes/dia, en 24 horas es dia/mes.
+  function leerPrePlainText(texto) {
+    var m = (texto || '').match(/\\[(\\d{1,2}):(\\d{2})(?::\\d{2})?\\s*(?:([ap])\\.?\\s?m\\.?)?\\s*,\\s*(\\d{1,2})\\/(\\d{1,2})\\/(\\d{2,4})\\]/i);
+    if (!m) return null;
+
+    var hora = parseInt(m[1], 10);
+    var meridiano = (m[3] || '').toLowerCase();
+    if (meridiano === 'p' && hora < 12) hora += 12;
+    if (meridiano === 'a' && hora === 12) hora = 0;
+
+    var n1 = parseInt(m[4], 10), n2 = parseInt(m[5], 10), dia, mes;
+    if (n1 > 12) { dia = n1; mes = n2; }
+    else if (n2 > 12) { mes = n1; dia = n2; }
+    else if (meridiano) { mes = n1; dia = n2; }
+    else { dia = n1; mes = n2; }
+
+    var anio = parseInt(m[6], 10);
+    if (anio < 100) anio += 2000;
+    if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+
+    return {
+      anio: anio, mes: mes, dia: dia,
+      hora: hora, minuto: m[2]
+    };
+  }
+
+  // La fecha del vecino mas cercano que si traiga data-pre-plain-text. Los
+  // mensajes de texto lo tienen; los de imagen no, y comparten el dia con ellos.
+  function fechaDeUnVecino(messageEl) {
+    var lista = messageEl.parentElement;
+    if (!lista) return null;
+
+    var hermanos = Array.prototype.slice.call(lista.children);
+    var yo = hermanos.indexOf(messageEl);
+    if (yo === -1) return null;
+
+    // Se mira hacia arriba y hacia abajo, alternando, y gana el mas cercano.
+    for (var salto = 1; salto < 40; salto++) {
+      var candidatos = [hermanos[yo - salto], hermanos[yo + salto]];
+      for (var k = 0; k < candidatos.length; k++) {
+        var h = candidatos[k];
+        if (!h || !h.querySelector) continue;
+        var el = h.querySelector('[data-pre-plain-text]');
+        if (!el) continue;
+        var p = leerPrePlainText(el.getAttribute('data-pre-plain-text'));
+        if (p) return p;
+      }
+    }
+    return null;
+  }
+
   // Extract message timestamp from WhatsApp DOM element
   // MEJORADO: Solo usa caché si es reciente (< 30 segundos)
   function extractMessageTimestamp(element) {
@@ -1989,18 +2045,13 @@ const MEDIA_CAPTURE_SCRIPT = `
       // Get WhatsApp message ID
       const whatsappMessageId = messageEl.getAttribute('data-id') || null;
 
-      // Look for timestamp in data-pre-plain-text attribute
-      // Format: "[HH:mm, DD/MM/YYYY] Nombre: "
+      // Fecha y hora del propio adjunto, si las trae.
       const timeEl = messageEl.querySelector('[data-pre-plain-text]');
       if (timeEl) {
-        const prePlainText = timeEl.getAttribute('data-pre-plain-text') || '';
-        const timeMatch = prePlainText.match(/\\[(\\d{1,2}:\\d{2}),\\s*(\\d{1,2}\\/\\d{1,2}\\/\\d{4})\\]/);
-        if (timeMatch) {
-          const [, time, date] = timeMatch;
-          const [day, month, year] = date.split('/');
-          const [hours, mins] = time.split(':');
-          // Convert local time to UTC
-          const messageSentAt = localToUtcIso(year, month, day, hours, mins);
+        const partes = leerPrePlainText(timeEl.getAttribute('data-pre-plain-text'));
+        if (partes) {
+          const messageSentAt = localToUtcIso(partes.anio, partes.mes, partes.dia,
+                                              partes.hora, partes.minuto);
 
           // Guardar en cache para cuando estemos en el visor
           lastKnownMessageTimestamp = messageSentAt;
@@ -2027,15 +2078,17 @@ const MEDIA_CAPTURE_SCRIPT = `
           if (ampm.includes('p') && hours < 12) hours += 12;
           if (ampm.includes('a') && hours === 12) hours = 0;
 
-          // Usar fecha de hoy y convertir a UTC
-          const now = new Date();
+          // La hora la muestra el propio adjunto; la fecha no. Se toma del
+          // mensaje vecino mas cercano que la traiga. Antes se ponia la de hoy,
+          // y un adjunto de otro dia quedaba fechado en el futuro y salia como
+          // ultimo mensaje de la conversacion.
+          const delVecino = fechaDeUnVecino(messageEl);
+          if (!delVecino) {
+            console.log('[MWS Debug] extractMessageTimestamp: hay hora (' + text + ') pero ningun vecino con fecha; se deja sin fechar');
+            break;
+          }
           const messageSentAt = localToUtcIso(
-            now.getFullYear(),
-            now.getMonth() + 1,
-            now.getDate(),
-            hours,
-            minutes
-          );
+            delVecino.anio, delVecino.mes, delVecino.dia, hours, minutes);
 
           // Guardar en cache
           lastKnownMessageTimestamp = messageSentAt;
