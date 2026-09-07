@@ -3267,21 +3267,15 @@ const MEDIA_CAPTURE_SCRIPT = `
       if (textContent.includes(deletionPhrases[i])) return true;
     }
 
-    // Method 2b: Generic pattern — WhatsApp shows deletion placeholder as
-    // italic text with no media. Catches unknown languages/future text changes.
-    var spans = messageEl.querySelectorAll('span[dir="ltr"], span[dir="rtl"]');
-    for (var j = 0; j < spans.length; j++) {
-      var spanText = (spans[j].textContent || '').trim();
-      if (spanText.length > 10 && spanText.length < 80) {
-        try {
-          var style = window.getComputedStyle(spans[j]);
-          if (style.fontStyle === 'italic' && !hasMediaElements(messageEl)) {
-            return true;
-          }
-        } catch (e) {}
-      }
-    }
-
+    // Aqui habia una tercera regla que daba por eliminado cualquier mensaje con
+    // un span en cursiva de 10 a 80 caracteres al que en ese instante no se le
+    // reconociera contenido multimedia. Era una suposicion a partir del estilo y
+    // marcaba mensajes reales: el 7-sep-2026 dio por eliminado un sticker cuatro
+    // segundos despues de capturarlo. Se quito.
+    //
+    // Lo que si detecta una eliminacion de verdad: los data-testid de arriba,
+    // que WhatsApp pone en cualquier idioma, las frases explicitas, y --si el
+    // mensaje llega a desaparecer-- la ruta por ausencia.
     return false;
   }
 
@@ -3297,7 +3291,8 @@ const MEDIA_CAPTURE_SCRIPT = `
     // Images: check for img with real src or WhatsApp media elements
     // Don't use getBoundingClientRect — lazy-loaded images have 0x0 dimensions while off-viewport
     var hasRealImage = !!messageEl.querySelector(
-      'img[src^="blob:"], img[src^="http"], [data-testid="media-canvas"], [data-testid="image-thumb"]'
+      'img[src^="blob:"], img[src^="http"], [data-testid="media-canvas"], [data-testid="image-thumb"],' +
+      '[data-testid="sticker"], [data-testid="sticker-thumb"], img[data-testid*="sticker"]'
     );
 
     // Audio: the <audio> element is global (not inside the message div), so check
