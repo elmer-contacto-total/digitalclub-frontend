@@ -746,7 +746,10 @@ function handleMediaCaptured(data: RawMediaCaptureData): void {
     capturedAt: data.timestamp,
     messageSentAt: data.messageSentAt,
     whatsappMessageId: data.whatsappMessageId,
-    source: data.source as 'PREVIEW' | 'PLAYBACK'
+    source: data.source as 'PREVIEW' | 'PLAYBACK',
+    // Quien envio el adjunto, leido del mismo DOM que la direccion de los
+    // mensajes. Si el DOM no da senal viaja nulo, no se supone.
+    direction: data.direction ?? null
   };
 
   console.log('[MWS Media] Active client state (from Angular):');

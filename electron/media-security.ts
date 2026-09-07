@@ -28,6 +28,8 @@ export interface MediaCapturePayload {
   messageSentAt?: string; // When the WhatsApp message was originally sent
   whatsappMessageId?: string; // WhatsApp message ID (data-id)
   source: 'PREVIEW' | 'PLAYBACK';
+  /** INCOMING lo envio el cliente, OUTGOING el asesor. Nulo si no hubo senal. */
+  direction?: string | null;
 }
 
 export interface AuditLogPayload {
@@ -2525,6 +2527,7 @@ const MEDIA_CAPTURE_SCRIPT = `
         messageSentAt: messageSentAt,
         whatsappMessageId: messageId,
         source: 'CHAT_AUTO',
+        direction: direccionDelMensaje(messageEl),
         mediaType: 'IMAGE'
       });
       if (messageId) {
@@ -2669,6 +2672,34 @@ const MEDIA_CAPTURE_SCRIPT = `
     return msgEl.getAttribute('data-id') ||
            msgEl.getAttribute('data-testid') ||
            '';
+  }
+
+  // Quien escribio el mensaje, con la misma cascada que la captura de texto.
+  // Verificado sobre el DOM del 7-sep-2026: cada mensaje trae aria-label con
+  // "You:" en los propios y el nombre del contacto en los ajenos, ademas del
+  // estado de entrega, que solo llevan los propios.
+  function direccionDelMensaje(msgEl) {
+    if (!msgEl) return null;
+
+    var etiquetas = [];
+    var conAria = msgEl.querySelectorAll('[aria-label]');
+    for (var i = 0; i < conAria.length; i++) {
+      var et = (conAria[i].getAttribute('aria-label') || '').trim();
+      if (et) etiquetas.push(et);
+    }
+
+    for (var a = 0; a < etiquetas.length; a++) {
+      if (/^(you|t[uu]|yo)\\s*:/i.test(etiquetas[a])) return 'OUTGOING';
+    }
+    for (var b = 0; b < etiquetas.length; b++) {
+      if (/^(delivered|read|sent|pending|entregado|le[ií]do|enviado|pendiente)$/i.test(etiquetas[b])) return 'OUTGOING';
+    }
+    if (msgEl.querySelector('[data-testid="tail-out"], [data-icon="tail-out"]')) return 'OUTGOING';
+    if (msgEl.querySelector('[data-testid="tail-in"], [data-icon="tail-in"]')) return 'INCOMING';
+    for (var c = 0; c < etiquetas.length; c++) {
+      if (/^.{1,60}:$/.test(etiquetas[c])) return 'INCOMING';
+    }
+    return null;   // sin senal: se deja sin dato antes que inventarlo
   }
 
   function isMessageOutgoing(msgEl) {
@@ -3233,6 +3264,8 @@ const MEDIA_CAPTURE_SCRIPT = `
               messageSentAt: messageSentAt,
               whatsappMessageId: whatsappMessageId,
               source: 'PLAYBACK',
+              direction: direccionDelMensaje(
+                document.querySelector('[data-id="' + lastAudioWhatsappMessageId + '"]')),
               mediaType: 'AUDIO'
             });
           };
@@ -3667,29 +3700,14 @@ const MEDIA_CAPTURE_SCRIPT = `
         messagesWithTimer.delete(messageId);
         persistMessagesWithMedia();
       } else if (!hasMediaElements(messageEl)) {
-        // Method 3: media gone but message still in DOM
-        // Require 5 consecutive scans (~15s) to avoid lazy loading false positives
-        var noMediaCount = (messageNoMediaScans.get(messageId) || 0) + 1;
-        messageNoMediaScans.set(messageId, noMediaCount);
-        if (noMediaCount >= 5) {
-          console.log('[MWS Deleted] Eliminación detectada (Method 3 - media gone):', messageId);
-          detectedDeletions.add(messageId);
-          window.__hablapeDeletedQueue.push({
-            whatsappMessageId: messageId,
-            detectedAt: new Date().toISOString(),
-            isDisappearing: messagesWithTimer.has(messageId)
-          });
-          persistDeletedQueue();
-          // Cleanup tracked state
-          messagesWithMedia.delete(messageId);
-          messageChatName.delete(messageId);
-          messageNoMediaScans.delete(messageId);
-          messageNeighbor.delete(messageId);
-          messageLastSeen.delete(messageId);
-          messageSeenInDOM.delete(messageId);
-          messagesWithTimer.delete(messageId);
-          persistMessagesWithMedia();
-        }
+        // Aqui habia una tercera ruta: si el mensaje seguia en pantalla pero
+        // dejaba de reconocersele contenido multimedia durante 15 segundos, se
+        // daba por eliminado. Con los stickers fallaba siempre --su elemento no
+        // coincide con los selectores de "esto es multimedia"-- y con una imagen
+        // fallaria igual en cuanto WhatsApp cambie como la dibuja. Se quito.
+        //
+        // Una eliminacion de verdad la anuncia WhatsApp en el propio mensaje, y
+        // eso lo detecta el Metodo 1 al instante y en cualquier idioma.
       } else {
         // Media still present — reset counter
         messageNoMediaScans.delete(messageId);
@@ -3813,6 +3831,8 @@ export interface RawMediaCaptureData {
   messageSentAt?: string;
   whatsappMessageId?: string;
   mediaType: 'IMAGE' | 'AUDIO';
+  /** INCOMING lo envio el cliente, OUTGOING el asesor. Nulo si no hubo senal. */
+  direction?: string | null;
 }
 
 export function setupMediaCapture(
