@@ -3505,9 +3505,13 @@ const MEDIA_CAPTURE_SCRIPT = `
             var nextInDOM = neighbors.next ? !!document.querySelector('[data-id="' + neighbors.next + '"]') : false;
             var prevInDOM = neighbors.prev ? !!document.querySelector('[data-id="' + neighbors.prev + '"]') : false;
             var anyNeighborInDOM = nextInDOM || prevInDOM;
-            if (anyNeighborInDOM && scansSinceSeen >= 1 && messageSeenInDOM.has(messageId)) {
-              // At least one neighbor in DOM, our message gone → deleted
-              // No time window limit: neighbor presence is a strong signal
+            // PASADAS_PARA_CONFIRMAR: cuantas pasadas seguidas (3 s cada una)
+            // tiene que estar ausente antes de darlo por eliminado. Con una sola
+            // se marcaban adjuntos que solo se estaban redibujando al
+            // desplazarse por la conversacion.
+            var PASADAS_PARA_CONFIRMAR = 4;
+            if (anyNeighborInDOM && scansSinceSeen >= PASADAS_PARA_CONFIRMAR && messageSeenInDOM.has(messageId)) {
+              // Ausente varias pasadas seguidas con vecinos a la vista: desaparecio.
               isDeleted = true;
             }
           }
