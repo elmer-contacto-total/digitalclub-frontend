@@ -227,9 +227,6 @@ export interface EstadoDelChat {
   direcciones: Record<string, 'INCOMING' | 'OUTGOING'>;
 }
 
-/** Pasadas sin ver un mensaje antes de sospechar de su desaparición. */
-const PASADAS_PARA_SOSPECHAR = 20;
-
 /**
  * Distingue una eliminación de un simple desplazamiento.
  *
@@ -249,7 +246,6 @@ const PASADAS_PARA_SOSPECHAR = 20;
 export class VigilanteDeEliminados {
   private pasada = 0;
   private ultimoVisto = new Map<string, number>();
-  private vecinos = new Map<string, { anterior: string | null; siguiente: string | null }>();
   private confirmadosEnPantalla = new Set<string>();
   private yaAvisados = new Set<string>();
 
@@ -261,66 +257,40 @@ export class VigilanteDeEliminados {
     }
   }
 
-  /** Devuelve los mensajes que se dan por eliminados en esta pasada. */
+  /**
+   * Devuelve los mensajes que se dan por eliminados en esta pasada.
+   *
+   * Solo cuenta el aviso que WhatsApp pone en el propio mensaje. Antes tambien
+   * se deducia de que el mensaje dejara de verse, y eso marcaba conversaciones
+   * enteras: WhatsApp rehace tramos de la lista al desplazarse, al cambiar de
+   * chat o cuando alguien borra un mensaje vecino, y en esa ventana los demas
+   * parecen haber desaparecido. El 7-sep-2026 quedaron 41 de 71 mensajes
+   * marcados sin que nadie los hubiera borrado, en tandas de 14, 12 y 11 al
+   * mismo milisegundo.
+   *
+   * Una eliminacion de verdad deja el aviso a la vista de forma permanente, asi
+   * que se detecta en cuanto el asesor pasa por delante.
+   */
   revisar(estado: EstadoDelChat): string[] {
     this.pasada++;
 
-    const presentes = new Set(estado.ids);
     const marcados = new Set(estado.conMarcador);
-    const eliminados: string[] = [];
+    const nuevos: string[] = [];
 
-    // Un aviso de eliminación a la vista que todavía no hayamos atribuido a
-    // ningún mensaje indica que en la conversación acaba de borrarse algo. El de
-    // un mensaje que ya avisamos no sirve como indicio: queda en pantalla para
-    // siempre y terminaría señalando a cualquier otro que se haya ido de la vista.
-    const hayAvisoSinExplicar = estado.conMarcador.some(id => !this.yaAvisados.has(id));
-
-    // Lo que sigue a la vista: se refresca su posición y sus vecinos.
-    for (let i = 0; i < estado.ids.length; i++) {
-      const id = estado.ids[i];
-      if (!this.ultimoVisto.has(id)) continue;
+    for (const id of estado.ids) {
+      if (!this.ultimoVisto.has(id)) continue;   // no lo seguimos
 
       this.confirmadosEnPantalla.add(id);
       this.ultimoVisto.set(id, this.pasada);
-      this.vecinos.set(id, {
-        anterior: i > 0 ? estado.ids[i - 1] : null,
-        siguiente: i < estado.ids.length - 1 ? estado.ids[i + 1] : null,
-      });
 
-      // El propio WhatsApp lo declara: no hace falta deducir nada.
-      if (marcados.has(id)) eliminados.push(id);
-    }
-
-    // Lo que ya no está.
-    for (const [id, visto] of this.ultimoVisto) {
-      if (presentes.has(id)) continue;
-      // Nunca llegamos a verlo en pantalla: no hay con qué comparar.
-      if (!this.confirmadosEnPantalla.has(id)) continue;
-
-      const pasadasSinVer = this.pasada - visto;
-      const v = this.vecinos.get(id);
-      const algunVecinoPresente = !!v && (
-        (!!v.anterior && presentes.has(v.anterior)) ||
-        (!!v.siguiente && presentes.has(v.siguiente))
-      );
-
-      if (algunVecinoPresente && pasadasSinVer >= 1) {
-        // Sus vecinos siguen ahí y él no: desapareció de la conversación.
-        eliminados.push(id);
-      } else if (pasadasSinVer >= PASADAS_PARA_SOSPECHAR && hayAvisoSinExplicar) {
-        // Lleva rato fuera de la vista y la conversación muestra el aviso de
-        // eliminación. Sin ese aviso se asume desplazamiento y no se concluye.
-        eliminados.push(id);
-      }
-    }
-
-    const nuevos: string[] = [];
-    for (const id of eliminados) {
+      if (!marcados.has(id)) continue;
       if (this.yaAvisados.has(id)) continue;
+
       this.yaAvisados.add(id);
       this.olvidar(id);
       nuevos.push(id);
     }
+
     return nuevos;
   }
 
@@ -328,14 +298,12 @@ export class VigilanteDeEliminados {
   olvidarTodo(): void {
     this.pasada = 0;
     this.ultimoVisto.clear();
-    this.vecinos.clear();
     this.confirmadosEnPantalla.clear();
     this.yaAvisados.clear();
   }
 
   private olvidar(id: string): void {
     this.ultimoVisto.delete(id);
-    this.vecinos.delete(id);
     this.confirmadosEnPantalla.delete(id);
   }
 }
