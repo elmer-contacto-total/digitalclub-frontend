@@ -248,6 +248,10 @@ export class VigilanteDeEliminados {
   private ultimoVisto = new Map<string, number>();
   private confirmadosEnPantalla = new Set<string>();
   private yaAvisados = new Set<string>();
+  /** Lápidas ya conocidas. Una que ya estaba no prueba nada: el borrado es viejo. */
+  private lapidasVistas = new Set<string>();
+  /** Lo que se veía en la pasada anterior, para saber qué acaba de irse. */
+  private visiblesAntes = new Set<string>();
 
   /** Empieza a seguir los mensajes que ya quedaron registrados. */
   seguir(ids: string[]): void {
@@ -258,38 +262,64 @@ export class VigilanteDeEliminados {
   }
 
   /**
-   * Devuelve los mensajes que se dan por eliminados en esta pasada.
+   * Devuelve los mensajes que acaban de ser borrados.
    *
-   * Solo cuenta el aviso que WhatsApp pone en el propio mensaje. Antes tambien
-   * se deducia de que el mensaje dejara de verse, y eso marcaba conversaciones
-   * enteras: WhatsApp rehace tramos de la lista al desplazarse, al cambiar de
-   * chat o cuando alguien borra un mensaje vecino, y en esa ventana los demas
-   * parecen haber desaparecido. El 7-sep-2026 quedaron 41 de 71 mensajes
-   * marcados sin que nadie los hubiera borrado, en tandas de 14, 12 y 11 al
-   * mismo milisegundo.
+   * Detecta el momento del borrado, no las lápidas que ya estaban cuando se
+   * abrió la conversación: esas corresponden a borrados anteriores y no hay nada
+   * que marcar, porque su mensaje nunca llegó a registrarse.
    *
-   * Una eliminacion de verdad deja el aviso a la vista de forma permanente, asi
-   * que se detecta en cuanto el asesor pasa por delante.
+   * Al borrar, WhatsApp reemplaza el mensaje por una lápida con OTRO
+   * identificador --comprobado en el DOM el 8-sep-2026--, así que el aviso nunca
+   * aparece sobre el identificador capturado. Lo que se mira es la coincidencia:
+   * aparece una lápida nueva y, a la vez, desaparece un mensaje que sí estaba.
+   * Una lápida no surge sola; solo la crea un borrado.
    */
   revisar(estado: EstadoDelChat): string[] {
     this.pasada++;
 
+    const presentes = new Set(estado.ids);
     const marcados = new Set(estado.conMarcador);
     const nuevos: string[] = [];
 
-    for (const id of estado.ids) {
-      if (!this.ultimoVisto.has(id)) continue;   // no lo seguimos
-
-      this.confirmadosEnPantalla.add(id);
-      this.ultimoVisto.set(id, this.pasada);
-
-      if (!marcados.has(id)) continue;
-      if (this.yaAvisados.has(id)) continue;
-
+    const marcar = (id: string) => {
+      if (this.yaAvisados.has(id)) return;
       this.yaAvisados.add(id);
       this.olvidar(id);
       nuevos.push(id);
+    };
+
+    // Lo que sigue a la vista: se refresca.
+    for (const id of estado.ids) {
+      if (!this.ultimoVisto.has(id)) continue;
+      this.confirmadosEnPantalla.add(id);
+      this.ultimoVisto.set(id, this.pasada);
+      // Por si alguna versión de WhatsApp sí conserva el identificador.
+      if (marcados.has(id)) marcar(id);
     }
+
+    // Lápidas que no estaban en la pasada anterior: alguien acaba de borrar.
+    const lapidasNuevas = estado.conMarcador.filter(id => !this.lapidasVistas.has(id));
+
+    if (lapidasNuevas.length > 0 && this.visiblesAntes.size > 0) {
+      // Mensajes seguidos que estaban a la vista y ya no están.
+      const seFueron: string[] = [];
+      for (const id of this.ultimoVisto.keys()) {
+        if (presentes.has(id)) continue;
+        if (!this.visiblesAntes.has(id)) continue;   // no estaba, no acaba de irse
+        if (!this.confirmadosEnPantalla.has(id)) continue;
+        seFueron.push(id);
+      }
+
+      // Las cuentas tienen que cuadrar. Si WhatsApp rehizo el tramo y se fueron
+      // diez mensajes con una sola lápida, no hay forma de atribuirlo y no se
+      // concluye nada: es preferible no marcar a marcar de más.
+      if (seFueron.length === lapidasNuevas.length) {
+        for (const id of seFueron) marcar(id);
+      }
+    }
+
+    for (const id of estado.conMarcador) this.lapidasVistas.add(id);
+    this.visiblesAntes = presentes;
 
     return nuevos;
   }
@@ -300,6 +330,8 @@ export class VigilanteDeEliminados {
     this.ultimoVisto.clear();
     this.confirmadosEnPantalla.clear();
     this.yaAvisados.clear();
+    this.lapidasVistas.clear();
+    this.visiblesAntes.clear();
   }
 
   private olvidar(id: string): void {
