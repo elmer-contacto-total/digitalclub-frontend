@@ -47,7 +47,15 @@ type ContentSegment =
       </div>
 
       <!-- Message Bubble -->
-      <div class="message-bubble">
+      <div class="message-bubble" [class.deleted-bubble]="fueEliminado()">
+        <!-- Constancia de eliminación: el contenido se conserva, se marca el hecho -->
+        @if (fueEliminado()) {
+          <div class="deleted-badge">
+            <i class="ph-fill ph-trash"></i>
+            Mensaje eliminado · {{ fechaDeEliminacion() }}
+          </div>
+        }
+
         <!-- Template Badge -->
         @if (isTemplateMessage()) {
           <div class="template-badge">
@@ -226,6 +234,21 @@ export class MessageItemComponent {
       case MessageStatus.FAILED: return 'status-failed';
       default: return 'status-sent';
     }
+  }
+
+  /** Si el mensaje desapareció de la conversación. El texto se conserva. */
+  fueEliminado(): boolean {
+    return !!this.message().deletedAt;
+  }
+
+  /** Cuándo se detectó la eliminación, en el formato de las demás fechas. */
+  fechaDeEliminacion(): string {
+    const dato = this.message().deletedAt;
+    if (!dato) return '';
+    const fecha = new Date(dato.replace(' ', 'T'));
+    return fecha.toLocaleString('es-PE', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+    });
   }
 
   formatTime(): string {

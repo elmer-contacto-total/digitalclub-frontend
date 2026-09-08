@@ -288,3 +288,26 @@
     max-width: 250px;
   }
 }
+
+
+// Constancia de eliminación. El mensaje se conserva y se lee; la marca solo
+// advierte de que ya no está en la conversación de WhatsApp.
+.deleted-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--danger-default, #d64545);
+  margin-bottom: var(--space-1);
+  opacity: 0.9;
+}
+
+.deleted-bubble {
+  border: 1px dashed var(--danger-default, #d64545);
+
+  .message-text {
+    opacity: 0.75;
+    font-style: italic;
+  }
+}

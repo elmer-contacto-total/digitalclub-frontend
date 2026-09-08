@@ -491,6 +491,7 @@ export class ChatService {
       // Handle dates - backend sends sent_at/created_at, frontend expects sentAt/createdAt
       sentAt: msg.sent_at || msg.sentAt || msg.created_at || msg.createdAt,
       createdAt: msg.created_at || msg.createdAt || msg.sent_at || msg.sentAt,
+      deletedAt: msg.deleted_at || msg.deletedAt || null,
       updatedAt: msg.updated_at || msg.updatedAt
     };
   }

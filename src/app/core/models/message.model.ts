@@ -72,6 +72,9 @@ export interface Message {
   // Expanded relations (optional, populated by API)
   sender?: MessageUser;
   recipient?: MessageUser;
+  /** Momento en que se detecto que el mensaje desaparecio de la conversacion.
+   *  Nulo mientras siga a la vista. El contenido se conserva igualmente. */
+  deletedAt?: string | null;
 }
 
 /**
