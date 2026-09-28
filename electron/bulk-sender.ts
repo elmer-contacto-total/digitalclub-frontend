@@ -1655,12 +1655,24 @@ export class BulkSender {
       await this.sleep(100);
 
       await this.cdpClear();
-      await this.cdpType(text);
+      // El cuerpo del mensaje va con insertText, NO tecla por tecla: ver el
+      // comentario de cdpInsertText. Tecleandolo se perdian los puntos de los
+      // importes ("S/.1444.68" llegaba como "S/144468").
+      await this.cdpInsertText(text);
 
       // Wait for React to process
       await this.sleep(300);
 
-      // Verify text was typed
+      // Comprobar que el texto llegó, y que llegó ENTERO.
+      //
+      // Antes solo se miraba que la caja no estuviera vacía, y por eso salieron
+      // mensajes con los importes mutilados: "S/.2854.16" se envió como
+      // "S/285416" sin que nada lo detectara. Ahora se exige que cada número del
+      // mensaje esté tal cual en la caja; si falta uno, no se pulsa Enter.
+      //
+      // Se comparan los números y no el texto completo porque WhatsApp dibuja
+      // los emojis como imagen y esos no aparecen en textContent.
+      const numerosEsperados = text.match(/\d[\d.,]*\d|\d/g) || [];
       const textCheck = await this.whatsappView.webContents.executeJavaScript(`
         (function() {
           var input = document.querySelector('[data-testid="conversation-compose-box-input"]') ||
@@ -1668,12 +1680,26 @@ export class BulkSender {
                       document.querySelector('#main div[contenteditable="true"][role="textbox"]') ||
                       document.querySelector('#main div[contenteditable="true"][data-tab]') ||
                       document.querySelector('#main div[contenteditable="true"]');
-          return input ? (input.textContent || '').trim().length > 0 : false;
+          if (!input) return { ok: false, motivo: 'no se encontró la caja de texto' };
+
+          var escrito = (input.textContent || '').trim();
+          if (!escrito.length) return { ok: false, motivo: 'la caja quedó vacía' };
+
+          var esperados = ${JSON.stringify(numerosEsperados)};
+          for (var i = 0; i < esperados.length; i++) {
+            if (escrito.indexOf(esperados[i]) === -1) {
+              return { ok: false, motivo: 'falta "' + esperados[i] + '" en lo escrito' };
+            }
+          }
+          return { ok: true };
         })()
       `, true);
 
-      if (!textCheck) {
-        return { success: false, error: 'No se pudo escribir el texto en el chat' };
+      if (!textCheck || !textCheck.ok) {
+        const motivo = (textCheck && textCheck.motivo) || 'sin respuesta de la vista';
+        console.warn(`[BulkSender] Texto incompleto, no se envía: ${motivo}`);
+        await this.cdpClear();
+        return { success: false, error: `El mensaje no se escribió completo (${motivo})` };
       }
 
       // Step 3: breve asentamiento antes de enviar (no es anti-ban)
@@ -1882,7 +1908,9 @@ export class BulkSender {
       // 4. Clear and type caption FIRST via CDP (before pasting image)
       await this.cdpClear();
       if (caption) {
-        await this.cdpType(caption);
+        // Mismo motivo que en sendAndSubmit: tecleado se perdían los puntos de
+        // los importes. Ver cdpInsertText.
+        await this.cdpInsertText(caption);
         await this.sleep(300);
         rlog('Step 4 OK: caption typed (' + caption.length + ' chars)');
       } else {
@@ -2551,6 +2579,30 @@ export class BulkSender {
     await dbg.sendCommand('Input.dispatchKeyEvent', { ...base, type: 'keyUp' });
   }
 
+  /**
+   * Escribe el texto de un tirón, sin pasar por el teclado.
+   *
+   * cdpType manda una tecla por carácter y usa el código del carácter como
+   * código de tecla de Windows. Para las letras y los dígitos coincide de
+   * casualidad, pero para la puntuación no: el punto es 46, que es la tecla
+   * SUPRIMIR, y el paréntesis que abre es 40, que es la FLECHA ABAJO. Chromium
+   * los ejecuta como comandos de edición y descarta el carácter.
+   *
+   * Medido en producción el 28/09/2026 sobre el mensaje de cobranza: "S/.2854.16"
+   * le llegó al cliente como "S/285416" --cien veces la deuda real-- y "(en 1
+   * sola cuota)" como "en 1 sola cuota)".
+   *
+   * Input.insertText inserta el texto como tal, sin simular teclas, así que no
+   * hay código de tecla que interpretar. Es lo mismo que ya hace el pie de foto
+   * de los adjuntos con execCommand('insertText').
+   */
+  private async cdpInsertText(text: string): Promise<void> {
+    if (!this.whatsappView) return;
+    await this.ensureCdpAttached();
+    const dbg = this.whatsappView.webContents.debugger;
+    await dbg.sendCommand('Input.insertText', { text });
+  }
+
   private async cdpType(text: string): Promise<void> {
     if (!this.whatsappView) return;
     await this.ensureCdpAttached();
@@ -2560,15 +2612,27 @@ export class BulkSender {
     // es la demora aleatoria de 30-90 s ENTRE mensajes, no la velocidad de
     // tecleo (un paste sería instantáneo de todas formas).
     for (const char of text) {
-      const code = char >= 'a' && char <= 'z' ? 'Key' + char.toUpperCase()
-                 : char >= '0' && char <= '9' ? 'Digit' + char : '';
+      const esLetra = char >= 'a' && char <= 'z';
+      const esDigito = char >= '0' && char <= '9';
+      const code = esLetra ? 'Key' + char.toUpperCase()
+                 : esDigito ? 'Digit' + char : '';
+
+      // El código de tecla solo se manda cuando de verdad corresponde: la letra
+      // en mayúscula y el dígito coinciden con su tecla de Windows. Para todo
+      // lo demás va 0, porque usar el código del carácter hacía que el punto
+      // (46) llegara como SUPRIMIR y el paréntesis (40) como FLECHA ABAJO, y
+      // Chromium se comía el carácter. Ver cdpInsertText.
+      const vk = esLetra ? char.toUpperCase().charCodeAt(0)
+               : esDigito ? char.charCodeAt(0)
+               : 0;
+
       await dbg.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyDown', key: char, code, text: char,
-        windowsVirtualKeyCode: char.charCodeAt(0), nativeVirtualKeyCode: char.charCodeAt(0)
+        windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk
       });
       await dbg.sendCommand('Input.dispatchKeyEvent', {
         type: 'keyUp', key: char, code,
-        windowsVirtualKeyCode: char.charCodeAt(0), nativeVirtualKeyCode: char.charCodeAt(0)
+        windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk
       });
     }
   }

@@ -114,8 +114,13 @@ export class WebSocketService implements OnDestroy {
 
   private stompClient: Client | null = null;
   private subscriptions: StompSubscription[] = [];
+  // Cuanto se espera antes de reintentar cuando la red se cayo pero la sesion
+  // sigue siendo valida. Lo suficiente para no martillar el servidor.
+  private static readonly ENFRIAMIENTO_MS = 60000;
+
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 10;
+  private reintentoLento: ReturnType<typeof setTimeout> | null = null;
   private pendingBulkSendClientId: number | null = null;
   private bulkSendStompSub: StompSubscription | null = null;
 
@@ -229,6 +234,10 @@ export class WebSocketService implements OnDestroy {
    */
   disconnect(): void {
     this.reconnectAttempts = 0;
+    if (this.reintentoLento) {
+      clearTimeout(this.reintentoLento);
+      this.reintentoLento = null;
+    }
 
     // Unsubscribe from all subscriptions
     this.subscriptions.forEach(sub => sub.unsubscribe());
@@ -530,15 +539,39 @@ export class WebSocketService implements OnDestroy {
     }
     this.reconnectAttempts++;
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      // Se agotaron los reintentos: la sesion no se pudo refrescar (refresh token
-      // tambien vencido o revocado). Cortamos el loop de reconexion y mandamos al
-      // login limpio, en vez de martillar "Expired JWT" indefinidamente.
-      console.warn('[WebSocket] Reconexiones agotadas; cerrando sesion');
+      // Antes, agotar los reintentos cerraba la sesion sin mas. Pero el contador
+      // sube con CUALQUIER cierre sucio del socket, no solo con los de token
+      // vencido: con heartbeat de 4 s y reintento cada 5 s, unos 50 segundos de
+      // red mala bastaban para mandar al login con el JWT todavia valido 24 h.
+      // Eso es lo que sacaba de la pantalla en medio de un envio masivo.
+      //
+      // Ahora se corta el martilleo igual --que era el motivo original-- pero la
+      // sesion solo se cierra si el token de verdad ya no sirve.
       const client = this.stompClient;
       this.stompClient = null;
       client?.deactivate();
       this._status.set('disconnected');
-      this.authService.forceLogout(true);
+
+      const token = this.authService.getToken();
+      if (this.isJwtExpired(token)) {
+        console.warn('[WebSocket] Reconexiones agotadas y el token vencio; cerrando sesion');
+        this.authService.forceLogout(true);
+        return;
+      }
+
+      // Token vigente: fue caida de red. Se espera y se vuelve a intentar sin
+      // tocar la sesion; mientras tanto el resto de la aplicacion sigue andando
+      // porque las llamadas HTTP no dependen del socket.
+      console.warn('[WebSocket] Reconexiones agotadas pero el token sigue vigente; ' +
+                   `se reintenta en ${WebSocketService.ENFRIAMIENTO_MS / 1000}s sin cerrar sesion`);
+      this.reconnectAttempts = 0;
+      if (this.reintentoLento) {
+        clearTimeout(this.reintentoLento);
+      }
+      this.reintentoLento = setTimeout(() => {
+        this.reintentoLento = null;
+        this.connect();
+      }, WebSocketService.ENFRIAMIENTO_MS);
       return;
     }
     this._status.set('reconnecting');
