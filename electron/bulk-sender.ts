@@ -1480,7 +1480,8 @@ export class BulkSender {
     // querySelector suelto daría positivo siempre y el ArrowDown+Enter
     // siguiente abriría un chat cualquiera — mandándole la campaña a la
     // persona equivocada. Se exige que alguna celda contenga los últimos 8
-    // dígitos del número buscado.
+    // dígitos del número buscado, o —si el contacto oculta su número con LID—
+    // que el buscador haya dejado una sola fila.
     const suffix = localDigits.slice(-8);
     const outcome = await this.waitForCondition(`
       (function() {
@@ -1491,12 +1492,41 @@ export class BulkSender {
             body.indexOf('is not on WhatsApp') !== -1) {
           return 'not_registered';
         }
-        var cells = document.querySelectorAll('[data-testid="cell-frame-container"]');
-        if (!cells.length) return null;
+        var todas = document.querySelectorAll('[data-testid="cell-frame-container"]');
+        if (!todas.length) return null;
+
+        // Se descartan las filas de accion del panel ("Nuevo grupo", etc.):
+        // no son personas y desvirtuarian el conteo de mas abajo.
+        var utiles = [];
+        for (var i = 0; i < todas.length; i++) {
+          var texto = (todas[i].textContent || '').trim();
+          if (!texto) continue;
+          if (/^(nuevo grupo|nueva comunidad|nuevo contacto|nueva lista|new group|new community|new contact|new list)/i.test(texto)) continue;
+          utiles.push(i);
+        }
+        if (!utiles.length) return null;
+
         var suffix = ${JSON.stringify(suffix)};
-        for (var i = 0; i < cells.length; i++) {
-          var digits = (cells[i].textContent || '').replace(/[^0-9]/g, '');
-          if (digits.indexOf(suffix) !== -1) return 'match:' + i;
+        for (var j = 0; j < utiles.length; j++) {
+          var digits = (todas[utiles[j]].textContent || '').replace(/[^0-9]/g, '');
+          if (digits.indexOf(suffix) !== -1) return 'match:' + utiles[j];
+        }
+
+        // Contacto con LID / nombre de usuario: WhatsApp no ensena el numero en
+        // ninguna parte de la fila, asi que el match por digitos nunca acierta y
+        // el numero se saltaba aunque si esta en WhatsApp (envio 59: 11 de 48).
+        // Cuando el buscador dejo UNA sola fila, esa fila es esa persona: el
+        // panel sin filtrar lista la agenda completa (70 filas medidas en
+        // produccion), de modo que "una sola fila" solo ocurre ya filtrado.
+        // Se exige ademas que el buscador siga conteniendo exactamente lo que se
+        // tecleo, para no leer la lista a medio filtrar.
+        if (utiles.length === 1) {
+          var input = document.querySelector('input[data-tab="3"]') ||
+                      document.querySelector('div[contenteditable="true"][data-tab="3"]');
+          var escrito = input ? (input.value || input.textContent || '') : '';
+          if (escrito.replace(/[^0-9]/g, '') === ${JSON.stringify(localDigits)}) {
+            return 'unico:' + utiles[0];
+          }
         }
         return null;
       })()
@@ -1511,7 +1541,10 @@ export class BulkSender {
       };
     }
 
-    if (typeof outcome !== 'string' || !outcome.startsWith('match:')) {
+    const abrible = typeof outcome === 'string' &&
+      (outcome.startsWith('match:') || outcome.startsWith('unico:'));
+
+    if (!abrible) {
       // Caso conocido: los contactos AGENDADOS aparecen en el panel con el
       // nombre y sin dígitos, así que el match por número no los ve (envío 26
       // de producción: 913254120 y 968195456 se saltearon por esto). Para
@@ -1546,7 +1579,11 @@ export class BulkSender {
     }
 
     // 4. Abrir ESA celda por índice, no la primera de la lista.
-    const index = Number(outcome.slice('match:'.length));
+    const index = Number((outcome as string).slice((outcome as string).indexOf(':') + 1));
+    if ((outcome as string).startsWith('unico:')) {
+      console.log(`[BulkSender] ${localDigits}: el panel dejo una sola fila y no ensena digitos ` +
+                  `(contacto con LID). Se abre esa fila.`);
+    }
     const clicked = await this.whatsappView.webContents.executeJavaScript(`
       (function() {
         var cells = document.querySelectorAll('[data-testid="cell-frame-container"]');
